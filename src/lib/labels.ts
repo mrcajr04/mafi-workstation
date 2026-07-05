@@ -41,9 +41,9 @@ export const assetLabels = {
 };
 
 export const ficoSourceLabels = {
-  [FicoSource.KNOWN_CREDIT_KARMA]: "Known via Credit Karma",
-  [FicoSource.KNOWN_BANK]: "Known via Bank",
-  [FicoSource.ESTIMATED_GUESS]: "Estimated/Guess",
+  [FicoSource.KNOWN_CREDIT_KARMA]: "Known",
+  [FicoSource.KNOWN_BANK]: "Known",
+  [FicoSource.ESTIMATED_GUESS]: "Estimated",
   [FicoSource.UNKNOWN]: "Unknown",
 };
 

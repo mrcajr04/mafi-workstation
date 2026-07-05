@@ -12,11 +12,13 @@ import { cn } from "@/lib/utils";
 
 type NewProspectModalProps = {
   initialData?: ProspectIntakeInitialData;
+  onOptimisticSaved?: (form: ProspectIntakeInitialData) => void;
   trigger?: (open: () => void) => ReactNode;
 };
 
 export function NewProspectModal({
   initialData,
+  onOptimisticSaved,
   trigger,
 }: NewProspectModalProps) {
   const router = useRouter();
@@ -70,7 +72,7 @@ export function NewProspectModal({
             onClick={() => setIsOpen(false)}
             type="button"
           />
-          <section className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-mafi-border bg-mafi-bg-off shadow-2xl">
+          <section className="relative flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-mafi-border bg-mafi-bg-off shadow-2xl">
             <header className="flex shrink-0 items-center justify-between border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
               <div>
                 <h2 className="text-xl font-bold text-mafi-text-dark">
@@ -81,6 +83,11 @@ export function NewProspectModal({
                     ? "Review and update the prospect details."
                     : "Capture the prospect details needed for Phase 1-2."}
                 </p>
+                {initialData?.createdOnLabel ? (
+                  <p className="mt-1 text-xs text-mafi-text-light">
+                    Created on {initialData.createdOnLabel}
+                  </p>
+                ) : null}
               </div>
               <button
                 aria-label="Close"
@@ -91,12 +98,20 @@ export function NewProspectModal({
                 <X className="size-5" />
               </button>
             </header>
-            <div className="overflow-y-auto p-3 pb-6 sm:p-4 sm:pb-6">
+            <div className="overflow-y-auto p-3 pb-0 sm:p-4 sm:pb-0">
               <ProspectIntakeForm
                 dense
                 initialData={initialData}
                 key={initialData?.contactId ?? "new-prospect"}
                 onCancel={() => setIsOpen(false)}
+                onOptimisticSaved={(form) => {
+                  if (initialData?.contactId) {
+                    onOptimisticSaved?.({
+                      ...form,
+                      contactId: initialData.contactId,
+                    });
+                  }
+                }}
                 onSaved={() => {
                   setIsOpen(false);
                   router.refresh();

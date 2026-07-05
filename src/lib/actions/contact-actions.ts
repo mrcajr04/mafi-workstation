@@ -102,6 +102,9 @@ type CreateOpportunityValueResult =
   | { success: false; error: string };
 
 type DeleteContactResult = { success: true } | { success: false; error: string };
+type DevDataActionResult =
+  | { success: true; count: number }
+  | { success: false; error: string };
 
 type ProspectEditDataResult =
   | {
@@ -163,6 +166,10 @@ function formatCurrencyForForm(value?: { toString(): string } | string | null) {
     style: "currency",
     currency: "USD",
   });
+}
+
+function randomItem<T>(items: T[]) {
+  return items[Math.floor(Math.random() * items.length)];
 }
 
 async function findWritableContact(contactId: string, profileId: string, role: RoleType) {
@@ -861,5 +868,166 @@ export async function deleteContact(contactId: string): Promise<DeleteContactRes
 
   return {
     success: true,
+  };
+}
+
+export async function deleteAllDevContacts(): Promise<DevDataActionResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  const result = await prisma.contact.deleteMany({
+    where: access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id },
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+    count: result.count,
+  };
+}
+
+export async function seedDevContacts(count: number): Promise<DevDataActionResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  const seedCount = Math.min(Math.max(Math.floor(count), 1), 250);
+  const fullNames = [
+    "Andrea Morrison",
+    "Carlos Bennett",
+    "Diana Fletcher",
+    "Eric Santiago",
+    "Gabriela Torres",
+    "Hannah Price",
+    "Isaac Coleman",
+    "Julia Mercer",
+    "Kevin Alvarez",
+    "Monica Reynolds",
+  ];
+  const phones = [
+    "3055550142",
+    "4075550198",
+    "5615550127",
+    "7865550164",
+    "9545550181",
+    "8135550155",
+    "7275550119",
+    "2395550173",
+    "3525550138",
+    "9045550106",
+  ];
+  const emails = [
+    "andrea.morrison@example.com",
+    "carlos.bennett@example.com",
+    "diana.fletcher@example.com",
+    "eric.santiago@example.com",
+    "gabriela.torres@example.com",
+    "hannah.price@example.com",
+    "isaac.coleman@example.com",
+    "julia.mercer@example.com",
+    "kevin.alvarez@example.com",
+    "monica.reynolds@example.com",
+  ];
+  const addresses = [
+    "1842 Coral Way, Miami, FL 33145",
+    "772 Palm Ridge Dr, Orlando, FL 32819",
+    "4158 Harbor View Ct, Tampa, FL 33602",
+    "920 Cypress Bend Ln, Fort Lauderdale, FL 33301",
+    "631 Lakefront Ave, West Palm Beach, FL 33401",
+    "2881 Pine Meadow Rd, Jacksonville, FL 32207",
+    "504 Sunset Key Blvd, Naples, FL 34102",
+    "1470 Magnolia Park Dr, Sarasota, FL 34236",
+    "359 Windward Trace, Clearwater, FL 33755",
+    "811 Golden Isles Pkwy, Boca Raton, FL 33432",
+  ];
+  const borrowerTypes = ["PRIMARY", "SECOND_HOME_VACATION", "INVESTMENT", "OTHER"];
+  const vestingTypes = ["INDIVIDUALS", "LLC_CORP", "TRUST", "OTHER"];
+  const loanPurposes = Object.values(LoanPurpose);
+  const assetTypes = Object.values(AssetType);
+  const ficoSources = [
+    FicoSource.KNOWN_BANK,
+    FicoSource.ESTIMATED_GUESS,
+    FicoSource.UNKNOWN,
+  ];
+  const propertyTypes = Object.values(PropertyType);
+  const insuranceTypes = Object.values(InsuranceType);
+
+  await prisma.$transaction(
+    Array.from({ length: seedCount }, (_, index) => {
+      const ficoSource = randomItem(ficoSources);
+      const hasFicoScore = ficoSource !== FicoSource.UNKNOWN;
+
+      return prisma.contact.create({
+        data: {
+          bdrId: access.data.id,
+          borrowerType: randomItem(borrowerTypes),
+          loanPurpose: randomItem(loanPurposes),
+          prospectEmail: randomItem(emails),
+          prospectName: randomItem(fullNames),
+          prospectPhone: randomItem(phones),
+          vesting: randomItem(vestingTypes),
+          assets: {
+            create: Array.from(
+              { length: Math.floor(Math.random() * 2) + 1 },
+              () => ({
+                amount: Math.floor(Math.random() * 90000) + 5000,
+                type: randomItem(assetTypes),
+              }),
+            ),
+          },
+          coBorrowers: {
+            create: Array.from({ length: Math.floor(Math.random() * 3) }, (_, coIndex) => ({
+              email: randomItem(emails),
+              name: randomItem(fullNames),
+              order: coIndex + 1,
+              phone: randomItem(phones),
+            })),
+          },
+          ficoInfo: {
+            create: {
+              score: hasFicoScore
+                ? Math.floor(Math.random() * (800 - 580 + 1)) + 580
+                : null,
+              source: ficoSource,
+            },
+          },
+          propertyDetails: {
+            create: {
+              additionalHoaFees:
+                Math.random() > 0.5 ? Math.floor(Math.random() * 500) + 100 : null,
+              address: randomItem(addresses),
+              hoaManagementInfo:
+                Math.random() > 0.5 ? `SEED management ${index + 1}` : null,
+              hoaName: Math.random() > 0.5 ? `SEED HOA ${index + 1}` : null,
+              insuranceType: randomItem(insuranceTypes),
+              propertyTaxesLastYear: Math.floor(Math.random() * 8500) + 2500,
+              propertyTaxesPresentYear: Math.floor(Math.random() * 9000) + 2600,
+              propertyType: randomItem(propertyTypes),
+            },
+          },
+        },
+      });
+    }),
+  );
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+    count: seedCount,
   };
 }

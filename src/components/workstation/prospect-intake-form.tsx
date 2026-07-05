@@ -87,6 +87,9 @@ type ProspectIntakeFormState = {
 
 export type ProspectIntakeInitialData = ProspectIntakeFormState & {
   contactId: string;
+  createdByEmail?: string;
+  createdByName?: string;
+  createdOnLabel?: string;
 };
 
 const initialCoBorrower: CoBorrowerRow = {
@@ -159,9 +162,8 @@ const assetLabels = {
 };
 
 const ficoLabels = {
-  [FicoSource.KNOWN_CREDIT_KARMA]: "Known via Credit Karma",
-  [FicoSource.KNOWN_BANK]: "Known via Bank",
-  [FicoSource.ESTIMATED_GUESS]: "Estimated/Guess",
+  [FicoSource.KNOWN_BANK]: "Known",
+  [FicoSource.ESTIMATED_GUESS]: "Estimated",
   [FicoSource.UNKNOWN]: "Unknown",
 };
 
@@ -237,6 +239,7 @@ type ProspectIntakeFormProps = {
   dense?: boolean;
   initialData?: ProspectIntakeInitialData;
   onCancel?: () => void;
+  onOptimisticSaved?: (form: ProspectIntakeFormState) => void;
   onSaved?: () => void;
 };
 
@@ -244,6 +247,7 @@ export function ProspectIntakeForm({
   dense = false,
   initialData,
   onCancel,
+  onOptimisticSaved,
   onSaved,
 }: ProspectIntakeFormProps) {
   const router = useRouter();
@@ -471,6 +475,13 @@ export function ProspectIntakeForm({
       return;
     }
 
+    if (!validateOpportunityValue()) {
+      return;
+    }
+
+    onOptimisticSaved?.(form);
+    onCancel?.();
+
     startTransition(async () => {
       const savedContactId = await createContactBasicsInBackground();
 
@@ -478,9 +489,25 @@ export function ProspectIntakeForm({
         return;
       }
 
+      if (isOpportunityValueExpanded) {
+        await saveOpportunityValueRequest(savedContactId);
+      }
+
       toast.success("Contact Basics saved.");
-      router.refresh();
+      if (onSaved) {
+        onSaved();
+      } else {
+        router.refresh();
+      }
     });
+  }
+
+  function updateFicoSource(value: FicoSource) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      ficoScore: value === FicoSource.UNKNOWN ? "" : currentForm.ficoScore,
+      ficoSource: value,
+    }));
   }
 
   async function saveFinancialSnapshot() {
@@ -514,12 +541,27 @@ export function ProspectIntakeForm({
   function saveFinancialSnapshotOnly() {
     setError("");
 
+    if (!validateOpportunityValue()) {
+      return;
+    }
+
+    onOptimisticSaved?.(form);
+    onCancel?.();
+
     startTransition(async () => {
       const saved = await saveFinancialSnapshot();
 
       if (saved) {
+        if (isOpportunityValueExpanded) {
+          await saveOpportunityValueRequest();
+        }
+
         toast.success("Financial Snapshot saved.");
-        router.refresh();
+        if (onSaved) {
+          onSaved();
+        } else {
+          router.refresh();
+        }
       }
     });
   }
@@ -538,10 +580,20 @@ export function ProspectIntakeForm({
     })();
   }
 
-  function savePropertyDetails({ finish }: { finish: boolean }) {
+  function savePropertyDetails({
+    closeImmediately = false,
+    finish,
+  }: {
+    closeImmediately?: boolean;
+    finish: boolean;
+  }) {
     setError("");
 
     if (!validatePropertyDetails()) {
+      return;
+    }
+
+    if (closeImmediately && !validateOpportunityValue()) {
       return;
     }
 
@@ -552,6 +604,11 @@ export function ProspectIntakeForm({
       setError(message);
       toast.error(message);
       return;
+    }
+
+    if (closeImmediately) {
+      onOptimisticSaved?.(form);
+      onCancel?.();
     }
 
     startTransition(async () => {
@@ -585,8 +642,16 @@ export function ProspectIntakeForm({
       }
 
       if (!finish) {
+        if (isOpportunityValueExpanded) {
+          await saveOpportunityValueRequest(resolvedContactId);
+        }
+
         toast.success("Property Details saved.");
-        router.refresh();
+        if (onSaved) {
+          onSaved();
+        } else {
+          router.refresh();
+        }
         return;
       }
 
@@ -612,59 +677,64 @@ export function ProspectIntakeForm({
   }
 
   function savePropertyDetailsOnly() {
-    savePropertyDetails({ finish: false });
+    savePropertyDetails({ closeImmediately: true, finish: false });
   }
 
   function savePropertyDetailsAndFinish() {
     savePropertyDetails({ finish: true });
   }
 
-  function saveOpportunityValue() {
+  function validateOpportunityValue() {
+    if (!isOpportunityValueExpanded) {
+      return true;
+    }
+
+    if (
+      form.opportunityStatus === OpportunityStatus.NOT_MOVING_FORWARD &&
+      !(
+        form.notMovingForwardReason === "Other"
+          ? form.notMovingForwardOtherReason.trim()
+          : form.notMovingForwardReason.trim()
+      )
+    ) {
+      setError("A not moving forward reason is required.");
+      toast.error("A not moving forward reason is required.");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function saveOpportunityValueRequest(targetContactId = contactId) {
     setError("");
 
-    if (!contactId) {
+    if (!targetContactId) {
       const message = "Save Phase 1 before adding Opportunity Value.";
       setError(message);
       toast.error(message);
-      return;
+      return false;
     }
 
-    startTransition(async () => {
-      if (
-        form.opportunityStatus === OpportunityStatus.NOT_MOVING_FORWARD &&
-        !(
-          form.notMovingForwardReason === "Other"
-            ? form.notMovingForwardOtherReason.trim()
-            : form.notMovingForwardReason.trim()
-        )
-      ) {
-        setError("A not moving forward reason is required.");
-        toast.error("A not moving forward reason is required.");
-        return;
-      }
-
-      const result = await createOpportunityValue({
-        contactId,
-        propertyValue: form.opportunityPropertyValue,
-        purchasePrice: "0",
-        loanAmount: form.opportunityLoanAmount,
-        hasRealtor: form.hasRealtor,
-        status: form.opportunityStatus,
-        notMovingForwardReason:
-          form.notMovingForwardReason === "Other"
-            ? form.notMovingForwardOtherReason
-            : form.notMovingForwardReason,
-      });
-
-      if (!result.success) {
-        setError(result.error);
-        toast.error(result.error);
-        return;
-      }
-
-      toast.success("Opportunity Value saved.");
-      router.refresh();
+    const result = await createOpportunityValue({
+      contactId: targetContactId,
+      propertyValue: form.opportunityPropertyValue,
+      purchasePrice: "0",
+      loanAmount: form.opportunityLoanAmount,
+      hasRealtor: form.hasRealtor,
+      status: form.opportunityStatus,
+      notMovingForwardReason:
+        form.notMovingForwardReason === "Other"
+          ? form.notMovingForwardOtherReason
+          : form.notMovingForwardReason,
     });
+
+    if (!result.success) {
+      setError(result.error);
+      toast.error(result.error);
+      return false;
+    }
+
+    return true;
   }
 
   function parseCurrencyValue(value: string) {
@@ -742,7 +812,7 @@ export function ProspectIntakeForm({
             : handleValidatedSubmit(() => handleSubmit())
         }
       >
-        {dense ? <WizardSteps step={step} /> : null}
+        {dense ? <WizardSteps onStepClick={setStep} step={step} /> : null}
 
         {(!dense || step === 1) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
@@ -1006,12 +1076,14 @@ export function ProspectIntakeForm({
             </RepeatableSection>
 
             <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
-              <Field label="FICO source">
+              <Field label="FICO">
                 <Select
-                  onValueChange={(value) =>
-                    updateField("ficoSource", value as FicoSource)
+                  onValueChange={(value) => updateFicoSource(value as FicoSource)}
+                  value={
+                    form.ficoSource === FicoSource.KNOWN_CREDIT_KARMA
+                      ? FicoSource.KNOWN_BANK
+                      : form.ficoSource
                   }
-                  value={form.ficoSource}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1350,15 +1422,6 @@ export function ProspectIntakeForm({
                     </Field>
                   ) : null}
                 </div>
-                <div className="flex justify-end">
-                  <Button
-                    disabled={isPending}
-                    onClick={saveOpportunityValue}
-                    type="button"
-                  >
-                    Save Opportunity Value
-                  </Button>
-                </div>
               </CardContent>
             ) : (
               <CardContent className="pt-4">
@@ -1373,85 +1436,90 @@ export function ProspectIntakeForm({
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
         <div
           className={cn(
-            "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+            "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
             dense &&
-              !(isEditMode && isOpportunityValueExpanded) &&
-              "sticky bottom-0 -mx-1 border-t border-mafi-border bg-mafi-bg-off/95 px-1 pt-3 backdrop-blur",
+              "sticky bottom-0 z-10 -mx-1 border-t border-mafi-border bg-mafi-bg-off/95 px-1 py-3 backdrop-blur",
           )}
         >
-          {onCancel ? (
-            <Button onClick={onCancel} type="button" variant="outline">
-              Cancel
-            </Button>
-          ) : null}
-          {dense && step > 1 ? (
-            <Button
-              onClick={() => setStep((currentStep) => (currentStep === 3 ? 2 : 1))}
-              type="button"
-              variant="outline"
-            >
-              Back
-            </Button>
-          ) : null}
-          {dense && step === 1 ? (
-            <Button
-              disabled={isPending}
-              onClick={saveContactBasicsOnly}
-              type="button"
-              variant="outline"
-            >
-              Save
-            </Button>
-          ) : null}
-          {dense && step === 2 ? (
-            <Button
-              disabled={isPending}
-              onClick={saveFinancialSnapshotOnly}
-              type="button"
-              variant="outline"
-            >
-              Save
-            </Button>
-          ) : null}
-          {dense && step === 3 ? (
-            <Button
-              disabled={isPending}
-              onClick={savePropertyDetailsOnly}
-              type="button"
-              variant="outline"
-            >
-              Save
-            </Button>
-          ) : null}
-          {dense && step === 1 ? (
-            <Button
-              onClick={saveContactBasicsAndContinue}
-              type="button"
-            >
-              Next
-            </Button>
-          ) : dense && step === 2 ? (
-            <Button
-              onClick={saveFinancialSnapshotAndContinue}
-              type="button"
-            >
-              Next
-            </Button>
-          ) : dense && step === 3 ? (
-            !isEditMode ? (
-            <Button
-              disabled={isPending}
-              onClick={savePropertyDetailsAndFinish}
-              type="button"
-            >
-              Submit
-            </Button>
-            ) : null
+          {initialData?.createdByEmail ? (
+            <div className="min-w-0 text-xs text-mafi-text-light">
+              <p className="truncate">
+                Created by{" "}
+                <span className="font-medium">
+                  {initialData.createdByName ?? "Unknown"}
+                </span>
+              </p>
+              <p className="truncate">{initialData.createdByEmail}</p>
+            </div>
           ) : (
-            <Button disabled={isPending} type="submit">
-              {isPending ? "Saving..." : "Save prospect intake"}
-            </Button>
+            <span />
           )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            {dense && step > 1 ? (
+              <Button
+                onClick={() =>
+                  setStep((currentStep) => (currentStep === 3 ? 2 : 1))
+                }
+                type="button"
+                variant="outline"
+              >
+                Back
+              </Button>
+            ) : null}
+            {dense && isEditMode && step === 1 ? (
+              <Button
+                disabled={isPending}
+                onClick={saveContactBasicsOnly}
+                type="button"
+                variant="outline"
+              >
+                Save & Close
+              </Button>
+            ) : null}
+            {dense && isEditMode && step === 2 ? (
+              <Button
+                disabled={isPending}
+                onClick={saveFinancialSnapshotOnly}
+                type="button"
+                variant="outline"
+              >
+                Save & Close
+              </Button>
+            ) : null}
+            {dense && isEditMode && step === 3 ? (
+              <Button
+                disabled={isPending}
+                onClick={savePropertyDetailsOnly}
+                type="button"
+                variant="outline"
+              >
+                Save & Close
+              </Button>
+            ) : null}
+            {dense && step === 1 ? (
+              <Button onClick={saveContactBasicsAndContinue} type="button">
+                Next
+              </Button>
+            ) : dense && step === 2 ? (
+              <Button onClick={saveFinancialSnapshotAndContinue} type="button">
+                Next
+              </Button>
+            ) : dense && step === 3 ? (
+              !isEditMode ? (
+                <Button
+                  disabled={isPending}
+                  onClick={savePropertyDetailsAndFinish}
+                  type="button"
+                >
+                  Submit
+                </Button>
+              ) : null
+            ) : (
+              <Button disabled={isPending} type="submit">
+                {isPending ? "Saving..." : "Save prospect intake"}
+              </Button>
+            )}
+          </div>
         </div>
       </form>
     </div>
@@ -1477,7 +1545,13 @@ function Field({
   );
 }
 
-function WizardSteps({ step }: { step: 1 | 2 | 3 }) {
+function WizardSteps({
+  onStepClick,
+  step,
+}: {
+  onStepClick: (step: 1 | 2 | 3) => void;
+  step: 1 | 2 | 3;
+}) {
   const steps = [
     { number: 1, label: "Contact Basics" },
     { number: 2, label: "Financial Snapshot" },
@@ -1492,7 +1566,12 @@ function WizardSteps({ step }: { step: 1 | 2 | 3 }) {
 
         return (
           <div className="flex flex-1 items-center gap-3" key={item.number}>
-            <div className="flex items-center gap-2">
+            <button
+              aria-current={isActive ? "step" : undefined}
+              className="flex min-h-9 items-center gap-2 rounded-md text-left transition hover:text-mafi-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary"
+              onClick={() => onStepClick(item.number)}
+              type="button"
+            >
               <span
                 className={cn(
                   "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold",
@@ -1511,7 +1590,7 @@ function WizardSteps({ step }: { step: 1 | 2 | 3 }) {
               >
                 {item.label}
               </span>
-            </div>
+            </button>
             {index < steps.length - 1 ? (
               <div className="h-px flex-1 bg-mafi-border" />
             ) : null}

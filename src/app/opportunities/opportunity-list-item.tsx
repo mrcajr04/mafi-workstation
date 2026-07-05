@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import { ProspectIntakeInitialData } from "@/components/workstation/prospect-intake-form";
 
 type OpportunityListContact = {
   id: string;
-  bdrName: string;
+  createdBy: string;
   createdLabel: string;
   prospectName: string;
   prospectPhone: string;
@@ -23,6 +24,50 @@ type OpportunityListItemProps = {
   showBdrColumn: boolean;
 };
 
+const loanPurposeLabels = {
+  PURCHASE: "Purchase",
+  RATE_TERM_REFI: "Rate/Term Refi",
+  CASH_OUT_REFI: "Cash-Out Refi",
+  LIMITED_CASH_OUT: "Limited Cash-Out",
+} as const;
+
+function borrowerTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    PRIMARY: "Primary",
+    SECOND_HOME: "Second Home",
+    SECOND_HOME_VACATION: "Second / Vacation",
+    INVESTMENT: "Investment",
+    OTHER: "Other",
+  };
+
+  return labels[value] ?? (value || "N/A");
+}
+
+function emailOnly(value: string) {
+  const parenthesizedEmail = value.match(/\(([^()\s]+@[^()\s]+)\)/);
+
+  return parenthesizedEmail?.[1] ?? value;
+}
+
+function optimisticContact(
+  contact: OpportunityListContact,
+  form: ProspectIntakeInitialData,
+): OpportunityListContact {
+  return {
+    ...contact,
+    borrowerType: borrowerTypeLabel(form.borrowerType),
+    ficoLabel: form.ficoScore || "N/A",
+    hasFicoInfo: Boolean(form.ficoScore),
+    initialData: form,
+    loanPurposeLabel:
+      loanPurposeLabels[form.loanPurpose as keyof typeof loanPurposeLabels] ??
+      contact.loanPurposeLabel,
+    prospectEmail: form.prospectEmail,
+    prospectName: form.prospectName,
+    prospectPhone: form.prospectPhone,
+  };
+}
+
 function desktopGridClass(showBdrColumn: boolean) {
   return showBdrColumn
     ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.55fr)]"
@@ -34,17 +79,21 @@ export function OpportunityMobileCard({
   contact,
   showBdrColumn,
 }: OpportunityListItemProps) {
+  const [displayContact, setDisplayContact] = useState(contact);
+  const createdByEmail = emailOnly(displayContact.createdBy);
   const content = (
     <>
-      <p className="text-sm font-semibold">{contact.prospectName}</p>
+      <p className="text-sm font-semibold">{displayContact.prospectName}</p>
       <div className="mt-3 grid gap-2 text-xs text-mafi-text-mid">
-        <InfoLine label="Date created" value={contact.createdLabel} />
-        {showBdrColumn ? <InfoLine label="BDR" value={contact.bdrName} /> : null}
-        <InfoLine label="Phone" value={contact.prospectPhone || "No phone"} />
-        <InfoLine label="Email" value={contact.prospectEmail || "No email"} />
-        <InfoLine label="Borrower type" value={contact.borrowerType} />
-        <InfoLine label="Loan purpose" value={contact.loanPurposeLabel} />
-        <InfoLine label="FICO" muted={!contact.hasFicoInfo} value={contact.ficoLabel} />
+        <InfoLine label="Date created" value={displayContact.createdLabel} />
+        {showBdrColumn ? (
+          <InfoLine label="Created By" value={createdByEmail} />
+        ) : null}
+        <InfoLine label="Phone" value={displayContact.prospectPhone || "No phone"} />
+        <InfoLine label="Email" value={displayContact.prospectEmail || "No email"} />
+        <InfoLine label="Borrower type" value={displayContact.borrowerType} />
+        <InfoLine label="Loan purpose" value={displayContact.loanPurposeLabel} />
+        <InfoLine label="FICO" muted={!displayContact.hasFicoInfo} value={displayContact.ficoLabel} />
       </div>
     </>
   );
@@ -59,7 +108,12 @@ export function OpportunityMobileCard({
 
   return (
     <NewProspectModal
-      initialData={contact.initialData}
+      initialData={displayContact.initialData}
+      onOptimisticSaved={(form) =>
+        setDisplayContact((currentContact) =>
+          optimisticContact(currentContact, form),
+        )
+      }
       trigger={(open) => (
         <button
           className="block w-full rounded-md border border-mafi-border bg-mafi-bg-off p-4 text-left text-mafi-text-dark transition hover:border-mafi-blue-primary hover:bg-mafi-bg-light"
@@ -78,42 +132,44 @@ export function OpportunityDesktopRow({
   contact,
   showBdrColumn,
 }: OpportunityListItemProps) {
+  const [displayContact, setDisplayContact] = useState(contact);
+  const createdByEmail = emailOnly(displayContact.createdBy);
   const rowClassName = `grid w-full ${desktopGridClass(showBdrColumn)} items-center border-b border-mafi-border text-left text-[13px] transition last:border-b-0`;
   const cells = (
     <>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {contact.createdLabel}
+        {displayContact.createdLabel}
       </div>
       {showBdrColumn ? (
         <div className="truncate px-4 py-2 text-mafi-text-mid">
-          {contact.bdrName}
+          {createdByEmail}
         </div>
       ) : null}
       <div className="min-w-0 px-4 py-2">
         <p className="font-semibold text-mafi-text-dark">
-          {contact.prospectName}
+          {displayContact.prospectName}
         </p>
       </div>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {contact.prospectPhone || "No phone"}
+        {displayContact.prospectPhone || "No phone"}
       </div>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {contact.prospectEmail || "No email"}
+        {displayContact.prospectEmail || "No email"}
       </div>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {contact.borrowerType}
+        {displayContact.borrowerType}
       </div>
       <div className="px-4 py-2 text-mafi-text-mid">
-        {contact.loanPurposeLabel}
+        {displayContact.loanPurposeLabel}
       </div>
       <div
         className={
-          contact.hasFicoInfo
+          displayContact.hasFicoInfo
             ? "px-4 py-2 text-mafi-text-mid"
             : "px-4 py-2 text-mafi-text-light"
         }
       >
-        {contact.ficoLabel}
+        {displayContact.ficoLabel}
       </div>
     </>
   );
@@ -124,7 +180,12 @@ export function OpportunityDesktopRow({
 
   return (
     <NewProspectModal
-      initialData={contact.initialData}
+      initialData={displayContact.initialData}
+      onOptimisticSaved={(form) =>
+        setDisplayContact((currentContact) =>
+          optimisticContact(currentContact, form),
+        )
+      }
       trigger={(open) => (
         <button
           className={`${rowClassName} hover:bg-mafi-bg-light`}

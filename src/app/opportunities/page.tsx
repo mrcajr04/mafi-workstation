@@ -11,6 +11,7 @@ import {
   OpportunityDesktopRow,
   OpportunityMobileCard,
 } from "@/app/opportunities/opportunity-list-item";
+import { DevDataControls } from "@/app/opportunities/dev-data-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
@@ -76,9 +77,8 @@ export default async function OpportunitiesPage({
   const lastRecordNumber = Math.min(currentPage * PAGE_SIZE, totalCount);
   const contactItems = contacts.map((contact) => ({
     id: contact.id,
-    bdrName: contact.bdr.fullName,
+    createdBy: contact.bdr.email,
     createdLabel: formatCreatedAt(contact.createdAt),
-    createdBy: `${contact.bdr.fullName} (${contact.bdr.email})`,
     prospectName: contact.prospectName,
     prospectPhone: contact.prospectPhone,
     prospectEmail: contact.prospectEmail ?? "",
@@ -89,6 +89,9 @@ export default async function OpportunitiesPage({
     hasFicoInfo: Boolean(contact.ficoInfo?.score),
     initialData: {
       contactId: contact.id,
+      createdByEmail: contact.bdr.email,
+      createdByName: contact.bdr.fullName,
+      createdOnLabel: formatCreatedAt(contact.createdAt),
       prospectName: contact.prospectName,
       prospectPhone: contact.prospectPhone,
       prospectEmail: contact.prospectEmail ?? "",
@@ -213,7 +216,7 @@ export default async function OpportunitiesPage({
                       Date Created
                     </div>
                     {showBdrColumn ? (
-                      <div className="px-4 py-2 font-semibold">BDR</div>
+                      <div className="px-4 py-2 font-semibold">Created By</div>
                     ) : null}
                     <div className="px-4 py-2 font-semibold">Prospect</div>
                     <div className="px-4 py-2 font-semibold">Phone</div>
@@ -282,6 +285,7 @@ export default async function OpportunitiesPage({
           ) : null}
         </CardContent>
       </Card>
+      {canCreateContacts ? <DevDataControls /> : null}
     </div>
   );
 }
