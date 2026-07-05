@@ -1,0 +1,15 @@
+import { UserPlus } from "lucide-react";
+import Link from "next/link";
+
+export function InviteUserHeaderButton() {
+  return (
+    <Link
+      aria-label="Invite User"
+      className="inline-flex size-11 items-center justify-center rounded-md text-white transition hover:bg-white/15 hover:text-white"
+      href="/admin/invite-user"
+      title="Invite User"
+    >
+      <UserPlus className="size-5" />
+    </Link>
+  );
+}

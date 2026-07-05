@@ -1,0 +1,865 @@
+"use server";
+
+import { revalidatePath, revalidateTag } from "next/cache";
+import {
+  AssetType,
+  ContactStatus,
+  FicoSource,
+  InsuranceType,
+  LoanPurpose,
+  OpportunityStatus,
+  PropertyType,
+  RealtorStatus,
+  RoleType,
+} from "@prisma/client";
+import { normalizeCurrencyInput } from "@/lib/currency";
+import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/rbac";
+
+type CoBorrowerInput = {
+  name: string;
+  phone?: string;
+  email?: string;
+};
+
+type AssetInput = {
+  type: AssetType;
+  amount?: string;
+};
+
+export type ProspectIntakeInput = {
+  prospectName: string;
+  prospectPhone: string;
+  prospectEmail?: string;
+  borrowerType?: string;
+  loanPurpose: LoanPurpose;
+  vesting?: string;
+  coBorrowers: CoBorrowerInput[];
+  assets: AssetInput[];
+  ficoSource: FicoSource;
+  ficoScore?: string;
+  propertyAddress: string;
+  propertyType: PropertyType;
+  propertyTaxesLastYear?: string;
+  propertyTaxesPresentYear?: string;
+  insuranceType?: InsuranceType;
+  hoaName?: string;
+  hoaManagementInfo?: string;
+  additionalHoaFees?: string;
+};
+
+export type ProspectContactBasicsInput = {
+  prospectName: string;
+  prospectPhone: string;
+  prospectEmail?: string;
+  borrowerType?: string;
+  loanPurpose: LoanPurpose;
+  vesting?: string;
+};
+
+export type UpdateProspectContactBasicsInput = ProspectContactBasicsInput & {
+  contactId: string;
+};
+
+export type ProspectFinancialSnapshotInput = {
+  contactId: string;
+  coBorrowers: CoBorrowerInput[];
+  assets: AssetInput[];
+  ficoSource: FicoSource;
+  ficoScore?: string;
+};
+
+export type ProspectPropertyDetailsInput = {
+  contactId: string;
+  propertyAddress: string;
+  propertyType: PropertyType;
+  propertyTaxesLastYear?: string;
+  propertyTaxesPresentYear?: string;
+  insuranceType?: InsuranceType;
+  hoaName?: string;
+  hoaManagementInfo?: string;
+  additionalHoaFees?: string;
+};
+
+export type OpportunityValueInput = {
+  contactId: string;
+  propertyValue: string;
+  purchasePrice: string;
+  loanAmount: string;
+  hasRealtor: RealtorStatus;
+  status: OpportunityStatus;
+  notMovingForwardReason?: string;
+};
+
+type CreateProspectIntakeResult =
+  | { success: true; contactId: string }
+  | { success: false; error: string };
+
+type UpdateProspectStepResult = { success: true } | { success: false; error: string };
+
+type CreateOpportunityValueResult =
+  | { success: true }
+  | { success: false; error: string };
+
+type DeleteContactResult = { success: true } | { success: false; error: string };
+
+type ProspectEditDataResult =
+  | {
+      success: true;
+      data: {
+        contactId: string;
+        prospectName: string;
+        prospectPhone: string;
+        prospectEmail: string;
+        borrowerType: string;
+        loanPurpose: LoanPurpose;
+        vesting: string;
+        coBorrowers: {
+          name: string;
+          phone: string;
+          email: string;
+        }[];
+        assets: {
+          type: AssetType;
+          amount: string;
+        }[];
+        ficoSource: FicoSource;
+        ficoScore: string;
+        propertyAddress: string;
+        propertyType: PropertyType;
+        propertyTaxesLastYear: string;
+        propertyTaxesPresentYear: string;
+        insuranceType: InsuranceType | "";
+        hoaName: string;
+        hoaManagementInfo: string;
+        additionalHoaFees: string;
+        opportunityPropertyValue: string;
+        opportunityPurchasePrice: string;
+        opportunityLoanAmount: string;
+        opportunityLtv: string;
+        hasRealtor: RealtorStatus;
+        opportunityStatus: OpportunityStatus;
+        notMovingForwardReason: string;
+        notMovingForwardOtherReason: string;
+      };
+    }
+  | { success: false; error: string };
+
+function optionalDecimal(value?: string) {
+  return normalizeCurrencyInput(value);
+}
+
+function optionalInt(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? Number(trimmed) : undefined;
+}
+
+function formatCurrencyForForm(value?: { toString(): string } | string | null) {
+  if (!value) {
+    return "";
+  }
+
+  return Number(value.toString()).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+}
+
+async function findWritableContact(contactId: string, profileId: string, role: RoleType) {
+  return prisma.contact.findFirst({
+    where: {
+      id: contactId,
+      ...(role === RoleType.OWNER ? {} : { bdrId: profileId }),
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
+export async function getProspectIntakeEditData(
+  contactId: string,
+): Promise<ProspectEditDataResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  const contact = await prisma.contact.findFirst({
+    where: {
+      id: contactId,
+      ...(access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id }),
+    },
+    select: {
+      id: true,
+      prospectName: true,
+      prospectPhone: true,
+      prospectEmail: true,
+      borrowerType: true,
+      loanPurpose: true,
+      vesting: true,
+      coBorrowers: {
+        orderBy: {
+          order: "asc",
+        },
+        select: {
+          name: true,
+          phone: true,
+          email: true,
+        },
+      },
+      assets: {
+        select: {
+          type: true,
+          amount: true,
+        },
+      },
+      ficoInfo: {
+        select: {
+          source: true,
+          score: true,
+        },
+      },
+      propertyDetails: {
+        select: {
+          address: true,
+          propertyType: true,
+          propertyTaxesLastYear: true,
+          propertyTaxesPresentYear: true,
+          insuranceType: true,
+          hoaName: true,
+          hoaManagementInfo: true,
+          additionalHoaFees: true,
+        },
+      },
+      opportunityValue: {
+        select: {
+          propertyValue: true,
+          purchasePrice: true,
+          loanAmount: true,
+          ltv: true,
+          hasRealtor: true,
+          status: true,
+          notMovingForwardReason: true,
+        },
+      },
+    },
+  });
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      contactId: contact.id,
+      prospectName: contact.prospectName,
+      prospectPhone: contact.prospectPhone,
+      prospectEmail: contact.prospectEmail ?? "",
+      borrowerType: contact.borrowerType,
+      loanPurpose: contact.loanPurpose,
+      vesting: contact.vesting ?? "",
+      coBorrowers: contact.coBorrowers.map((coBorrower) => ({
+        name: coBorrower.name,
+        phone: coBorrower.phone ?? "",
+        email: coBorrower.email ?? "",
+      })),
+      assets: contact.assets.map((asset) => ({
+        type: asset.type,
+        amount: formatCurrencyForForm(asset.amount),
+      })),
+      ficoSource: contact.ficoInfo?.source ?? FicoSource.UNKNOWN,
+      ficoScore: contact.ficoInfo?.score ? String(contact.ficoInfo.score) : "",
+      propertyAddress: contact.propertyDetails?.address ?? "",
+      propertyType: contact.propertyDetails?.propertyType ?? PropertyType.SFR,
+      propertyTaxesLastYear: formatCurrencyForForm(
+        contact.propertyDetails?.propertyTaxesLastYear,
+      ),
+      propertyTaxesPresentYear: formatCurrencyForForm(
+        contact.propertyDetails?.propertyTaxesPresentYear,
+      ),
+      insuranceType: contact.propertyDetails?.insuranceType ?? "",
+      hoaName: contact.propertyDetails?.hoaName ?? "",
+      hoaManagementInfo: contact.propertyDetails?.hoaManagementInfo ?? "",
+      additionalHoaFees: formatCurrencyForForm(
+        contact.propertyDetails?.additionalHoaFees,
+      ),
+      opportunityPropertyValue: formatCurrencyForForm(
+        contact.opportunityValue?.propertyValue,
+      ),
+      opportunityPurchasePrice: formatCurrencyForForm(
+        contact.opportunityValue?.purchasePrice,
+      ),
+      opportunityLoanAmount: formatCurrencyForForm(
+        contact.opportunityValue?.loanAmount,
+      ),
+      opportunityLtv: contact.opportunityValue?.ltv?.toString() ?? "",
+      hasRealtor: contact.opportunityValue?.hasRealtor ?? RealtorStatus.NO,
+      opportunityStatus:
+        contact.opportunityValue?.status ?? OpportunityStatus.NOT_DECIDED,
+      notMovingForwardReason:
+        contact.opportunityValue?.notMovingForwardReason &&
+        [
+          "Chose another lender",
+          "Not ready financially",
+          "Timing not right",
+          "Lost contact",
+        ].includes(contact.opportunityValue.notMovingForwardReason)
+          ? contact.opportunityValue.notMovingForwardReason
+          : contact.opportunityValue?.notMovingForwardReason
+            ? "Other"
+            : "",
+      notMovingForwardOtherReason:
+        contact.opportunityValue?.notMovingForwardReason &&
+        ![
+          "Chose another lender",
+          "Not ready financially",
+          "Timing not right",
+          "Lost contact",
+        ].includes(contact.opportunityValue.notMovingForwardReason)
+          ? contact.opportunityValue.notMovingForwardReason
+          : "",
+    },
+  };
+}
+
+export async function createProspectContactBasics(
+  input: ProspectContactBasicsInput,
+): Promise<CreateProspectIntakeResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  if (!input.prospectName || !input.prospectPhone || !input.loanPurpose) {
+    return {
+      success: false,
+      error: "Missing required contact fields.",
+    };
+  }
+
+  const contact = await prisma.contact.create({
+    data: {
+      bdrId: access.data.id,
+      prospectName: input.prospectName.trim(),
+      prospectPhone: input.prospectPhone.trim(),
+      prospectEmail: input.prospectEmail?.trim() || null,
+      borrowerType: input.borrowerType?.trim() || "Unknown",
+      loanPurpose: input.loanPurpose,
+      vesting: input.vesting?.trim() || null,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+    contactId: contact.id,
+  };
+}
+
+export async function updateProspectContactBasics(
+  input: UpdateProspectContactBasicsInput,
+): Promise<UpdateProspectStepResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  if (!input.prospectName || !input.prospectPhone || !input.loanPurpose) {
+    return {
+      success: false,
+      error: "Missing required contact fields.",
+    };
+  }
+
+  const contact = await findWritableContact(
+    input.contactId,
+    access.data.id,
+    access.data.role,
+  );
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  await prisma.contact.update({
+    where: {
+      id: contact.id,
+    },
+    data: {
+      prospectName: input.prospectName.trim(),
+      prospectPhone: input.prospectPhone.trim(),
+      prospectEmail: input.prospectEmail?.trim() || null,
+      borrowerType: input.borrowerType?.trim() || "Unknown",
+      loanPurpose: input.loanPurpose,
+      vesting: input.vesting?.trim() || null,
+    },
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidateTag(`engagement-contact-${contact.id}`, "max");
+  revalidatePath("/opportunities");
+  revalidatePath(`/opportunities/${contact.id}`);
+
+  return {
+    success: true,
+  };
+}
+
+export async function updateProspectFinancialSnapshot(
+  input: ProspectFinancialSnapshotInput,
+): Promise<UpdateProspectStepResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  const contact = await findWritableContact(
+    input.contactId,
+    access.data.id,
+    access.data.role,
+  );
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.coBorrower.deleteMany({
+      where: {
+        contactId: contact.id,
+      },
+    });
+
+    const coBorrowers = input.coBorrowers
+      .filter((coBorrower) => coBorrower.name.trim())
+      .map((coBorrower, index) => ({
+        contactId: contact.id,
+        name: coBorrower.name.trim(),
+        phone: coBorrower.phone?.trim() || null,
+        email: coBorrower.email?.trim() || null,
+        order: index + 1,
+      }));
+
+    if (coBorrowers.length) {
+      await tx.coBorrower.createMany({
+        data: coBorrowers,
+      });
+    }
+
+    await tx.asset.deleteMany({
+      where: {
+        contactId: contact.id,
+      },
+    });
+
+    const assets = input.assets
+      .filter((asset) => optionalDecimal(asset.amount))
+      .map((asset) => ({
+        contactId: contact.id,
+        type: asset.type,
+        amount: optionalDecimal(asset.amount),
+      }));
+
+    if (assets.length) {
+      await tx.asset.createMany({
+        data: assets,
+      });
+    }
+
+    await tx.ficoInfo.upsert({
+      where: {
+        contactId: contact.id,
+      },
+      create: {
+        contactId: contact.id,
+        source: input.ficoSource,
+        score:
+          input.ficoSource === FicoSource.UNKNOWN
+            ? null
+            : optionalInt(input.ficoScore),
+      },
+      update: {
+        source: input.ficoSource,
+        score:
+          input.ficoSource === FicoSource.UNKNOWN
+            ? null
+            : optionalInt(input.ficoScore),
+      },
+    });
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+  };
+}
+
+export async function updateProspectPropertyDetails(
+  input: ProspectPropertyDetailsInput,
+): Promise<UpdateProspectStepResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  if (!input.propertyAddress) {
+    return {
+      success: false,
+      error: "Property address is required.",
+    };
+  }
+
+  const contact = await findWritableContact(
+    input.contactId,
+    access.data.id,
+    access.data.role,
+  );
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  await prisma.propertyDetails.upsert({
+    where: {
+      contactId: contact.id,
+    },
+    create: {
+      contactId: contact.id,
+      address: input.propertyAddress.trim(),
+      propertyType: input.propertyType,
+      propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
+      propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
+      insuranceType: input.insuranceType || null,
+      hoaName: input.hoaName?.trim() || null,
+      hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
+      additionalHoaFees: optionalDecimal(input.additionalHoaFees),
+    },
+    update: {
+      address: input.propertyAddress.trim(),
+      propertyType: input.propertyType,
+      propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
+      propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
+      insuranceType: input.insuranceType || null,
+      hoaName: input.hoaName?.trim() || null,
+      hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
+      additionalHoaFees: optionalDecimal(input.additionalHoaFees),
+    },
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+  };
+}
+
+export async function createProspectIntake(
+  input: ProspectIntakeInput,
+): Promise<CreateProspectIntakeResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  if (!input.prospectName || !input.prospectPhone || !input.loanPurpose) {
+    return {
+      success: false,
+      error: "Missing required contact fields.",
+    };
+  }
+
+  if (!input.propertyAddress) {
+    return {
+      success: false,
+      error: "Property address is required.",
+    };
+  }
+
+  const contact = await prisma.$transaction((tx) =>
+    tx.contact.create({
+      data: {
+        bdrId: access.data.id,
+        prospectName: input.prospectName.trim(),
+        prospectPhone: input.prospectPhone.trim(),
+        prospectEmail: input.prospectEmail?.trim() || null,
+        borrowerType: input.borrowerType?.trim() || "Unknown",
+        loanPurpose: input.loanPurpose,
+        vesting: input.vesting?.trim() || null,
+        coBorrowers: {
+          create: input.coBorrowers
+            .filter((coBorrower) => coBorrower.name.trim())
+            .map((coBorrower, index) => ({
+              name: coBorrower.name.trim(),
+              phone: coBorrower.phone?.trim() || null,
+              email: coBorrower.email?.trim() || null,
+              order: index + 1,
+            })),
+        },
+        assets: {
+          create: input.assets
+            .filter((asset) => optionalDecimal(asset.amount))
+            .map((asset) => ({
+              type: asset.type,
+              amount: optionalDecimal(asset.amount),
+            })),
+        },
+        ficoInfo: {
+          create: {
+            source: input.ficoSource,
+            score:
+              input.ficoSource === FicoSource.UNKNOWN
+                ? null
+                : optionalInt(input.ficoScore),
+          },
+        },
+        propertyDetails: {
+          create: {
+            address: input.propertyAddress.trim(),
+            propertyType: input.propertyType,
+            propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
+            propertyTaxesPresentYear: optionalDecimal(
+              input.propertyTaxesPresentYear,
+            ),
+            insuranceType: input.insuranceType || null,
+            hoaName: input.hoaName?.trim() || null,
+            hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
+            additionalHoaFees: optionalDecimal(input.additionalHoaFees),
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    }),
+  );
+
+  revalidateTag("engagement-queue", "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+    contactId: contact.id,
+  };
+}
+
+export async function createOpportunityValue(
+  input: OpportunityValueInput,
+): Promise<CreateOpportunityValueResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  if (
+    !input.contactId ||
+    !input.propertyValue ||
+    !input.loanAmount
+  ) {
+    return {
+      success: false,
+      error: "Missing required opportunity value fields.",
+    };
+  }
+
+  const propertyValue = optionalDecimal(input.propertyValue);
+  const purchasePrice = optionalDecimal(input.purchasePrice);
+  const loanAmount = optionalDecimal(input.loanAmount);
+
+  if (!propertyValue || !loanAmount) {
+    return {
+      success: false,
+      error: "Property value and loan amount are required.",
+    };
+  }
+
+  if (
+    input.status === OpportunityStatus.NOT_MOVING_FORWARD &&
+    !input.notMovingForwardReason?.trim()
+  ) {
+    return {
+      success: false,
+      error: "A not moving forward reason is required.",
+    };
+  }
+
+  const ltv =
+    Number(propertyValue.toString()) > 0
+      ? (Number(loanAmount.toString()) / Number(propertyValue.toString())) * 100
+      : null;
+
+  const contact = await prisma.contact.findFirst({
+    where: {
+      id: input.contactId,
+      ...(access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id }),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.opportunityValue.upsert({
+      where: {
+        contactId: contact.id,
+      },
+      create: {
+        contactId: contact.id,
+        propertyValue,
+        purchasePrice: purchasePrice ?? 0,
+        loanAmount,
+        hasRealtor: input.hasRealtor,
+        // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
+        calculatedOpportunityValue: loanAmount,
+        ltv,
+        status: input.status,
+        notMovingForwardReason:
+          input.status === OpportunityStatus.NOT_MOVING_FORWARD
+            ? input.notMovingForwardReason?.trim()
+            : null,
+      },
+      update: {
+        propertyValue,
+        purchasePrice: purchasePrice ?? 0,
+        loanAmount,
+        hasRealtor: input.hasRealtor,
+        // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
+        calculatedOpportunityValue: loanAmount,
+        ltv,
+        status: input.status,
+        notMovingForwardReason:
+          input.status === OpportunityStatus.NOT_MOVING_FORWARD
+            ? input.notMovingForwardReason?.trim()
+            : null,
+      },
+    });
+
+    if (input.status === OpportunityStatus.READY_FOR_REVIEW) {
+      await tx.contact.update({
+        where: {
+          id: contact.id,
+        },
+        data: {
+          status: ContactStatus.IN_SCENARIO_REVIEW,
+        },
+      });
+    }
+
+    if (input.status === OpportunityStatus.NOT_MOVING_FORWARD) {
+      await tx.contact.update({
+        where: {
+          id: contact.id,
+        },
+        data: {
+          status: ContactStatus.LOST,
+        },
+      });
+    }
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidateTag(`engagement-contact-${contact.id}`, "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+  };
+}
+
+export async function deleteContact(contactId: string): Promise<DeleteContactResult> {
+  const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
+
+  if (!access.success) {
+    return {
+      success: false,
+      error: access.error,
+    };
+  }
+
+  const contact = await prisma.contact.findFirst({
+    where: {
+      id: contactId,
+      ...(access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id }),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!contact) {
+    return {
+      success: false,
+      error: "Contact not found.",
+    };
+  }
+
+  await prisma.contact.delete({
+    where: {
+      id: contact.id,
+    },
+  });
+
+  revalidateTag("engagement-queue", "max");
+  revalidateTag(`engagement-contact-${contact.id}`, "max");
+  revalidatePath("/opportunities");
+
+  return {
+    success: true,
+  };
+}

@@ -1,0 +1,368 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RoleType {
+  BDR
+  LICENSED_LO
+  LOAN_PROCESSOR
+  COMPLIANCE_OFFICER
+  OWNER
+}
+
+enum ContactStatus {
+  ACTIVE
+  IN_SCENARIO_REVIEW
+  IN_PROCESSING
+  WON
+  LOST
+  RE_ENGAGEMENT
+}
+
+enum LoanPurpose {
+  PURCHASE
+  RATE_TERM_REFI
+  CASH_OUT_REFI
+  LIMITED_CASH_OUT
+}
+
+enum AssetType {
+  CHECKING
+  SAVINGS
+  RETIREMENT
+  GIFT
+  OTHER
+}
+
+enum FicoSource {
+  KNOWN_CREDIT_KARMA
+  KNOWN_BANK
+  ESTIMATED_GUESS
+  UNKNOWN
+}
+
+enum PropertyType {
+  SFR
+  PUD_TOWNHOUSE
+  PUD_VILLA
+  CONDO
+  COMMERCIAL
+  BUSINESS
+  OTHER
+}
+
+enum InsuranceType {
+  HAZARD_HO3
+  INVESTOR_DP3
+  WALL_IN_HO6
+  FLOOD
+  WINDSTORM
+  MASTER_INSURANCE
+  MASTER_FLOOD
+  MASTER_WINDSTORM
+  OTHER
+}
+
+enum RealtorStatus {
+  YES
+  NO
+  NEEDS_HELP
+}
+
+enum OpportunityStatus {
+  NOT_DECIDED
+  READY_FOR_REVIEW
+  NOT_MOVING_FORWARD
+}
+
+enum ScenarioDeskStatus {
+  IN_REVIEW
+  FINALIZED
+}
+
+enum DecisionBranch {
+  PENDING
+  PROCEED_TO_PROCESSING
+  RE_ENGAGEMENT
+}
+
+enum PricingLockFloat {
+  LOCKED
+  FLOATING
+  NOT_SET
+}
+
+enum LoanApprovalStatus {
+  NOT_STARTED
+  CONDITIONS_PENDING
+  FINAL_REVIEW
+  APPROVED
+}
+
+enum CreditAuthorizationStatus {
+  NOT_STARTED
+  AUTHORIZED
+  REPORT_REVIEWED
+}
+
+enum LoanApplicationStatus {
+  NOT_STARTED
+  SUBMITTED
+}
+
+enum DisclosuresStatus {
+  NOT_SENT
+  SENT
+  SIGNED
+}
+
+enum AppraisalStatus {
+  NOT_ORDERED
+  ORDERED
+  CONFIRMED
+}
+
+enum CommandCenterTag {
+  CLIENT
+  RE_ENGAGEMENT
+}
+
+enum NurtureTouchType {
+  EMAIL
+  SMS
+  SEASONAL_CHECKIN
+  RATE_DROP_ALERT
+  OTHER
+}
+
+// User profile and role mapping, PRD Section 10 - Permissions
+model Profile {
+  id         String   @id @db.Uuid
+  fullName   String
+  email      String   @unique
+  phone      String?
+  role       RoleType
+  nmlsNumber String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  contactsAsBDR               Contact[]            @relation("ContactBDR")
+  contactsAsLO                Contact[]            @relation("ContactAssignedLO")
+  commandCenterBDRAssignments CommandCenterEntry[] @relation("CommandCenterAssignedBDR")
+  commandCenterLOAssignments  CommandCenterEntry[] @relation("CommandCenterAssignedLO")
+  auditLogs                   AuditLog[]
+}
+
+// Phase 1 - Contact Information, PRD Section 9.1
+model Contact {
+  id            String        @id @default(uuid()) @db.Uuid
+  bdrId         String        @db.Uuid
+  assignedLOId  String?       @db.Uuid
+  status        ContactStatus @default(ACTIVE)
+  prospectName  String
+  prospectPhone String
+  prospectEmail String?
+  borrowerType  String
+  loanPurpose   LoanPurpose
+  vesting       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  bdr                Profile             @relation("ContactBDR", fields: [bdrId], references: [id])
+  assignedLO         Profile?            @relation("ContactAssignedLO", fields: [assignedLOId], references: [id])
+  coBorrowers        CoBorrower[]
+  assets             Asset[]
+  ficoInfo           FicoInfo?
+  propertyDetails    PropertyDetails?
+  opportunityValue   OpportunityValue?
+  scenarioDesk       ScenarioDesk?
+  phase4Pipeline     Phase4Pipeline?
+  commandCenterEntry CommandCenterEntry?
+
+  @@index([bdrId])
+  @@index([assignedLOId])
+  @@index([status])
+}
+
+// Phase 1 - Co-Borrowers, PRD Section 9.1
+model CoBorrower {
+  id        String  @id @default(uuid()) @db.Uuid
+  contactId String  @db.Uuid
+  name      String
+  phone     String?
+  email     String?
+  order     Int
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+// Phase 1 - Assets Available, PRD Section 9.1
+model Asset {
+  id        String    @id @default(uuid()) @db.Uuid
+  contactId String    @db.Uuid
+  type      AssetType
+  amount    Decimal?  @db.Decimal(12, 2)
+  notes     String?
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+// Phase 1 - FICO Score, PRD Section 9.1
+model FicoInfo {
+  id        String     @id @default(uuid()) @db.Uuid
+  contactId String     @unique @db.Uuid
+  source    FicoSource
+  score     Int?
+  contact   Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+// Phase 1 - Property Details, PRD Section 9.1
+model PropertyDetails {
+  id                       String         @id @default(uuid()) @db.Uuid
+  contactId                String         @unique @db.Uuid
+  address                  String
+  zillowUrl                String?
+  redfinUrl                String?
+  realtorUrl               String?
+  propertyType             PropertyType
+  propertyTaxesLastYear    Decimal?       @db.Decimal(12, 2)
+  propertyTaxesPresentYear Decimal?       @db.Decimal(12, 2)
+  insuranceType            InsuranceType?
+  hoaName                  String?
+  hoaManagementInfo        String?
+  additionalHoaFees        Decimal?       @db.Decimal(12, 2)
+  contact                  Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+// Phase 2 - Opportunity Value, PRD Section 9.2
+model OpportunityValue {
+  id                         String            @id @default(uuid()) @db.Uuid
+  contactId                  String            @unique @db.Uuid
+  // Represents estimated property value prior to appraisal — Property Value and Estimated Value were confirmed by stakeholder to be the same concept.
+  propertyValue              Decimal           @db.Decimal(12, 2)
+  purchasePrice              Decimal           @db.Decimal(12, 2)
+  loanAmount                 Decimal           @db.Decimal(12, 2)
+  hasRealtor                 RealtorStatus
+  calculatedOpportunityValue Decimal           @db.Decimal(12, 2)
+  ltv                        Decimal?          @db.Decimal(5, 2)
+  status                     OpportunityStatus @default(NOT_DECIDED)
+  notMovingForwardReason     String?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+  contact                    Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+// Phase 3 - Scenario Desk, PRD Section 9.3
+model ScenarioDesk {
+  id                     String             @id @default(uuid()) @db.Uuid
+  contactId              String             @unique @db.Uuid
+  status                 ScenarioDeskStatus @default(IN_REVIEW)
+  selectedScenarioNumber Int?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  contact                Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  scenarios              Scenario[]
+}
+
+// Phase 3 - Scenario Options, PRD Section 9.3
+model Scenario {
+  id                   String       @id @default(uuid()) @db.Uuid
+  scenarioDeskId       String       @db.Uuid
+  scenarioNumber       Int
+  lenderAndProduct     String
+  interestRate         Decimal      @db.Decimal(6, 3)
+  principalAndInterest Decimal      @db.Decimal(12, 2)
+  pitia                Decimal      @db.Decimal(12, 2)
+  escrowed             Boolean
+  originationPay       Decimal      @db.Decimal(12, 2)
+  processingFee        Decimal      @db.Decimal(12, 2)
+  scenarioDesk         ScenarioDesk @relation(fields: [scenarioDeskId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioDeskId, scenarioNumber])
+  @@index([scenarioDeskId])
+}
+
+// Phase 4 - Pipeline, PRD Section 9.4
+model Phase4Pipeline {
+  id                        String                    @id @default(uuid()) @db.Uuid
+  contactId                 String                    @unique @db.Uuid
+  decisionBranch            DecisionBranch            @default(PENDING)
+  loanPreApprovalHtml       String?
+  loanEstimateHtml          String?
+  pricingLockFloat          PricingLockFloat          @default(NOT_SET)
+  loanApprovalStatus        LoanApprovalStatus        @default(NOT_STARTED)
+  creditAuthorizationStatus CreditAuthorizationStatus @default(NOT_STARTED)
+  loanApplicationStatus     LoanApplicationStatus     @default(NOT_STARTED)
+  disclosuresStatus         DisclosuresStatus         @default(NOT_SENT)
+  appraisalStatus           AppraisalStatus           @default(NOT_ORDERED)
+  loanLockConfirmed         Boolean                   @default(false)
+  allInvoicesCollected      Boolean                   @default(false)
+  ctcNotified               Boolean                   @default(false)
+  closingScheduleDate       DateTime?
+  closingDocsSignedOut      Boolean                   @default(false)
+  fundingDate               DateTime?
+  postClosingComplete       Boolean                   @default(false)
+  reasonCode                String?
+  nextTouchDate             DateTime?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  contact                   Contact                   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+// MLG Command Center - Company-wide Database, PRD Section 10.5
+model CommandCenterEntry {
+  id                 String           @id @default(uuid()) @db.Uuid
+  contactId          String           @unique @db.Uuid
+  tag                CommandCenterTag
+  sourcePhase        String
+  assignedBDRId      String           @db.Uuid
+  assignedLOId       String?          @db.Uuid
+  lastContactDate    DateTime?
+  nextScheduledTouch DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  contact            Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedBDR        Profile          @relation("CommandCenterAssignedBDR", fields: [assignedBDRId], references: [id])
+  assignedLO         Profile?         @relation("CommandCenterAssignedLO", fields: [assignedLOId], references: [id])
+  nurtureTouches     NurtureTouch[]
+
+  @@index([assignedBDRId])
+  @@index([assignedLOId])
+  @@index([tag])
+}
+
+// MLG Command Center - Nurture Touches, PRD Section 10.5
+model NurtureTouch {
+  id                   String             @id @default(uuid()) @db.Uuid
+  commandCenterEntryId String             @db.Uuid
+  touchType            NurtureTouchType
+  touchDate            DateTime
+  notes                String?
+  commandCenterEntry   CommandCenterEntry @relation(fields: [commandCenterEntryId], references: [id], onDelete: Cascade)
+
+  @@index([commandCenterEntryId])
+}
+
+// Compliance Read-only Activity Log, PRD Section 12.4
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  fieldDiffs Json?
+  timestamp  DateTime @default(now())
+  user       Profile  @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}

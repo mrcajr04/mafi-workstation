@@ -1,0 +1,276 @@
+import {
+  AssetType,
+  ContactStatus,
+  FicoSource,
+  InsuranceType,
+  LoanPurpose,
+  OpportunityStatus,
+  PrismaClient,
+  PropertyType,
+  RealtorStatus,
+  RoleType,
+} from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+const seedContacts = [
+  {
+    prospectName: "SEED_Test Prospect 1",
+    prospectPhone: "555-0101",
+    prospectEmail: "SEED_test.prospect1@example.test",
+    borrowerType: "Primary",
+    loanPurpose: LoanPurpose.PURCHASE,
+    vesting: "Individuals",
+    coBorrowers: [
+      {
+        name: "SEED_Co Borrower 1A",
+        phone: "555-1101",
+        email: "SEED_coborrower1a@example.test",
+        order: 1,
+      },
+    ],
+    assets: [
+      { type: AssetType.CHECKING, amount: "18000.00", notes: "SEED checking" },
+      { type: AssetType.GIFT, amount: "12000.00", notes: "SEED family gift" },
+    ],
+    ficoInfo: { source: FicoSource.KNOWN_CREDIT_KARMA, score: 718 },
+    propertyDetails: {
+      address: "SEED_1201 Palm Grove Ave, Orlando, FL 32801",
+      propertyType: PropertyType.SFR,
+      propertyTaxesLastYear: "5200.00",
+      propertyTaxesPresentYear: "5450.00",
+      insuranceType: InsuranceType.HAZARD_HO3,
+      hoaName: "SEED_Palm Grove HOA",
+      hoaManagementInfo: "SEED_Brightline Management",
+      additionalHoaFees: "125.00",
+    },
+  },
+  {
+    prospectName: "SEED_Test Prospect 2",
+    prospectPhone: "555-0102",
+    prospectEmail: "SEED_test.prospect2@example.test",
+    borrowerType: "Second home / vacation",
+    loanPurpose: LoanPurpose.RATE_TERM_REFI,
+    vesting: "LLC / Corp",
+    coBorrowers: [],
+    assets: [
+      { type: AssetType.SAVINGS, amount: "42000.00", notes: "SEED savings" },
+    ],
+    ficoInfo: { source: FicoSource.UNKNOWN, score: null },
+    propertyDetails: {
+      address: "SEED_88 Harbor View Dr, Tampa, FL 33602",
+      propertyType: PropertyType.CONDO,
+      propertyTaxesLastYear: "6100.00",
+      propertyTaxesPresentYear: "6325.00",
+      insuranceType: InsuranceType.WALL_IN_HO6,
+      hoaName: "SEED_Harbor View Condo Association",
+      hoaManagementInfo: "SEED_Coastal Property Services",
+      additionalHoaFees: "410.00",
+    },
+  },
+  {
+    prospectName: "SEED_Test Prospect 3",
+    prospectPhone: "555-0103",
+    prospectEmail: "SEED_test.prospect3@example.test",
+    borrowerType: "Investment",
+    loanPurpose: LoanPurpose.CASH_OUT_REFI,
+    vesting: "Trust",
+    coBorrowers: [
+      {
+        name: "SEED_Co Borrower 3A",
+        phone: "555-1301",
+        email: "SEED_coborrower3a@example.test",
+        order: 1,
+      },
+      {
+        name: "SEED_Co Borrower 3B",
+        phone: "555-1302",
+        email: "SEED_coborrower3b@example.test",
+        order: 2,
+      },
+    ],
+    assets: [
+      {
+        type: AssetType.RETIREMENT,
+        amount: "95000.00",
+        notes: "SEED retirement account",
+      },
+      { type: AssetType.CHECKING, amount: "25000.00", notes: "SEED checking" },
+    ],
+    ficoInfo: { source: FicoSource.KNOWN_BANK, score: 742 },
+    propertyDetails: {
+      address: "SEED_2400 Coral Way, Miami, FL 33145",
+      propertyType: PropertyType.PUD_TOWNHOUSE,
+      propertyTaxesLastYear: "7800.00",
+      propertyTaxesPresentYear: "8100.00",
+      insuranceType: InsuranceType.INVESTOR_DP3,
+      hoaName: "SEED_Coral Way Townhomes",
+      hoaManagementInfo: "SEED_Sunstate HOA Group",
+      additionalHoaFees: "225.00",
+    },
+  },
+  {
+    prospectName: "SEED_Test Prospect 4",
+    prospectPhone: "555-0104",
+    prospectEmail: "SEED_test.prospect4@example.test",
+    borrowerType: "Primary",
+    loanPurpose: LoanPurpose.LIMITED_CASH_OUT,
+    vesting: "Individuals",
+    coBorrowers: [
+      {
+        name: "SEED_Co Borrower 4A",
+        phone: "555-1401",
+        email: "SEED_coborrower4a@example.test",
+        order: 1,
+      },
+    ],
+    assets: [
+      { type: AssetType.OTHER, amount: "15000.00", notes: "SEED brokerage" },
+    ],
+    ficoInfo: { source: FicoSource.ESTIMATED_GUESS, score: 680 },
+    propertyDetails: {
+      address: "SEED_510 Lake Meadow Rd, Jacksonville, FL 32207",
+      propertyType: PropertyType.PUD_VILLA,
+      propertyTaxesLastYear: "4300.00",
+      propertyTaxesPresentYear: "4475.00",
+      insuranceType: InsuranceType.FLOOD,
+      hoaName: "SEED_Lake Meadow Villas",
+      hoaManagementInfo: "SEED_First Coast Management",
+      additionalHoaFees: "185.00",
+    },
+    opportunityValue: {
+      propertyValue: "390000.00",
+      purchasePrice: "0.00",
+      loanAmount: "260000.00",
+      hasRealtor: RealtorStatus.NO,
+      calculatedOpportunityValue: "260000.00",
+      ltv: "66.67",
+      status: OpportunityStatus.NOT_DECIDED,
+      notMovingForwardReason: null,
+    },
+  },
+  {
+    prospectName: "SEED_Test Prospect 5",
+    prospectPhone: "555-0105",
+    prospectEmail: "SEED_test.prospect5@example.test",
+    borrowerType: "Business",
+    loanPurpose: LoanPurpose.PURCHASE,
+    vesting: "LLC / Corp",
+    coBorrowers: [],
+    assets: [
+      { type: AssetType.SAVINGS, amount: "65000.00", notes: "SEED savings" },
+      { type: AssetType.CHECKING, amount: "22000.00", notes: "SEED checking" },
+    ],
+    ficoInfo: { source: FicoSource.UNKNOWN, score: null },
+    propertyDetails: {
+      address: "SEED_730 Commerce Park Blvd, Fort Lauderdale, FL 33301",
+      propertyType: PropertyType.COMMERCIAL,
+      propertyTaxesLastYear: "11800.00",
+      propertyTaxesPresentYear: "12150.00",
+      insuranceType: InsuranceType.MASTER_INSURANCE,
+      hoaName: "SEED_Commerce Park Association",
+      hoaManagementInfo: "SEED_Atlantic Commercial Management",
+      additionalHoaFees: "525.00",
+    },
+    opportunityValue: {
+      propertyValue: "875000.00",
+      purchasePrice: "850000.00",
+      loanAmount: "680000.00",
+      hasRealtor: RealtorStatus.YES,
+      calculatedOpportunityValue: "680000.00",
+      ltv: "77.71",
+      status: OpportunityStatus.READY_FOR_REVIEW,
+      notMovingForwardReason: null,
+    },
+  },
+];
+
+async function main() {
+  const bdr = await prisma.profile.findFirst({
+    where: {
+      role: RoleType.BDR,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  if (!bdr) {
+    throw new Error(
+      "No BDR Profile found. Create or invite a BDR account first, then re-run `npx prisma db seed`.",
+    );
+  }
+
+  const createdContacts = [];
+
+  for (const seedContact of seedContacts) {
+    const status = seedContact.opportunityValue?.status === OpportunityStatus.READY_FOR_REVIEW
+      ? ContactStatus.IN_SCENARIO_REVIEW
+      : ContactStatus.ACTIVE;
+
+    const contact = await prisma.contact.create({
+      data: {
+        bdrId: bdr.id,
+        status,
+        prospectName: seedContact.prospectName,
+        prospectPhone: seedContact.prospectPhone,
+        prospectEmail: seedContact.prospectEmail,
+        borrowerType: seedContact.borrowerType,
+        loanPurpose: seedContact.loanPurpose,
+        vesting: seedContact.vesting,
+        coBorrowers: {
+          create: seedContact.coBorrowers,
+        },
+        assets: {
+          create: seedContact.assets,
+        },
+        ficoInfo: {
+          create: seedContact.ficoInfo,
+        },
+        propertyDetails: {
+          create: seedContact.propertyDetails,
+        },
+        opportunityValue: seedContact.opportunityValue
+          ? {
+              create: seedContact.opportunityValue,
+            }
+          : undefined,
+      },
+      include: {
+        opportunityValue: true,
+      },
+    });
+
+    createdContacts.push(contact);
+  }
+
+  const withoutOpportunityValue = createdContacts.filter(
+    (contact) => !contact.opportunityValue,
+  );
+  const withOpportunityValue = createdContacts.filter(
+    (contact) => contact.opportunityValue,
+  );
+
+  console.log(`Seeded ${createdContacts.length} contacts for BDR ${bdr.email}.`);
+  console.log("");
+  console.log("Contacts without OpportunityValue:");
+  withoutOpportunityValue.forEach((contact) => {
+    console.log(`- ${contact.id} | ${contact.prospectName}`);
+  });
+  console.log("");
+  console.log("Contacts with OpportunityValue:");
+  withOpportunityValue.forEach((contact) => {
+    console.log(
+      `- ${contact.id} | ${contact.prospectName} | status=${contact.opportunityValue?.status}`,
+    );
+  });
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
