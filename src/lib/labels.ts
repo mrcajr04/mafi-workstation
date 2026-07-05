@@ -1,8 +1,17 @@
 import {
+  AppraisalStatus,
   AssetType,
+  ContactStatus,
+  CreditAuthorizationStatus,
+  DecisionBranch,
+  DisclosuresStatus,
   FicoSource,
   InsuranceType,
+  LoanApplicationStatus,
+  LoanApprovalStatus,
   LoanPurpose,
+  OpportunityStatus,
+  PricingLockFloat,
   PropertyType,
   RealtorStatus,
 } from "@prisma/client";
@@ -73,6 +82,63 @@ export const realtorLabels = {
   [RealtorStatus.YES]: "Yes",
   [RealtorStatus.NO]: "No",
   [RealtorStatus.NEEDS_HELP]: "Needs Help",
+};
+
+export const opportunityStatusLabels = {
+  [OpportunityStatus.NOT_DECIDED]: "Still working it",
+  [OpportunityStatus.READY_FOR_REVIEW]: "Ready for Review",
+  [OpportunityStatus.NOT_MOVING_FORWARD]: "Not moving forward",
+};
+
+export const contactStatusLabels = {
+  [ContactStatus.ACTIVE]: "Active",
+  [ContactStatus.IN_SCENARIO_REVIEW]: "In Scenario Review",
+  [ContactStatus.IN_PROCESSING]: "In Processing",
+  [ContactStatus.WON]: "Won",
+  [ContactStatus.LOST]: "Lost",
+  [ContactStatus.RE_ENGAGEMENT]: "Re-engagement",
+};
+
+export const decisionBranchLabels = {
+  [DecisionBranch.PENDING]: "Pending",
+  [DecisionBranch.PROCEED_TO_PROCESSING]: "Proceed to Processing",
+  [DecisionBranch.RE_ENGAGEMENT]: "Re-engagement",
+};
+
+export const pricingLockFloatLabels = {
+  [PricingLockFloat.LOCKED]: "Locked",
+  [PricingLockFloat.FLOATING]: "Floating",
+  [PricingLockFloat.NOT_SET]: "Not Set",
+};
+
+export const loanApprovalStatusLabels = {
+  [LoanApprovalStatus.NOT_STARTED]: "Not Started",
+  [LoanApprovalStatus.CONDITIONS_PENDING]: "Conditions Pending",
+  [LoanApprovalStatus.FINAL_REVIEW]: "Final Review",
+  [LoanApprovalStatus.APPROVED]: "Approved",
+};
+
+export const creditAuthorizationStatusLabels = {
+  [CreditAuthorizationStatus.NOT_STARTED]: "Not Started",
+  [CreditAuthorizationStatus.AUTHORIZED]: "Authorized",
+  [CreditAuthorizationStatus.REPORT_REVIEWED]: "Report Reviewed",
+};
+
+export const loanApplicationStatusLabels = {
+  [LoanApplicationStatus.NOT_STARTED]: "Not Started",
+  [LoanApplicationStatus.SUBMITTED]: "Submitted",
+};
+
+export const disclosuresStatusLabels = {
+  [DisclosuresStatus.NOT_SENT]: "Not Sent",
+  [DisclosuresStatus.SENT]: "Sent",
+  [DisclosuresStatus.SIGNED]: "Signed",
+};
+
+export const appraisalStatusLabels = {
+  [AppraisalStatus.NOT_ORDERED]: "Not Ordered",
+  [AppraisalStatus.ORDERED]: "Ordered",
+  [AppraisalStatus.CONFIRMED]: "Confirmed",
 };
 
 export function labelFromMap(

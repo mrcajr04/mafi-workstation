@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Opportunities", href: "/opportunities" },
-  { label: "Scenario Desk", href: "#" },
+  { label: "Scenario Desk", href: "/scenario-desk" },
   { label: "Mortgage Calculators", href: "#" },
-  { label: "Loan Pre-Approval", href: "#" },
+  { label: "Loan Pre-Approval", href: "/phase4" },
   { label: "Loan Estimate", href: "#" },
   { label: "Loan Search", href: "#" },
   { label: "Step by Step Process", href: "#" },
