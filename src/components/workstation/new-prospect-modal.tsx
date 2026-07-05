@@ -8,24 +8,32 @@ import {
   ProspectIntakeForm,
   ProspectIntakeInitialData,
 } from "@/components/workstation/prospect-intake-form";
+import { getProspectIntakeEditData } from "@/lib/actions/contact-actions";
 import { cn } from "@/lib/utils";
 
 type NewProspectModalProps = {
+  contactId?: string;
   initialData?: ProspectIntakeInitialData;
   onOptimisticSaved?: (form: ProspectIntakeInitialData) => void;
   trigger?: (open: () => void) => ReactNode;
 };
 
 export function NewProspectModal({
+  contactId,
   initialData,
   onOptimisticSaved,
   trigger,
 }: NewProspectModalProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const isEditMode = Boolean(initialData);
+  const [loadedData, setLoadedData] = useState(initialData);
+  const [loadError, setLoadError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const isEditMode = Boolean(initialData || contactId);
 
   function openModal() {
+    setIsLoading(Boolean(contactId && loadedData?.contactId !== contactId));
+    setLoadError("");
     setIsOpen(true);
   }
 
@@ -48,6 +56,33 @@ export function NewProspectModal({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !contactId || loadedData?.contactId === contactId) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    getProspectIntakeEditData(contactId).then((result) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      if (!result.success) {
+        setLoadError(result.error);
+        setIsLoading(false);
+        return;
+      }
+
+      setLoadedData(result.data);
+      setIsLoading(false);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [contactId, isOpen, loadedData?.contactId]);
 
   return (
     <>
@@ -83,9 +118,9 @@ export function NewProspectModal({
                     ? "Review and update the prospect details."
                     : "Capture the prospect details needed for Phase 1-2."}
                 </p>
-                {initialData?.createdOnLabel ? (
+                {loadedData?.createdOnLabel ? (
                   <p className="mt-1 text-xs text-mafi-text-light">
-                    Created on {initialData.createdOnLabel}
+                    Created on {loadedData.createdOnLabel}
                   </p>
                 ) : null}
               </div>
@@ -99,24 +134,34 @@ export function NewProspectModal({
               </button>
             </header>
             <div className="overflow-y-auto p-3 pb-0 sm:p-4 sm:pb-0">
-              <ProspectIntakeForm
-                dense
-                initialData={initialData}
-                key={initialData?.contactId ?? "new-prospect"}
-                onCancel={() => setIsOpen(false)}
-                onOptimisticSaved={(form) => {
-                  if (initialData?.contactId) {
-                    onOptimisticSaved?.({
-                      ...form,
-                      contactId: initialData.contactId,
-                    });
-                  }
-                }}
-                onSaved={() => {
-                  setIsOpen(false);
-                  router.refresh();
-                }}
-              />
+              {isLoading ? (
+                <div className="py-16 text-center text-sm text-mafi-text-mid">
+                  Loading prospect details...
+                </div>
+              ) : loadError ? (
+                <div className="py-16 text-center text-sm text-destructive">
+                  {loadError}
+                </div>
+              ) : (
+                <ProspectIntakeForm
+                  dense
+                  initialData={loadedData}
+                  key={loadedData?.contactId ?? "new-prospect"}
+                  onCancel={() => setIsOpen(false)}
+                  onOptimisticSaved={(form) => {
+                    if (loadedData?.contactId) {
+                      onOptimisticSaved?.({
+                        ...form,
+                        contactId: loadedData.contactId,
+                      });
+                    }
+                  }}
+                  onSaved={() => {
+                    setIsOpen(false);
+                    router.refresh();
+                  }}
+                />
+              )}
             </div>
           </section>
         </div>

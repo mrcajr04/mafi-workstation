@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentProfile } from "@/lib/rbac";
-import { RoleType } from "@prisma/client";
+import { ContactStatus, RoleType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 
 export async function getContactsNeedingOpportunityValue({
@@ -37,6 +37,7 @@ export async function getContactsNeedingOpportunityValue({
   }
 
   const where = {
+    status: ContactStatus.ACTIVE,
     ...(viewerRole === RoleType.OWNER ||
     viewerRole === RoleType.COMPLIANCE_OFFICER
       ? {}
@@ -49,7 +50,7 @@ export async function getContactsNeedingOpportunityValue({
         prisma.contact.findMany({
           where,
           orderBy: {
-            createdAt: "desc",
+            updatedAt: "desc",
           },
           skip: (safePage - 1) * safePageSize,
           take: safePageSize,
@@ -68,34 +69,6 @@ export async function getContactsNeedingOpportunityValue({
                 email: true,
               },
             },
-            propertyDetails: {
-              select: {
-                address: true,
-                propertyType: true,
-                propertyTaxesLastYear: true,
-                propertyTaxesPresentYear: true,
-                insuranceType: true,
-                hoaName: true,
-                hoaManagementInfo: true,
-                additionalHoaFees: true,
-              },
-            },
-            coBorrowers: {
-              orderBy: {
-                order: "asc",
-              },
-              select: {
-                name: true,
-                phone: true,
-                email: true,
-              },
-            },
-            assets: {
-              select: {
-                type: true,
-                amount: true,
-              },
-            },
             ficoInfo: {
               select: {
                 source: true,
@@ -104,14 +77,8 @@ export async function getContactsNeedingOpportunityValue({
             },
             opportunityValue: {
               select: {
-                id: true,
-                propertyValue: true,
-                purchasePrice: true,
-                loanAmount: true,
-                ltv: true,
-                hasRealtor: true,
-                status: true,
                 notMovingForwardReason: true,
+                status: true,
               },
             },
           },

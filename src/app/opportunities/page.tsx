@@ -1,10 +1,5 @@
 import Link from "next/link";
 import {
-  FicoSource,
-  InsuranceType,
-  OpportunityStatus,
-  PropertyType,
-  RealtorStatus,
   RoleType,
 } from "@prisma/client";
 import {
@@ -16,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import {
+  opportunityStatusLabels,
   borrowerTypeLabels,
   labelFromMap,
   loanPurposeLabels,
@@ -33,17 +29,6 @@ function formatCreatedAt(createdAt: Date | string) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-function formatCurrency(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return "";
-  }
-
-  return Number(value.toString()).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
   });
 }
 
@@ -83,82 +68,17 @@ export default async function OpportunitiesPage({
     prospectPhone: contact.prospectPhone,
     prospectEmail: contact.prospectEmail ?? "",
     borrowerType: labelFromMap(contact.borrowerType, borrowerTypeLabels),
-    propertyAddress: contact.propertyDetails?.address ?? "",
     loanPurposeLabel: loanPurposeLabels[contact.loanPurpose],
     ficoLabel: formatFico(contact.ficoInfo),
     hasFicoInfo: Boolean(contact.ficoInfo?.score),
-    initialData: {
-      contactId: contact.id,
-      createdByEmail: contact.bdr.email,
-      createdByName: contact.bdr.fullName,
-      createdOnLabel: formatCreatedAt(contact.createdAt),
-      prospectName: contact.prospectName,
-      prospectPhone: contact.prospectPhone,
-      prospectEmail: contact.prospectEmail ?? "",
-      borrowerType: contact.borrowerType,
-      loanPurpose: contact.loanPurpose,
-      vesting: contact.vesting ?? "",
-      coBorrowers: contact.coBorrowers.map((coBorrower) => ({
-        name: coBorrower.name,
-        phone: coBorrower.phone ?? "",
-        email: coBorrower.email ?? "",
-      })),
-      assets: contact.assets.map((asset) => ({
-        type: asset.type,
-        amount: formatCurrency(asset.amount),
-      })),
-      ficoSource: contact.ficoInfo?.source ?? FicoSource.UNKNOWN,
-      ficoScore: contact.ficoInfo?.score ? String(contact.ficoInfo.score) : "",
-      propertyAddress: contact.propertyDetails?.address ?? "",
-      propertyType: contact.propertyDetails?.propertyType ?? PropertyType.SFR,
-      propertyTaxesLastYear: formatCurrency(
-        contact.propertyDetails?.propertyTaxesLastYear,
-      ),
-      propertyTaxesPresentYear: formatCurrency(
-        contact.propertyDetails?.propertyTaxesPresentYear,
-      ),
-      insuranceType: contact.propertyDetails?.insuranceType
-        ? (contact.propertyDetails.insuranceType as InsuranceType)
-        : ("" as const),
-      hoaName: contact.propertyDetails?.hoaName ?? "",
-      hoaManagementInfo: contact.propertyDetails?.hoaManagementInfo ?? "",
-      additionalHoaFees: formatCurrency(
-        contact.propertyDetails?.additionalHoaFees,
-      ),
-      opportunityPropertyValue: formatCurrency(
-        contact.opportunityValue?.propertyValue,
-      ),
-      opportunityPurchasePrice: formatCurrency(
-        contact.opportunityValue?.purchasePrice,
-      ),
-      opportunityLoanAmount: formatCurrency(contact.opportunityValue?.loanAmount),
-      opportunityLtv: contact.opportunityValue?.ltv?.toString() ?? "",
-      hasRealtor: contact.opportunityValue?.hasRealtor ?? RealtorStatus.NO,
-      opportunityStatus:
-        contact.opportunityValue?.status ?? OpportunityStatus.NOT_DECIDED,
-      notMovingForwardReason:
-        contact.opportunityValue?.notMovingForwardReason &&
-        [
-          "Chose another lender",
-          "Not ready financially",
-          "Timing not right",
-          "Lost contact",
-        ].includes(contact.opportunityValue.notMovingForwardReason)
-          ? contact.opportunityValue.notMovingForwardReason
-          : contact.opportunityValue?.notMovingForwardReason
-            ? "Other"
-            : "",
-      notMovingForwardOtherReason:
-        contact.opportunityValue?.notMovingForwardReason &&
-        ![
-          "Chose another lender",
-          "Not ready financially",
-          "Timing not right",
-          "Lost contact",
-        ].includes(contact.opportunityValue.notMovingForwardReason)
-          ? contact.opportunityValue.notMovingForwardReason
-          : "",
-    },
+    opportunityStatusLabel: contact.opportunityValue
+      ? opportunityStatusLabels[contact.opportunityValue.status]
+      : "No opportunity value yet",
+    opportunityStatusReason:
+      contact.opportunityValue?.notMovingForwardReason ?? "",
+    opportunityStatusTone: contact.opportunityValue
+      ? contact.opportunityValue.status
+      : "NOT_STARTED",
   }));
 
   return (
@@ -208,8 +128,8 @@ export default async function OpportunitiesPage({
                   <div
                     className={
                       showBdrColumn
-                        ? "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.55fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
-                        : "grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.25fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_minmax(0,0.6fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        ? "grid grid-cols-[minmax(0,0.75fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        : "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
                     }
                   >
                     <div className="px-4 py-2 font-semibold">
@@ -227,6 +147,7 @@ export default async function OpportunitiesPage({
                     <div className="px-4 py-2 font-semibold">
                       Loan purpose
                     </div>
+                    <div className="px-4 py-2 font-semibold">Status</div>
                     <div className="px-4 py-2 font-semibold">FICO</div>
                   </div>
                   {contactItems.map((contact) => (

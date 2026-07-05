@@ -15,7 +15,9 @@ type OpportunityListContact = {
   loanPurposeLabel: string;
   ficoLabel: string;
   hasFicoInfo: boolean;
-  initialData: ProspectIntakeInitialData;
+  opportunityStatusLabel: string;
+  opportunityStatusReason: string;
+  opportunityStatusTone: string;
 };
 
 type OpportunityListItemProps = {
@@ -58,10 +60,20 @@ function optimisticContact(
     borrowerType: borrowerTypeLabel(form.borrowerType),
     ficoLabel: form.ficoScore || "N/A",
     hasFicoInfo: Boolean(form.ficoScore),
-    initialData: form,
     loanPurposeLabel:
       loanPurposeLabels[form.loanPurpose as keyof typeof loanPurposeLabels] ??
       contact.loanPurposeLabel,
+    opportunityStatusLabel:
+      form.opportunityStatus === "NOT_DECIDED"
+        ? "Still working it"
+        : form.opportunityStatus === "READY_FOR_REVIEW"
+          ? "Ready for Review"
+          : "Not moving forward",
+    opportunityStatusReason:
+      form.notMovingForwardReason === "Other"
+        ? form.notMovingForwardOtherReason
+        : form.notMovingForwardReason,
+    opportunityStatusTone: form.opportunityStatus,
     prospectEmail: form.prospectEmail,
     prospectName: form.prospectName,
     prospectPhone: form.prospectPhone,
@@ -70,8 +82,8 @@ function optimisticContact(
 
 function desktopGridClass(showBdrColumn: boolean) {
   return showBdrColumn
-    ? "grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.55fr)]"
-    : "grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.25fr)_minmax(0,0.95fr)_minmax(0,0.95fr)_minmax(0,0.6fr)]";
+    ? "grid-cols-[minmax(0,0.75fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)]"
+    : "grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)]";
 }
 
 export function OpportunityMobileCard({
@@ -93,6 +105,14 @@ export function OpportunityMobileCard({
         <InfoLine label="Email" value={displayContact.prospectEmail || "No email"} />
         <InfoLine label="Borrower type" value={displayContact.borrowerType} />
         <InfoLine label="Loan purpose" value={displayContact.loanPurposeLabel} />
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-mafi-text-dark">Status:</span>
+          <StatusBadge
+            label={displayContact.opportunityStatusLabel}
+            reason={displayContact.opportunityStatusReason}
+            tone={displayContact.opportunityStatusTone}
+          />
+        </div>
         <InfoLine label="FICO" muted={!displayContact.hasFicoInfo} value={displayContact.ficoLabel} />
       </div>
     </>
@@ -108,7 +128,7 @@ export function OpportunityMobileCard({
 
   return (
     <NewProspectModal
-      initialData={displayContact.initialData}
+      contactId={displayContact.id}
       onOptimisticSaved={(form) =>
         setDisplayContact((currentContact) =>
           optimisticContact(currentContact, form),
@@ -162,6 +182,13 @@ export function OpportunityDesktopRow({
       <div className="px-4 py-2 text-mafi-text-mid">
         {displayContact.loanPurposeLabel}
       </div>
+      <div className="min-w-0 px-4 py-2">
+        <StatusBadge
+          label={displayContact.opportunityStatusLabel}
+          reason={displayContact.opportunityStatusReason}
+          tone={displayContact.opportunityStatusTone}
+        />
+      </div>
       <div
         className={
           displayContact.hasFicoInfo
@@ -180,7 +207,7 @@ export function OpportunityDesktopRow({
 
   return (
     <NewProspectModal
-      initialData={displayContact.initialData}
+      contactId={displayContact.id}
       onOptimisticSaved={(form) =>
         setDisplayContact((currentContact) =>
           optimisticContact(currentContact, form),
@@ -196,6 +223,36 @@ export function OpportunityDesktopRow({
         </button>
       )}
     />
+  );
+}
+
+function StatusBadge({
+  label,
+  reason,
+  tone,
+}: {
+  label: string;
+  reason: string;
+  tone: string;
+}) {
+  const title =
+    tone === "NOT_MOVING_FORWARD" && reason
+      ? `Reason: ${reason}`
+      : undefined;
+  const className =
+    tone === "NOT_STARTED"
+      ? "border-mafi-border bg-mafi-bg-lighter text-mafi-text-light"
+      : tone === "NOT_MOVING_FORWARD"
+        ? "border-mafi-gold bg-mafi-gold-light/45 text-mafi-gold-dark"
+        : "border-mafi-border bg-mafi-bg-light text-mafi-blue-primary";
+
+  return (
+    <span
+      className={`inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none ${className}`}
+      title={title}
+    >
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
 

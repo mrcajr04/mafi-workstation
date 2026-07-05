@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import {
   AssetType,
+  CommandCenterTag,
   ContactStatus,
   FicoSource,
   InsuranceType,
@@ -111,6 +112,9 @@ type ProspectEditDataResult =
       success: true;
       data: {
         contactId: string;
+        createdByEmail?: string;
+        createdByName?: string;
+        createdOnLabel?: string;
         prospectName: string;
         prospectPhone: string;
         prospectEmail: string;
@@ -168,6 +172,15 @@ function formatCurrencyForForm(value?: { toString(): string } | string | null) {
   });
 }
 
+function refreshOpportunitiesList() {
+  updateTag("engagement-queue");
+  revalidatePath("/opportunities");
+}
+
+function refreshEngagementContact(contactId: string) {
+  updateTag(`engagement-contact-${contactId}`);
+}
+
 function randomItem<T>(items: T[]) {
   return items[Math.floor(Math.random() * items.length)];
 }
@@ -179,6 +192,7 @@ async function findWritableContact(contactId: string, profileId: string, role: R
       ...(role === RoleType.OWNER ? {} : { bdrId: profileId }),
     },
     select: {
+      bdrId: true,
       id: true,
     },
   });
@@ -203,6 +217,7 @@ export async function getProspectIntakeEditData(
     },
     select: {
       id: true,
+      createdAt: true,
       prospectName: true,
       prospectPhone: true,
       prospectEmail: true,
@@ -254,6 +269,12 @@ export async function getProspectIntakeEditData(
           notMovingForwardReason: true,
         },
       },
+      bdr: {
+        select: {
+          email: true,
+          fullName: true,
+        },
+      },
     },
   });
 
@@ -268,6 +289,13 @@ export async function getProspectIntakeEditData(
     success: true,
     data: {
       contactId: contact.id,
+      createdByEmail: contact.bdr.email,
+      createdByName: contact.bdr.fullName,
+      createdOnLabel: contact.createdAt.toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
       prospectName: contact.prospectName,
       prospectPhone: contact.prospectPhone,
       prospectEmail: contact.prospectEmail ?? "",
@@ -368,12 +396,12 @@ export async function createProspectContactBasics(
       vesting: input.vesting?.trim() || null,
     },
     select: {
+      bdrId: true,
       id: true,
     },
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,
@@ -427,9 +455,8 @@ export async function updateProspectContactBasics(
     },
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidateTag(`engagement-contact-${contact.id}`, "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
+  refreshEngagementContact(contact.id);
   revalidatePath(`/opportunities/${contact.id}`);
 
   return {
@@ -463,6 +490,15 @@ export async function updateProspectFinancialSnapshot(
   }
 
   await prisma.$transaction(async (tx) => {
+    await tx.contact.update({
+      where: {
+        id: contact.id,
+      },
+      data: {
+        updatedAt: new Date(),
+      },
+    });
+
     await tx.coBorrower.deleteMany({
       where: {
         contactId: contact.id,
@@ -527,8 +563,7 @@ export async function updateProspectFinancialSnapshot(
     });
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,
@@ -567,35 +602,45 @@ export async function updateProspectPropertyDetails(
     };
   }
 
-  await prisma.propertyDetails.upsert({
-    where: {
-      contactId: contact.id,
-    },
-    create: {
-      contactId: contact.id,
-      address: input.propertyAddress.trim(),
-      propertyType: input.propertyType,
-      propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
-      propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
-      insuranceType: input.insuranceType || null,
-      hoaName: input.hoaName?.trim() || null,
-      hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
-      additionalHoaFees: optionalDecimal(input.additionalHoaFees),
-    },
-    update: {
-      address: input.propertyAddress.trim(),
-      propertyType: input.propertyType,
-      propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
-      propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
-      insuranceType: input.insuranceType || null,
-      hoaName: input.hoaName?.trim() || null,
-      hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
-      additionalHoaFees: optionalDecimal(input.additionalHoaFees),
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.contact.update({
+      where: {
+        id: contact.id,
+      },
+      data: {
+        updatedAt: new Date(),
+      },
+    });
+
+    await tx.propertyDetails.upsert({
+      where: {
+        contactId: contact.id,
+      },
+      create: {
+        contactId: contact.id,
+        address: input.propertyAddress.trim(),
+        propertyType: input.propertyType,
+        propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
+        propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
+        insuranceType: input.insuranceType || null,
+        hoaName: input.hoaName?.trim() || null,
+        hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
+        additionalHoaFees: optionalDecimal(input.additionalHoaFees),
+      },
+      update: {
+        address: input.propertyAddress.trim(),
+        propertyType: input.propertyType,
+        propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
+        propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
+        insuranceType: input.insuranceType || null,
+        hoaName: input.hoaName?.trim() || null,
+        hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
+        additionalHoaFees: optionalDecimal(input.additionalHoaFees),
+      },
+    });
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,
@@ -686,8 +731,7 @@ export async function createProspectIntake(
     }),
   );
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,
@@ -708,13 +752,13 @@ export async function createOpportunityValue(
   }
 
   if (
-    !input.contactId ||
-    !input.propertyValue ||
-    !input.loanAmount
+    input.status === OpportunityStatus.READY_FOR_REVIEW &&
+    (!input.contactId || !input.propertyValue || !input.loanAmount)
   ) {
     return {
       success: false,
-      error: "Missing required opportunity value fields.",
+      error:
+        "Property value and loan amount are required when ready for scenario review.",
     };
   }
 
@@ -722,10 +766,14 @@ export async function createOpportunityValue(
   const purchasePrice = optionalDecimal(input.purchasePrice);
   const loanAmount = optionalDecimal(input.loanAmount);
 
-  if (!propertyValue || !loanAmount) {
+  if (
+    input.status === OpportunityStatus.READY_FOR_REVIEW &&
+    (!propertyValue || !loanAmount)
+  ) {
     return {
       success: false,
-      error: "Property value and loan amount are required.",
+      error:
+        "Property value and loan amount are required when ready for scenario review.",
     };
   }
 
@@ -740,7 +788,7 @@ export async function createOpportunityValue(
   }
 
   const ltv =
-    Number(propertyValue.toString()) > 0
+    propertyValue && loanAmount && Number(propertyValue.toString()) > 0
       ? (Number(loanAmount.toString()) / Number(propertyValue.toString())) * 100
       : null;
 
@@ -750,6 +798,7 @@ export async function createOpportunityValue(
       ...(access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id }),
     },
     select: {
+      bdrId: true,
       id: true,
     },
   });
@@ -762,6 +811,15 @@ export async function createOpportunityValue(
   }
 
   await prisma.$transaction(async (tx) => {
+    await tx.contact.update({
+      where: {
+        id: contact.id,
+      },
+      data: {
+        updatedAt: new Date(),
+      },
+    });
+
     await tx.opportunityValue.upsert({
       where: {
         contactId: contact.id,
@@ -806,6 +864,12 @@ export async function createOpportunityValue(
           status: ContactStatus.IN_SCENARIO_REVIEW,
         },
       });
+
+      await tx.commandCenterEntry.deleteMany({
+        where: {
+          contactId: contact.id,
+        },
+      });
     }
 
     if (input.status === OpportunityStatus.NOT_MOVING_FORWARD) {
@@ -814,15 +878,53 @@ export async function createOpportunityValue(
           id: contact.id,
         },
         data: {
-          status: ContactStatus.LOST,
+          status: ContactStatus.ACTIVE,
+        },
+      });
+
+      // Command Center list UI does not exist yet; this only routes the data for a future view.
+      await tx.commandCenterEntry.upsert({
+        where: {
+          contactId: contact.id,
+        },
+        create: {
+          assignedBDRId: contact.bdrId,
+          contactId: contact.id,
+          lastContactDate: new Date(),
+          nextScheduledTouch: null,
+          sourcePhase: "Phase 2 - Opportunity Value",
+          tag: CommandCenterTag.RE_ENGAGEMENT,
+        },
+        update: {
+          assignedBDRId: contact.bdrId,
+          lastContactDate: new Date(),
+          nextScheduledTouch: null,
+          sourcePhase: "Phase 2 - Opportunity Value",
+          tag: CommandCenterTag.RE_ENGAGEMENT,
+        },
+      });
+    }
+
+    if (input.status === OpportunityStatus.NOT_DECIDED) {
+      await tx.contact.update({
+        where: {
+          id: contact.id,
+        },
+        data: {
+          status: ContactStatus.ACTIVE,
+        },
+      });
+
+      await tx.commandCenterEntry.deleteMany({
+        where: {
+          contactId: contact.id,
         },
       });
     }
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidateTag(`engagement-contact-${contact.id}`, "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
+  refreshEngagementContact(contact.id);
 
   return {
     success: true,
@@ -862,9 +964,8 @@ export async function deleteContact(contactId: string): Promise<DeleteContactRes
     },
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidateTag(`engagement-contact-${contact.id}`, "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
+  refreshEngagementContact(contact.id);
 
   return {
     success: true,
@@ -885,8 +986,7 @@ export async function deleteAllDevContacts(): Promise<DevDataActionResult> {
     where: access.data.role === RoleType.OWNER ? {} : { bdrId: access.data.id },
   });
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,
@@ -1023,8 +1123,7 @@ export async function seedDevContacts(count: number): Promise<DevDataActionResul
     }),
   );
 
-  revalidateTag("engagement-queue", "max");
-  revalidatePath("/opportunities");
+  refreshOpportunitiesList();
 
   return {
     success: true,

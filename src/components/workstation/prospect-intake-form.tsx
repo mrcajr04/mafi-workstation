@@ -85,6 +85,11 @@ type ProspectIntakeFormState = {
   notMovingForwardOtherReason: string;
 };
 
+type OpportunityValueFieldErrors = {
+  opportunityLoanAmount?: string;
+  opportunityPropertyValue?: string;
+};
+
 export type ProspectIntakeInitialData = ProspectIntakeFormState & {
   contactId: string;
   createdByEmail?: string;
@@ -256,6 +261,8 @@ export function ProspectIntakeForm({
     initialData ?? initialForm,
   );
   const [error, setError] = useState("");
+  const [opportunityErrors, setOpportunityErrors] =
+    useState<OpportunityValueFieldErrors>({});
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [contactId, setContactId] = useState<string | null>(
     initialData?.contactId ?? null,
@@ -309,6 +316,14 @@ export function ProspectIntakeForm({
       field === "propertyAddress"
     ) {
       setValue(field, String(value));
+    }
+
+    if (
+      field === "opportunityPropertyValue" ||
+      field === "opportunityLoanAmount" ||
+      field === "opportunityStatus"
+    ) {
+      setOpportunityErrors({});
     }
   }
 
@@ -690,6 +705,29 @@ export function ProspectIntakeForm({
     }
 
     if (
+      form.opportunityStatus === OpportunityStatus.READY_FOR_REVIEW &&
+      (!form.opportunityPropertyValue.trim() || !form.opportunityLoanAmount.trim())
+    ) {
+      setOpportunityErrors({
+        opportunityPropertyValue: !form.opportunityPropertyValue.trim()
+          ? "Property value is required when ready for scenario review."
+          : undefined,
+        opportunityLoanAmount: !form.opportunityLoanAmount.trim()
+          ? "Loan amount is required when ready for scenario review."
+          : undefined,
+      });
+      setError(
+        "Property value and loan amount are required when ready for scenario review.",
+      );
+      toast.error(
+        "Property value and loan amount are required when ready for scenario review.",
+      );
+      return false;
+    }
+
+    setOpportunityErrors({});
+
+    if (
       form.opportunityStatus === OpportunityStatus.NOT_MOVING_FORWARD &&
       !(
         form.notMovingForwardReason === "Other"
@@ -707,6 +745,10 @@ export function ProspectIntakeForm({
 
   async function saveOpportunityValueRequest(targetContactId = contactId) {
     setError("");
+
+    if (!validateOpportunityValue()) {
+      return false;
+    }
 
     if (!targetContactId) {
       const message = "Save Phase 1 before adding Opportunity Value.";
@@ -1300,8 +1342,21 @@ export function ProspectIntakeForm({
             {isOpportunityValueExpanded ? (
               <CardContent className="space-y-4 pt-4">
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Field label="Property value">
+                  <Field
+                    label="Property value"
+                    required={
+                      form.opportunityStatus ===
+                      OpportunityStatus.READY_FOR_REVIEW
+                    }
+                  >
                     <Input
+                      aria-invalid={Boolean(
+                        opportunityErrors.opportunityPropertyValue,
+                      )}
+                      className={cn(
+                        opportunityErrors.opportunityPropertyValue &&
+                          "border-destructive",
+                      )}
                       inputMode="decimal"
                       onBlur={(event) =>
                         updateField(
@@ -1315,9 +1370,25 @@ export function ProspectIntakeForm({
                       type="text"
                       value={form.opportunityPropertyValue}
                     />
+                    {opportunityErrors.opportunityPropertyValue ? (
+                      <p className="text-xs font-medium text-destructive">
+                        {opportunityErrors.opportunityPropertyValue}
+                      </p>
+                    ) : null}
                   </Field>
-                  <Field label="Loan amount">
+                  <Field
+                    label="Loan amount"
+                    required={
+                      form.opportunityStatus ===
+                      OpportunityStatus.READY_FOR_REVIEW
+                    }
+                  >
                     <Input
+                      aria-invalid={Boolean(opportunityErrors.opportunityLoanAmount)}
+                      className={cn(
+                        opportunityErrors.opportunityLoanAmount &&
+                          "border-destructive",
+                      )}
                       inputMode="decimal"
                       onBlur={(event) =>
                         updateField(
@@ -1331,6 +1402,11 @@ export function ProspectIntakeForm({
                       type="text"
                       value={form.opportunityLoanAmount}
                     />
+                    {opportunityErrors.opportunityLoanAmount ? (
+                      <p className="text-xs font-medium text-destructive">
+                        {opportunityErrors.opportunityLoanAmount}
+                      </p>
+                    ) : null}
                   </Field>
                   <Field label="Has a realtor">
                     <Select

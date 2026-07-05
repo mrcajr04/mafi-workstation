@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backdate-test": "tsx scripts/backdate-test-record.ts",
+    "create-test-phase4": "tsx scripts/create-test-phase4-record.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -24,10 +26,12 @@
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "prisma": "^6.19.3",
+    "puppeteer": "^25.3.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.80.0",
     "recharts": "^3.9.2",
+    "resend": "^6.17.1",
     "shadcn": "^4.13.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

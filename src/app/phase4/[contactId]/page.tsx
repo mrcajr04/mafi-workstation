@@ -3,6 +3,7 @@ import {
   RoleType,
   ScenarioDeskStatus,
 } from "@prisma/client";
+import { Phase4Documents } from "@/app/phase4/[contactId]/phase4-documents";
 import { Phase4Form } from "@/app/phase4/[contactId]/phase4-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -47,6 +48,18 @@ function formatDateInput(value?: Date | null) {
   }
 
   return value.toISOString().slice(0, 10);
+}
+
+function formatGeneratedAt(value?: Date | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  return value.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default async function Phase4DetailPage({
@@ -299,6 +312,23 @@ export default async function Phase4DetailPage({
           />
         </SummaryCard>
       </div>
+
+      {canEdit ? (
+        <Phase4Documents
+          contactId={contact.id}
+          loanEstimateGeneratedAt={
+            contact.phase4Pipeline?.loanEstimateHtml
+              ? formatGeneratedAt(contact.phase4Pipeline.updatedAt)
+              : undefined
+          }
+          loanPreApprovalGeneratedAt={
+            contact.phase4Pipeline?.loanPreApprovalHtml
+              ? formatGeneratedAt(contact.phase4Pipeline.updatedAt)
+              : undefined
+          }
+          prospectName={contact.prospectName}
+        />
+      ) : null}
 
       <Phase4Form
         canEdit={canEdit}
