@@ -14,6 +14,7 @@ import {
   ScenarioDeskStatus,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -61,6 +62,7 @@ export async function updatePhase4Pipeline(
   ]);
 
   if (!access.success) {
+    await logAccessDenied("UPDATE_PHASE4_PIPELINE", "Phase4Pipeline", input.contactId);
     return {
       success: false,
       error: access.error,
@@ -143,6 +145,11 @@ export async function updatePhase4DecisionBranch(
   ]);
 
   if (!access.success) {
+    await logAccessDenied(
+      "PHASE4_DECISION_BRANCH",
+      "Phase4Pipeline",
+      input.contactId,
+    );
     return {
       success: false,
       error: access.error,
@@ -182,8 +189,8 @@ export async function updatePhase4DecisionBranch(
 
   const nextTouchDate = optionalDate(input.nextTouchDate);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.phase4Pipeline.upsert({
+  const pipeline = await prisma.$transaction(async (tx) => {
+    const phase4Pipeline = await tx.phase4Pipeline.upsert({
       where: {
         contactId: contact.id,
       },
@@ -233,7 +240,7 @@ export async function updatePhase4DecisionBranch(
         },
       });
 
-      return;
+      return phase4Pipeline;
     }
 
     await tx.contact.update({
@@ -246,8 +253,19 @@ export async function updatePhase4DecisionBranch(
     });
 
     // Winning/client command-center routing happens later at funding.
+    return phase4Pipeline;
   });
 
+  await logAuditEvent(
+    access.data.id,
+    "PHASE4_DECISION_BRANCH",
+    "Phase4Pipeline",
+    pipeline.id,
+    {
+      decisionBranch: input.decisionBranch,
+      reasonCode: input.reasonCode,
+    },
+  );
   revalidatePath("/phase4");
   revalidatePath(`/phase4/${contact.id}`);
 

@@ -161,18 +161,19 @@ model Profile {
 
 // Phase 1 - Contact Information, PRD Section 9.1
 model Contact {
-  id            String        @id @default(uuid()) @db.Uuid
-  bdrId         String        @db.Uuid
-  assignedLOId  String?       @db.Uuid
-  status        ContactStatus @default(ACTIVE)
-  prospectName  String
-  prospectPhone String
-  prospectEmail String?
-  borrowerType  String
-  loanPurpose   LoanPurpose
-  vesting       String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               String        @id @default(uuid()) @db.Uuid
+  bdrId            String        @db.Uuid
+  assignedLOId     String?       @db.Uuid
+  status           ContactStatus @default(ACTIVE)
+  prospectName     String
+  prospectPhone    String
+  prospectEmail    String?
+  borrowerType     String
+  loanPurpose      LoanPurpose
+  vesting          String?
+  welcomeEmailSent Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   bdr                Profile             @relation("ContactBDR", fields: [bdrId], references: [id])
   assignedLO         Profile?            @relation("ContactAssignedLO", fields: [assignedLOId], references: [id])

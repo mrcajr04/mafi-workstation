@@ -6,6 +6,7 @@ import {
   RoleType,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { normalizeCurrencyInput } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -46,6 +47,11 @@ export async function finalizeScenarioDesk(
   const access = await requireRole([RoleType.LICENSED_LO, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied(
+      "FINALIZE_SCENARIO_DESK",
+      "ScenarioDesk",
+      input.contactId,
+    );
     return {
       success: false,
       error: access.error,
@@ -91,7 +97,7 @@ export async function finalizeScenarioDesk(
     };
   }
 
-  await prisma.$transaction(async (tx) => {
+  const finalizedScenarioDesk = await prisma.$transaction(async (tx) => {
     const scenarioDesk = await tx.scenarioDesk.upsert({
       where: {
         contactId: contact.id,
@@ -137,8 +143,20 @@ export async function finalizeScenarioDesk(
         status: ContactStatus.IN_PROCESSING,
       },
     });
+
+    return scenarioDesk;
   });
 
+  await logAuditEvent(
+    access.data.id,
+    "FINALIZE_SCENARIO_DESK",
+    "ScenarioDesk",
+    finalizedScenarioDesk.id,
+    {
+      contactId: contact.id,
+      selectedScenarioNumber: input.selectedScenarioNumber,
+    },
+  );
   revalidatePath("/scenario-desk");
   revalidatePath(`/scenario-desk/${contact.id}`);
   revalidatePath("/opportunities");

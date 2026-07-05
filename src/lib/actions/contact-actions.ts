@@ -13,7 +13,10 @@ import {
   RealtorStatus,
   RoleType,
 } from "@prisma/client";
+import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { normalizeCurrencyInput } from "@/lib/currency";
+import { sendEmail } from "@/lib/email";
+import { welcomeEmail } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -161,6 +164,10 @@ function optionalInt(value?: string) {
   return trimmed ? Number(trimmed) : undefined;
 }
 
+function hasValidEmail(value?: string | null) {
+  return Boolean(value?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()));
+}
+
 function formatCurrencyForForm(value?: { toString(): string } | string | null) {
   if (!value) {
     return "";
@@ -179,6 +186,23 @@ function refreshOpportunitiesList() {
 
 function refreshEngagementContact(contactId: string) {
   updateTag(`engagement-contact-${contactId}`);
+}
+
+function changedFields(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+) {
+  return Object.fromEntries(
+    Object.entries(after)
+      .filter(([key, value]) => before[key] !== value)
+      .map(([key, value]) => [
+        key,
+        {
+          after: value,
+          before: before[key],
+        },
+      ]),
+  );
 }
 
 function randomItem<T>(items: T[]) {
@@ -204,6 +228,7 @@ export async function getProspectIntakeEditData(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("VIEW_CONTACT", "Contact", contactId);
     return {
       success: false,
       error: access.error,
@@ -372,6 +397,7 @@ export async function createProspectContactBasics(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("CREATE_CONTACT", "Contact", "pending");
     return {
       success: false,
       error: access.error,
@@ -398,8 +424,45 @@ export async function createProspectContactBasics(
     select: {
       bdrId: true,
       id: true,
+      prospectEmail: true,
+      prospectName: true,
+      welcomeEmailSent: true,
     },
   });
+
+  await logAuditEvent(access.data.id, "CREATE_CONTACT", "Contact", contact.id, {
+    borrowerType: input.borrowerType?.trim() || "Unknown",
+    email: input.prospectEmail?.trim() || null,
+    loanPurpose: input.loanPurpose,
+    phone: input.prospectPhone.trim(),
+    prospectName: input.prospectName.trim(),
+    source: "Prospect Intake Step 1",
+    vesting: input.vesting?.trim() || null,
+  });
+
+  if (hasValidEmail(contact.prospectEmail) && !contact.welcomeEmailSent) {
+    try {
+      await sendEmail({
+        html: welcomeEmail(contact.prospectName),
+        subject: "Welcome to MLG Financial",
+        to: contact.prospectEmail!,
+      });
+
+      await prisma.contact.update({
+        where: {
+          id: contact.id,
+        },
+        data: {
+          welcomeEmailSent: true,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Welcome email failed",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
 
   refreshOpportunitiesList();
 
@@ -415,6 +478,7 @@ export async function updateProspectContactBasics(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("UPDATE_CONTACT", "Contact", input.contactId);
     return {
       success: false,
       error: access.error,
@@ -441,20 +505,46 @@ export async function updateProspectContactBasics(
     };
   }
 
+  const beforeContactBasics = await prisma.contact.findUnique({
+    where: {
+      id: contact.id,
+    },
+    select: {
+      borrowerType: true,
+      loanPurpose: true,
+      prospectEmail: true,
+      prospectName: true,
+      prospectPhone: true,
+      vesting: true,
+    },
+  });
+  const nextContactBasics = {
+    borrowerType: input.borrowerType?.trim() || "Unknown",
+    loanPurpose: input.loanPurpose,
+    prospectEmail: input.prospectEmail?.trim() || null,
+    prospectName: input.prospectName.trim(),
+    prospectPhone: input.prospectPhone.trim(),
+    vesting: input.vesting?.trim() || null,
+  };
+
   await prisma.contact.update({
     where: {
       id: contact.id,
     },
-    data: {
-      prospectName: input.prospectName.trim(),
-      prospectPhone: input.prospectPhone.trim(),
-      prospectEmail: input.prospectEmail?.trim() || null,
-      borrowerType: input.borrowerType?.trim() || "Unknown",
-      loanPurpose: input.loanPurpose,
-      vesting: input.vesting?.trim() || null,
-    },
+    data: nextContactBasics,
   });
 
+  await logAuditEvent(
+    access.data.id,
+    "UPDATE_CONTACT_BASICS",
+    "Contact",
+    contact.id,
+    {
+      changedFields: beforeContactBasics
+        ? changedFields(beforeContactBasics, nextContactBasics)
+        : nextContactBasics,
+    },
+  );
   refreshOpportunitiesList();
   refreshEngagementContact(contact.id);
   revalidatePath(`/opportunities/${contact.id}`);
@@ -470,6 +560,7 @@ export async function updateProspectFinancialSnapshot(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("UPDATE_CONTACT", "Contact", input.contactId);
     return {
       success: false,
       error: access.error,
@@ -488,6 +579,31 @@ export async function updateProspectFinancialSnapshot(
       error: "Contact not found.",
     };
   }
+
+  const existingFinancialSnapshot = await prisma.contact.findUnique({
+    where: {
+      id: contact.id,
+    },
+    select: {
+      _count: {
+        select: {
+          assets: true,
+          coBorrowers: true,
+        },
+      },
+      ficoInfo: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+  const isFirstFinancialSnapshotSave = Boolean(
+    existingFinancialSnapshot &&
+      !existingFinancialSnapshot.ficoInfo &&
+      existingFinancialSnapshot._count.assets === 0 &&
+      existingFinancialSnapshot._count.coBorrowers === 0,
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.contact.update({
@@ -563,6 +679,28 @@ export async function updateProspectFinancialSnapshot(
     });
   });
 
+  await logAuditEvent(
+    access.data.id,
+    isFirstFinancialSnapshotSave
+      ? "ADD_FINANCIAL_SNAPSHOT"
+      : "UPDATE_FINANCIAL_SNAPSHOT",
+    "Contact",
+    contact.id,
+    {
+      assetCount: input.assets.filter((asset) => optionalDecimal(asset.amount))
+        .length,
+      coBorrowerCount: input.coBorrowers.filter((coBorrower) =>
+        coBorrower.name.trim(),
+      ).length,
+      ficoScore:
+        input.ficoSource === FicoSource.UNKNOWN
+          ? null
+          : optionalInt(input.ficoScore) ?? null,
+      ficoSource: input.ficoSource,
+      summary: "Financial Snapshot saved as a single intake step.",
+      updatedFields: ["coBorrowers", "assets", "ficoInfo"],
+    },
+  );
   refreshOpportunitiesList();
 
   return {
@@ -576,6 +714,7 @@ export async function updateProspectPropertyDetails(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("UPDATE_CONTACT", "Contact", input.contactId);
     return {
       success: false,
       error: access.error,
@@ -601,6 +740,15 @@ export async function updateProspectPropertyDetails(
       error: "Contact not found.",
     };
   }
+
+  const existingPropertyDetails = await prisma.propertyDetails.findUnique({
+    where: {
+      contactId: contact.id,
+    },
+    select: {
+      id: true,
+    },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.contact.update({
@@ -640,6 +788,24 @@ export async function updateProspectPropertyDetails(
     });
   });
 
+  await logAuditEvent(
+    access.data.id,
+    existingPropertyDetails ? "UPDATE_PROPERTY_DETAILS" : "ADD_PROPERTY_DETAILS",
+    "Contact",
+    contact.id,
+    {
+      updatedFields: [
+        "propertyAddress",
+        "propertyType",
+        "propertyTaxesLastYear",
+        "propertyTaxesPresentYear",
+        "insuranceType",
+        "hoaName",
+        "hoaManagementInfo",
+        "additionalHoaFees",
+      ],
+    },
+  );
   refreshOpportunitiesList();
 
   return {
@@ -653,6 +819,7 @@ export async function createProspectIntake(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("CREATE_CONTACT", "Contact", "pending");
     return {
       success: false,
       error: access.error,
@@ -732,6 +899,9 @@ export async function createProspectIntake(
   );
 
   refreshOpportunitiesList();
+  await logAuditEvent(access.data.id, "CREATE_CONTACT", "Contact", contact.id, {
+    source: "Legacy full prospect intake",
+  });
 
   return {
     success: true,
@@ -745,6 +915,7 @@ export async function createOpportunityValue(
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("UPDATE_OPPORTUNITY_VALUE", "OpportunityValue", input.contactId);
     return {
       success: false,
       error: access.error,
@@ -923,6 +1094,20 @@ export async function createOpportunityValue(
     }
   });
 
+  await logAuditEvent(
+    access.data.id,
+    "UPDATE_OPPORTUNITY_VALUE",
+    "OpportunityValue",
+    contact.id,
+    {
+      hasRealtor: input.hasRealtor,
+      status: input.status,
+      notMovingForwardReason:
+        input.status === OpportunityStatus.NOT_MOVING_FORWARD
+          ? input.notMovingForwardReason?.trim()
+          : undefined,
+    },
+  );
   refreshOpportunitiesList();
   refreshEngagementContact(contact.id);
 
@@ -935,6 +1120,7 @@ export async function deleteContact(contactId: string): Promise<DeleteContactRes
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("DELETE_CONTACT", "Contact", contactId);
     return {
       success: false,
       error: access.error,
@@ -964,6 +1150,7 @@ export async function deleteContact(contactId: string): Promise<DeleteContactRes
     },
   });
 
+  await logAuditEvent(access.data.id, "DELETE_CONTACT", "Contact", contact.id);
   refreshOpportunitiesList();
   refreshEngagementContact(contact.id);
 
@@ -976,6 +1163,7 @@ export async function deleteAllDevContacts(): Promise<DevDataActionResult> {
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("DELETE_ALL_DEV_CONTACTS", "Contact", "bulk");
     return {
       success: false,
       error: access.error,
@@ -998,6 +1186,7 @@ export async function seedDevContacts(count: number): Promise<DevDataActionResul
   const access = await requireRole([RoleType.BDR, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("SEED_DEV_CONTACTS", "Contact", "bulk");
     return {
       success: false,
       error: access.error,

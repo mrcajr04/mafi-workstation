@@ -45,3 +45,25 @@ export function followUpNotMovingForward(prospectName: string) {
     <p style="margin:0;color:#54595F;">Best,<br />MAFI Workstation</p>
   `);
 }
+
+export function welcomeEmail(prospectName: string) {
+  const name = escapeHtml(prospectName || "there");
+
+  return emailShell(`
+    <p style="margin:0 0 16px;">Hi ${name},</p>
+    <p style="margin:0 0 16px;">
+      Welcome to MLG Financial. We received your information and someone from our team will follow up to learn more about your mortgage goals and discuss available options.
+    </p>
+    <p style="margin:0 0 16px;">
+      MLG Financial can help review a range of mortgage programs and potential benefits based on your situation. Any options discussed are informational and subject to eligibility, documentation, underwriting, and final approval.
+    </p>
+    <p style="margin:0 0 18px;color:#54595F;">Best,<br />MLG Financial</p>
+    <hr style="border:0;border-top:1px solid #D8E4F0;margin:18px 0;" />
+    <p style="margin:0 0 8px;color:#7A7A7A;font-size:12px;line-height:1.5;">
+      If you'd rather not receive these emails, reply STOP or contact us at [placeholder email].
+    </p>
+    <p style="margin:0;color:#7A7A7A;font-size:12px;line-height:1.5;">
+      [MLG Financial business address]
+    </p>
+  `);
+}

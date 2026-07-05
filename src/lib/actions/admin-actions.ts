@@ -1,6 +1,7 @@
 "use server";
 
 import { Prisma, RoleType } from "@prisma/client";
+import { logAccessDenied } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,6 +23,7 @@ export async function inviteUser(
   const roleCheck = await requireRole([RoleType.OWNER]);
 
   if (!roleCheck.success) {
+    await logAccessDenied("INVITE_USER", "Profile", input.email || "pending");
     return {
       success: false,
       error: "FORBIDDEN",

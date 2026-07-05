@@ -1,12 +1,14 @@
 "use server";
 
 import { RoleType } from "@prisma/client";
+import { logAccessDenied } from "@/lib/audit";
 import { ActionResult, requireRole } from "@/lib/rbac";
 
 export async function testPhase3Write(): Promise<ActionResult<string>> {
   const access = await requireRole([RoleType.LICENSED_LO, RoleType.OWNER]);
 
   if (!access.success) {
+    await logAccessDenied("TEST_PHASE3_WRITE", "ScenarioDesk", "demo");
     return access;
   }
 

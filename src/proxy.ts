@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicRoutes = ["/login"];
+const publicRoutes = ["/login", "/forgot-password", "/reset-password"];
+const publicRoutesWithAuthenticatedRedirect = ["/login", "/forgot-password"];
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next({
@@ -37,7 +38,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (hasVerifiedSession && isPublicRoute) {
+  if (
+    hasVerifiedSession &&
+    publicRoutesWithAuthenticatedRedirect.includes(request.nextUrl.pathname)
+  ) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/";
     redirectUrl.search = "";

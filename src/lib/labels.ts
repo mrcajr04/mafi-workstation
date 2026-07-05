@@ -141,6 +141,28 @@ export const appraisalStatusLabels = {
   [AppraisalStatus.CONFIRMED]: "Confirmed",
 };
 
+export const auditActionLabels: Record<string, string> = {
+  ACCESS_DENIED: "Access Denied",
+  ADD_FINANCIAL_SNAPSHOT: "Added Financial Snapshot",
+  ADD_PROPERTY_DETAILS: "Added Property Details",
+  CREATE_CONTACT: "Created Contact",
+  DELETE_ALL_DEV_CONTACTS: "Deleted Dev Contacts",
+  DELETE_CONTACT: "Deleted Contact",
+  FINALIZE_SCENARIO_DESK: "Finalized Scenario Desk",
+  GENERATE_DOCUMENT: "Generated Document",
+  INVITE_USER: "Invited User",
+  PHASE4_DECISION_BRANCH: "Phase 4 Decision Branch",
+  SEED_DEV_CONTACTS: "Seeded Dev Contacts",
+  TEST_PHASE3_WRITE: "Tested Phase 3 Write Access",
+  UPDATE_CONTACT: "Updated Contact",
+  UPDATE_CONTACT_BASICS: "Updated Contact Basics",
+  UPDATE_FINANCIAL_SNAPSHOT: "Updated Financial Snapshot",
+  UPDATE_OPPORTUNITY_VALUE: "Updated Opportunity Value",
+  UPDATE_PHASE4_PIPELINE: "Updated Phase 4 Pipeline",
+  UPDATE_PROPERTY_DETAILS: "Updated Property Details",
+  VIEW_CONTACT: "Viewed Contact",
+};
+
 export function labelFromMap(
   value: string | null | undefined,
   labels: Record<string, string>,

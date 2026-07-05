@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -42,6 +44,15 @@ export default function LoginPage() {
     reValidateMode: "onSubmit",
     resolver: zodResolver(loginSchema),
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("reset") === "success") {
+      toast.success("Password updated. You can log in now.");
+      router.replace("/login");
+    }
+  }, [router]);
 
   async function onSubmit(values: LoginFormValues) {
     setError("");
@@ -90,7 +101,15 @@ export default function LoginPage() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  className="text-sm font-medium text-mafi-blue-primary hover:underline"
+                  href="/forgot-password"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 autoComplete="current-password"
                 aria-invalid={Boolean(errors.password)}

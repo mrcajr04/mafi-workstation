@@ -5,6 +5,7 @@ import puppeteer from "puppeteer";
 import { loanEstimateTemplate } from "@/lib/documents/loan-estimate-template";
 import { loanPreApprovalTemplate } from "@/lib/documents/loan-pre-approval-template";
 import { LoanDocumentData } from "@/lib/documents/document-types";
+import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -83,6 +84,7 @@ export async function generateLoanDocument(
   ]);
 
   if (!access.success) {
+    await logAccessDenied("GENERATE_DOCUMENT", "Phase4Pipeline", contactId);
     return {
       success: false,
       error: access.error,
@@ -185,7 +187,7 @@ export async function generateLoanDocument(
 
   const pdfBase64 = await htmlToPdfBase64(html);
 
-  await prisma.phase4Pipeline.upsert({
+  const pipeline = await prisma.phase4Pipeline.upsert({
     where: {
       contactId,
     },
@@ -200,6 +202,16 @@ export async function generateLoanDocument(
         ? { loanPreApprovalHtml: html }
         : { loanEstimateHtml: html },
   });
+  await logAuditEvent(
+    access.data.id,
+    "GENERATE_DOCUMENT",
+    "Phase4Pipeline",
+    pipeline.id,
+    {
+      contactId,
+      docType,
+    },
+  );
 
   return {
     success: true,
