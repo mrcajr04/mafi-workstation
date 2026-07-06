@@ -48,12 +48,9 @@ export default async function OpportunitiesPage({
   const canCreateContacts = canEditContacts;
   const showBdrColumn =
     viewerRole === RoleType.OWNER ||
-    viewerRole === RoleType.COMPLIANCE_OFFICER;
-  const emptyMessage =
+    viewerRole === RoleType.COMPLIANCE_OFFICER ||
     viewerRole === RoleType.LICENSED_LO ||
-    viewerRole === RoleType.LOAN_PROCESSOR
-      ? "Assigned prospects view coming soon"
-      : "No opportunities yet.";
+    viewerRole === RoleType.LOAN_PROCESSOR;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const hasPreviousPage = currentPage > 1;
   const hasNextPage = currentPage < totalPages;
@@ -164,7 +161,7 @@ export default async function OpportunitiesPage({
           ) : (
             <>
               <div className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-                {emptyMessage}
+                No opportunities yet.
               </div>
             </>
           )}

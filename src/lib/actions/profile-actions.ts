@@ -39,6 +39,13 @@ export async function updateOwnProfile(
   const canEditNmls =
     profile.role === RoleType.LICENSED_LO || profile.role === RoleType.OWNER;
 
+  if (profile.role === RoleType.LICENSED_LO && !input.nmlsNumber?.trim()) {
+    return {
+      success: false,
+      error: "NMLS number is required for Licensed LO users.",
+    };
+  }
+
   await prisma.profile.update({
     where: {
       id: profile.id,

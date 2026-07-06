@@ -14,9 +14,10 @@ import {
   RoleType,
 } from "@prisma/client";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
+import { getAutomationSettings } from "@/lib/automation-settings";
 import { normalizeCurrencyInput } from "@/lib/currency";
 import { sendEmail } from "@/lib/email";
-import { welcomeEmail } from "@/lib/email-templates";
+import { renderEmailTemplate } from "@/lib/email-template-store";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -442,9 +443,26 @@ export async function createProspectContactBasics(
 
   if (hasValidEmail(contact.prospectEmail) && !contact.welcomeEmailSent) {
     try {
+      const automationSettings = await getAutomationSettings();
+
+      if (!automationSettings.welcomeEmailEnabled) {
+        refreshOpportunitiesList();
+
+        return {
+          success: true,
+          contactId: contact.id,
+        };
+      }
+
+      const emailTemplate = await renderEmailTemplate({
+        loanOfficerName: null,
+        prospectName: contact.prospectName,
+        templateKey: "WELCOME",
+      });
+
       await sendEmail({
-        html: welcomeEmail(contact.prospectName),
-        subject: "Welcome to MLG Financial",
+        html: emailTemplate.html,
+        subject: emailTemplate.subject,
         to: contact.prospectEmail!,
       });
 

@@ -13,6 +13,52 @@ import {
 
 const prisma = new PrismaClient();
 
+const emailTemplateSeeds = [
+  {
+    templateKey: "WELCOME",
+    subject: "Welcome to MLG Financial",
+    bodyHtml: `
+      <p style="margin:0 0 16px;">Hi {{prospect_name}},</p>
+      <p style="margin:0 0 16px;">
+        Welcome to MLG Financial. We received your information and someone from our team will follow up to learn more about your mortgage goals and discuss available options.
+      </p>
+      <p style="margin:0 0 16px;">
+        MLG Financial can help review a range of mortgage programs and potential benefits based on your situation. Any options discussed are informational and subject to eligibility, documentation, underwriting, and final approval.
+      </p>
+      <p style="margin:0 0 18px;color:#54595F;">Best,<br />MLG Financial</p>
+      <hr style="border:0;border-top:1px solid #D8E4F0;margin:18px 0;" />
+      <p style="margin:0 0 8px;color:#7A7A7A;font-size:12px;line-height:1.5;">
+        If you'd rather not receive these emails, reply STOP or contact us at [placeholder email].
+      </p>
+      <p style="margin:0;color:#7A7A7A;font-size:12px;line-height:1.5;">
+        [MLG Financial business address]
+      </p>
+    `.trim(),
+  },
+  {
+    templateKey: "DISCOVERY_FOLLOW_UP",
+    subject: "Checking in on your mortgage options",
+    bodyHtml: `
+      <p style="margin:0 0 16px;">Hi {{prospect_name}},</p>
+      <p style="margin:0 0 16px;">
+        Just checking in on your mortgage options. Happy to answer any questions whenever you're ready.
+      </p>
+      <p style="margin:0;color:#54595F;">Best,<br />MAFI Workstation</p>
+    `.trim(),
+  },
+  {
+    templateKey: "RE_ENGAGEMENT_FOLLOW_UP",
+    subject: "Want to revisit your mortgage options?",
+    bodyHtml: `
+      <p style="margin:0 0 16px;">Hi {{prospect_name}},</p>
+      <p style="margin:0 0 16px;">
+        It's been a while. Rates and programs change often, so we're happy to revisit your options if the timing is better now.
+      </p>
+      <p style="margin:0;color:#54595F;">Best,<br />MAFI Workstation</p>
+    `.trim(),
+  },
+];
+
 const seedContacts = [
   {
     prospectName: "SEED_Test Prospect 1",
@@ -186,6 +232,26 @@ const seedContacts = [
 ];
 
 async function main() {
+  await prisma.automationSettings.upsert({
+    where: {
+      id: "singleton",
+    },
+    update: {},
+    create: {
+      id: "singleton",
+    },
+  });
+
+  for (const template of emailTemplateSeeds) {
+    await prisma.emailTemplate.upsert({
+      where: {
+        templateKey: template.templateKey,
+      },
+      update: {},
+      create: template,
+    });
+  }
+
   const bdr = await prisma.profile.findFirst({
     where: {
       role: RoleType.BDR,

@@ -149,6 +149,7 @@ model Profile {
   phone      String?
   role       RoleType
   nmlsNumber String?
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -368,4 +369,24 @@ model AuditLog {
   @@index([userId])
   @@index([entityType, entityId])
   @@index([timestamp])
+}
+
+// Owner-controlled email automation settings
+model AutomationSettings {
+  id                          String   @id @default("singleton")
+  welcomeEmailEnabled         Boolean  @default(true)
+  discoveryFollowUpEnabled    Boolean  @default(true)
+  discoveryFollowUpDays       Int      @default(14)
+  reEngagementFollowUpEnabled Boolean  @default(true)
+  reEngagementFollowUpDays    Int      @default(60)
+  updatedAt                   DateTime @updatedAt
+}
+
+// Owner-controlled email templates
+model EmailTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  templateKey String   @unique
+  subject     String
+  bodyHtml    String   @db.Text
+  updatedAt   DateTime @updatedAt
 }

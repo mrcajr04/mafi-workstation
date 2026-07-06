@@ -24,24 +24,14 @@ export async function getContactsNeedingOpportunityValue({
   const safePageSize = Math.min(Math.max(1, pageSize), 20);
   const viewerRole = profile.role;
 
-  // PRD pending decision: LO/processor assigned-prospect visibility is intentionally unresolved.
-  if (
+  const canViewAllContacts =
+    viewerRole === RoleType.OWNER ||
+    viewerRole === RoleType.COMPLIANCE_OFFICER ||
     viewerRole === RoleType.LICENSED_LO ||
-    viewerRole === RoleType.LOAN_PROCESSOR
-  ) {
-    return {
-      contacts: [],
-      totalCount: 0,
-      viewerRole,
-    };
-  }
-
+    viewerRole === RoleType.LOAN_PROCESSOR;
   const where = {
     status: ContactStatus.ACTIVE,
-    ...(viewerRole === RoleType.OWNER ||
-    viewerRole === RoleType.COMPLIANCE_OFFICER
-      ? {}
-      : { bdrId: profile.id }),
+    ...(canViewAllContacts ? {} : { bdrId: profile.id }),
   };
 
   return unstable_cache(

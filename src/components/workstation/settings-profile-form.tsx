@@ -20,13 +20,27 @@ import { Label } from "@/components/ui/label";
 import { updateOwnProfile } from "@/lib/actions/profile-actions";
 import { cn } from "@/lib/utils";
 
-const settingsProfileSchema = z.object({
-  fullName: z.string().trim().min(1, "Full name is required."),
-  phone: z.string().optional(),
-  nmlsNumber: z.string().optional(),
-});
+function buildSettingsProfileSchema(role: RoleType) {
+  return z
+    .object({
+      fullName: z.string().trim().min(1, "Full name is required."),
+      phone: z.string().optional(),
+      nmlsNumber: z.string().optional(),
+    })
+    .superRefine((values, context) => {
+      if (role === RoleType.LICENSED_LO && !values.nmlsNumber?.trim()) {
+        context.addIssue({
+          code: "custom",
+          message: "NMLS number is required for Licensed LO users.",
+          path: ["nmlsNumber"],
+        });
+      }
+    });
+}
 
-type SettingsProfileValues = z.infer<typeof settingsProfileSchema>;
+type SettingsProfileValues = z.infer<
+  ReturnType<typeof buildSettingsProfileSchema>
+>;
 
 type SettingsProfileFormProps = {
   profile: {
@@ -56,7 +70,7 @@ export function SettingsProfileForm({ profile }: SettingsProfileFormProps) {
     },
     mode: "onSubmit",
     reValidateMode: "onSubmit",
-    resolver: zodResolver(settingsProfileSchema),
+    resolver: zodResolver(buildSettingsProfileSchema(profile.role)),
   });
 
   async function onSubmit(values: SettingsProfileValues) {
@@ -124,8 +138,23 @@ export function SettingsProfileForm({ profile }: SettingsProfileFormProps) {
             </div>
             {canEditNmls ? (
               <div className="space-y-2">
-                <Label htmlFor="nmlsNumber">NMLS number</Label>
-                <Input id="nmlsNumber" {...register("nmlsNumber")} />
+                <Label htmlFor="nmlsNumber">
+                  NMLS number{" "}
+                  {profile.role === RoleType.LICENSED_LO ? (
+                    <span className="text-destructive">*</span>
+                  ) : null}
+                </Label>
+                <Input
+                  aria-invalid={Boolean(errors.nmlsNumber)}
+                  className={cn(errors.nmlsNumber && "border-destructive")}
+                  id="nmlsNumber"
+                  {...register("nmlsNumber")}
+                />
+                {errors.nmlsNumber ? (
+                  <p className="text-sm text-destructive">
+                    {errors.nmlsNumber.message}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>

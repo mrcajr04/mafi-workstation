@@ -15,7 +15,7 @@ type NavItem = {
 export const navItems: NavItem[] = [
   { label: "Opportunities", href: "/opportunities" },
   { label: "Scenario Desk", href: "/scenario-desk" },
-  { label: "Mortgage Calculators", href: "#" },
+  { label: "Mortgage Calculators", href: "/calculators" },
   { label: "Loan Pre-Approval", href: "/phase4" },
   { label: "Loan Estimate", href: "#" },
   { label: "Loan Search", href: "#" },
@@ -24,6 +24,21 @@ export const navItems: NavItem[] = [
   { label: "Social Media/Marketing", href: "#" },
   { label: "Landing Page Setup", href: "#" },
   { label: "Settings", href: "/settings" },
+  {
+    label: "Manage Users",
+    href: "/admin/users",
+    roles: [RoleType.OWNER],
+  },
+  {
+    label: "Automation Settings",
+    href: "/admin/automation-settings",
+    roles: [RoleType.OWNER],
+  },
+  {
+    label: "Email Templates",
+    href: "/admin/email-templates",
+    roles: [RoleType.OWNER],
+  },
   {
     label: "Audit Log",
     href: "/audit-log",
