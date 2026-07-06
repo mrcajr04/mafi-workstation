@@ -34,12 +34,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  resendInvite,
   setUserActiveStatus,
   updateUserProfile,
 } from "@/lib/actions/admin-actions";
 import { cn } from "@/lib/utils";
 
 type ManagedUser = {
+  canResendInvite: boolean;
   email: string;
   fullName: string;
   id: string;
@@ -86,6 +88,7 @@ type UserProfileValues = z.infer<typeof userProfileSchema>;
 export function ManageUsersList({ users }: ManageUsersListProps) {
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
   const [displayUsers, setDisplayUsers] = useState(users);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   function updateDisplayedUser(userId: string, nextUser: Partial<ManagedUser>) {
     setDisplayUsers((currentUsers) =>
@@ -95,6 +98,21 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
     );
   }
 
+  async function handleResendInvite(user: ManagedUser) {
+    setResendingUserId(user.id);
+
+    const result = await resendInvite(user.id);
+
+    setResendingUserId(null);
+
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(`Invite resent to ${user.email}`);
+  }
+
   return (
     <>
       <div className="space-y-3 md:hidden">
@@ -102,6 +120,8 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
           <UserCard
             key={user.id}
             onSelect={() => setSelectedUser(user)}
+            onResendInvite={() => handleResendInvite(user)}
+            isResendingInvite={resendingUserId === user.id}
             user={user}
           />
         ))}
@@ -109,19 +129,27 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
 
       <Card className="hidden border-mafi-border bg-mafi-bg-white md:block">
         <CardContent className="p-0">
-          <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.65fr)] border-b border-mafi-border bg-mafi-bg-lighter text-sm font-semibold text-mafi-text-dark">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.85fr)] border-b border-mafi-border bg-mafi-bg-lighter text-sm font-semibold text-mafi-text-dark">
             <div className="px-4 py-3">Full name</div>
             <div className="px-4 py-3">Email</div>
             <div className="px-4 py-3">Phone</div>
             <div className="px-4 py-3">Role</div>
             <div className="px-4 py-3">Status</div>
+            <div className="px-4 py-3">Actions</div>
           </div>
           {displayUsers.map((user) => (
-            <button
-              className="grid w-full grid-cols-[minmax(0,1.1fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.65fr)] border-b border-mafi-border text-left text-sm transition last:border-b-0 hover:bg-mafi-bg-light"
+            <div
+              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.85fr)] border-b border-mafi-border text-sm transition last:border-b-0 hover:bg-mafi-bg-light"
               key={user.id}
               onClick={() => setSelectedUser(user)}
-              type="button"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedUser(user);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <div className="truncate px-4 py-3 font-semibold text-mafi-text-dark">
                 {user.fullName}
@@ -138,7 +166,26 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
               <div className="px-4 py-3">
                 <StatusBadge isActive={user.isActive} />
               </div>
-            </button>
+              <div
+                className="px-4 py-2"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                {user.canResendInvite ? (
+                  <Button
+                    className="h-8 px-3 text-xs"
+                    disabled={resendingUserId === user.id}
+                    onClick={() => handleResendInvite(user)}
+                    type="button"
+                    variant="outline"
+                  >
+                    {resendingUserId === user.id ? "Sending..." : "Resend Invite"}
+                  </Button>
+                ) : (
+                  <span className="text-xs text-mafi-text-light">-</span>
+                )}
+              </div>
+            </div>
           ))}
         </CardContent>
       </Card>
@@ -161,34 +208,49 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
 }
 
 function UserCard({
+  isResendingInvite,
   onSelect,
+  onResendInvite,
   user,
 }: {
+  isResendingInvite: boolean;
   onSelect: () => void;
+  onResendInvite: () => void;
   user: ManagedUser;
 }) {
   return (
-    <button
-      className="block w-full rounded-md border border-mafi-border bg-mafi-bg-off p-4 text-left transition hover:border-mafi-blue-primary hover:bg-mafi-bg-light"
-      onClick={onSelect}
-      type="button"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-mafi-text-dark">
-            {user.fullName}
-          </p>
-          <p className="mt-1 truncate text-xs text-mafi-text-mid">
-            Email: {user.email}
-          </p>
-          <p className="mt-1 truncate text-xs text-mafi-text-mid">
-            Phone: {user.phone || "Not provided"}
-          </p>
+    <div className="rounded-md border border-mafi-border bg-mafi-bg-off transition hover:border-mafi-blue-primary hover:bg-mafi-bg-light">
+      <button className="block w-full p-4 text-left" onClick={onSelect} type="button">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-mafi-text-dark">
+              {user.fullName}
+            </p>
+            <p className="mt-1 truncate text-xs text-mafi-text-mid">
+              Email: {user.email}
+            </p>
+            <p className="mt-1 truncate text-xs text-mafi-text-mid">
+              Phone: {user.phone || "Not provided"}
+            </p>
+          </div>
+          <StatusBadge isActive={user.isActive} />
         </div>
-        <StatusBadge isActive={user.isActive} />
-      </div>
-      <p className="mt-3 text-xs text-mafi-text-mid">{user.role}</p>
-    </button>
+        <p className="mt-3 text-xs text-mafi-text-mid">{user.role}</p>
+      </button>
+      {user.canResendInvite ? (
+        <div className="border-t border-mafi-border px-4 py-3">
+          <Button
+            className="h-9 w-full text-xs"
+            disabled={isResendingInvite}
+            onClick={onResendInvite}
+            type="button"
+            variant="outline"
+          >
+            {isResendingInvite ? "Sending..." : "Resend Invite"}
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

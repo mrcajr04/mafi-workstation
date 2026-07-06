@@ -68,6 +68,7 @@ export default async function Phase4DetailPage({
   params: Promise<{ contactId: string }>;
 }) {
   const access = await requireRole([
+    RoleType.BDR,
     RoleType.LICENSED_LO,
     RoleType.LOAN_PROCESSOR,
     RoleType.OWNER,
@@ -79,8 +80,8 @@ export default async function Phase4DetailPage({
       <div className="mx-auto max-w-6xl">
         <Card className="border-mafi-border bg-mafi-bg-white">
           <CardContent className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-            Not authorized. Phase 4 is available only to Licensed LO, Loan
-            Processor, Owner, and Compliance read-only roles.
+            Not authorized. Phase 4 is available only to active workstation
+            roles.
           </CardContent>
         </Card>
       </div>
@@ -146,7 +147,12 @@ export default async function Phase4DetailPage({
     (scenario) =>
       scenario.scenarioNumber === contact.scenarioDesk?.selectedScenarioNumber,
   );
-  const canEdit = access.data.role !== RoleType.COMPLIANCE_OFFICER;
+  const phase4WriteRoles: RoleType[] = [
+    RoleType.LICENSED_LO,
+    RoleType.LOAN_PROCESSOR,
+    RoleType.OWNER,
+  ];
+  const canEdit = phase4WriteRoles.includes(access.data.role);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

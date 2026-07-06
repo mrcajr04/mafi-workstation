@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma, RoleType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getCurrentProfile } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 
 type CreateProfileInput = {
@@ -54,4 +55,47 @@ export async function signOut() {
 
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+export async function completePasswordSetup() {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return {
+      success: false,
+      error: "UNAUTHENTICATED",
+    } as const;
+  }
+
+  await prisma.profile.update({
+    where: {
+      id: profile.id,
+    },
+    data: {
+      passwordSetupRequired: false,
+    },
+  });
+
+  updateTag(`profile-${profile.id}`);
+  revalidatePath("/", "layout");
+
+  return {
+    success: true,
+  } as const;
+}
+
+export async function getPasswordSetupStatus() {
+  const profile = await getCurrentProfile();
+
+  if (!profile) {
+    return {
+      success: false,
+      error: "UNAUTHENTICATED",
+    } as const;
+  }
+
+  return {
+    success: true,
+    passwordSetupRequired: profile.passwordSetupRequired,
+  } as const;
 }

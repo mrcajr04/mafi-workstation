@@ -5,7 +5,7 @@ import {
   ScenarioDeskStatus,
   RoleType,
 } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { normalizeCurrencyInput } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
@@ -160,6 +160,8 @@ export async function finalizeScenarioDesk(
   revalidatePath("/scenario-desk");
   revalidatePath(`/scenario-desk/${contact.id}`);
   revalidatePath("/opportunities");
+  updateTag("scenario-desk-list");
+  updateTag("phase4-list");
 
   return {
     success: true,

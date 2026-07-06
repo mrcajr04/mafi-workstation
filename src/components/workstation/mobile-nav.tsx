@@ -7,12 +7,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { navItems } from "@/components/workstation/sidebar-nav";
+import type { NavBadgeCounts } from "@/lib/nav-notifications";
 
 type MobileNavProps = {
   currentRole?: RoleType | null;
+  navBadgeCounts?: NavBadgeCounts;
 };
 
-export function MobileNav({ currentRole }: MobileNavProps) {
+export function MobileNav({ currentRole, navBadgeCounts }: MobileNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -64,11 +66,16 @@ export function MobileNav({ currentRole }: MobileNavProps) {
                   item.href !== "#" &&
                   (pathname === item.href ||
                     pathname.startsWith(`${item.href}/`));
+                const badgeCount =
+                  item.href === "/opportunities" || item.href === "/scenario-desk"
+                    ? navBadgeCounts?.[item.href]
+                    : undefined;
+                const shouldShowBadge = !isActive && Boolean(badgeCount);
 
                 return (
                   <Link
                     className={cn(
-                      "block rounded-md px-3 py-3 text-sm font-medium text-mafi-text-dark hover:bg-mafi-bg-lighter hover:text-mafi-blue-primary",
+                      "flex items-center justify-between gap-3 rounded-md px-3 py-3 text-sm font-medium text-mafi-text-dark hover:bg-mafi-bg-lighter hover:text-mafi-blue-primary",
                       isActive &&
                         "bg-mafi-blue-primary font-semibold text-white hover:bg-mafi-blue-primary hover:text-white",
                     )}
@@ -76,7 +83,8 @@ export function MobileNav({ currentRole }: MobileNavProps) {
                     key={item.label}
                     onClick={() => setIsOpen(false)}
                   >
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
+                    {shouldShowBadge ? <NavBadge count={badgeCount ?? 0} /> : null}
                   </Link>
                 );
               })}
@@ -85,5 +93,13 @@ export function MobileNav({ currentRole }: MobileNavProps) {
         </div>
       ) : null}
     </>
+  );
+}
+
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-mafi-gold px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }

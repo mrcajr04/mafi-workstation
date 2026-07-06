@@ -1,7 +1,7 @@
 "use server";
 
 import { RoleType } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { type EmailTemplateKey } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
@@ -86,6 +86,7 @@ export async function updateEmailTemplate(
   );
 
   revalidatePath("/admin/email-templates");
+  updateTag("email-templates-list");
 
   return {
     success: true,

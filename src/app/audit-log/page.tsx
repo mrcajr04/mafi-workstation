@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { RoleType } from "@prisma/client";
+import { Prisma, RoleType } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { AuditLogList } from "@/app/audit-log/audit-log-list";
 import { Card, CardContent } from "@/components/ui/card";
 import { auditActionLabels, labelFromMap } from "@/lib/labels";
@@ -50,6 +51,63 @@ function pageHref(
   return `/audit-log?${params.toString()}`;
 }
 
+function getCachedAuditLogData({
+  currentPage,
+  where,
+}: {
+  currentPage: number;
+  where: Prisma.AuditLogWhereInput;
+}) {
+  return unstable_cache(
+    () =>
+      Promise.all([
+        prisma.auditLog.findMany({
+          where,
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+          orderBy: {
+            timestamp: "desc",
+          },
+          skip: (currentPage - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
+        }),
+        prisma.auditLog.count({
+          where,
+        }),
+        prisma.auditLog.groupBy({
+          by: ["action"],
+          orderBy: {
+            action: "asc",
+          },
+        }),
+        prisma.auditLog.findMany({
+          distinct: ["userId"],
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+          orderBy: {
+            user: {
+              fullName: "asc",
+            },
+          },
+        }),
+      ]),
+    [`audit-log-${currentPage}-${JSON.stringify(where)}`],
+    {
+      revalidate: 15,
+    },
+  )();
+}
+
 export default async function AuditLogPage({
   searchParams,
 }: {
@@ -75,52 +133,16 @@ export default async function AuditLogPage({
   const currentPage = Math.max(1, Number(pageParam ?? 1) || 1);
   const selectedAction = action && action !== "ALL" ? action : undefined;
   const selectedUserId = userId && userId !== "ALL" ? userId : undefined;
-  const where = {
+  const where: Prisma.AuditLogWhereInput = {
     ...(selectedAction ? { action: selectedAction } : {}),
     ...(selectedUserId ? { userId: selectedUserId } : {}),
   };
 
-  const [logs, totalCount, actionOptions, userOptions] = await Promise.all([
-    prisma.auditLog.findMany({
+  const [logs, totalCount, actionOptions, userOptions] =
+    await getCachedAuditLogData({
+      currentPage,
       where,
-      include: {
-        user: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: {
-        timestamp: "desc",
-      },
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
-    prisma.auditLog.count({
-      where,
-    }),
-    prisma.auditLog.groupBy({
-      by: ["action"],
-      orderBy: {
-        action: "asc",
-      },
-    }),
-    prisma.auditLog.findMany({
-      distinct: ["userId"],
-      include: {
-        user: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: {
-        user: {
-          fullName: "asc",
-        },
-      },
-    }),
-  ]);
+    });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const firstRecordNumber =

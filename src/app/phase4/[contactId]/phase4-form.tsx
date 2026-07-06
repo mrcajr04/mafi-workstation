@@ -409,7 +409,7 @@ export function Phase4Form({ canEdit, contactId, initialData }: Phase4FormProps)
           </div>
         ) : (
           <p className="text-sm text-mafi-text-mid">
-            Compliance access is read-only.
+            Your access to this Phase 4 file is read-only.
           </p>
         )}
       </CardContent>

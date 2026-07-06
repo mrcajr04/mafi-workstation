@@ -13,7 +13,7 @@ import {
   RoleType,
   ScenarioDeskStatus,
 } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -129,6 +129,7 @@ export async function updatePhase4Pipeline(
 
   revalidatePath("/phase4");
   revalidatePath(`/phase4/${contact.id}`);
+  updateTag("phase4-list");
 
   return {
     success: true,
@@ -268,6 +269,7 @@ export async function updatePhase4DecisionBranch(
   );
   revalidatePath("/phase4");
   revalidatePath(`/phase4/${contact.id}`);
+  updateTag("phase4-list");
 
   return {
     success: true,

@@ -1,7 +1,8 @@
 "use server";
 
 import { Prisma, RoleType } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { headers } from "next/headers";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -17,6 +18,33 @@ type InviteUserInput = {
 type InviteUserResult =
   | { success: true }
   | { success: false; error: string };
+
+function logInviteError(label: string, error: unknown) {
+  console.error(label, {
+    error,
+    message: error instanceof Error ? error.message : undefined,
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+}
+
+async function getAppUrl() {
+  const headerStore = await headers();
+  const origin = headerStore.get("origin");
+
+  if (origin) {
+    return origin;
+  }
+
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
+}
 
 type UpdateUserProfileInput = {
   fullName: string;
@@ -66,12 +94,16 @@ export async function inviteUser(
   }
 
   const supabase = createAdminClient();
+  const appUrl = await getAppUrl();
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(
     input.email,
+    {
+      redirectTo: `${appUrl}/set-password`,
+    },
   );
 
   if (error || !data.user) {
-    console.warn("Supabase invite failed", error?.message);
+    logInviteError("Supabase invite failed", error);
     return {
       success: false,
       error: error?.message ?? "Unable to send invite.",
@@ -84,14 +116,17 @@ export async function inviteUser(
         id: data.user.id,
         fullName: input.fullName,
         email: input.email,
+        passwordSetupRequired: true,
         phone: input.phone || null,
         role: input.role,
       },
     });
+    revalidatePath("/admin/users");
+    updateTag("manage-users-list");
 
     return { success: true };
   } catch (profileError) {
-    console.error("Invited user profile creation failed", profileError);
+    logInviteError("Invited user profile creation failed", profileError);
 
     if (
       profileError instanceof Prisma.PrismaClientKnownRequestError &&
@@ -201,6 +236,97 @@ export async function updateUserProfile(
     },
   );
   revalidatePath("/admin/users");
+  updateTag("manage-users-list");
+
+  return {
+    success: true,
+  };
+}
+
+export async function resendInvite(userId: string): Promise<AdminActionResult> {
+  const access = await requireRole([RoleType.OWNER]);
+
+  if (!access.success) {
+    await logAccessDenied("RESEND_INVITE", "Profile", userId);
+    return {
+      success: false,
+      error: "FORBIDDEN",
+    };
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      email: true,
+      id: true,
+      isActive: true,
+    },
+  });
+
+  if (!profile) {
+    return {
+      success: false,
+      error: "User profile not found.",
+    };
+  }
+
+  if (!profile.isActive) {
+    return {
+      success: false,
+      error: "Inactive users must be reactivated before resending an invite.",
+    };
+  }
+
+  const supabase = createAdminClient();
+  const { data: authUserData, error: authUserError } =
+    await supabase.auth.admin.getUserById(profile.id);
+
+  if (authUserError || !authUserData.user) {
+    console.error(
+      "Supabase user lookup failed",
+      authUserError?.message ?? "No user returned.",
+    );
+    return {
+      success: false,
+      error: authUserError?.message ?? "Unable to find auth user.",
+    };
+  }
+
+  if (authUserData.user.last_sign_in_at) {
+    return {
+      success: false,
+      error: "This user has already signed in.",
+    };
+  }
+
+  const appUrl = await getAppUrl();
+  const { error } = await supabase.auth.admin.inviteUserByEmail(profile.email, {
+    redirectTo: `${appUrl}/set-password`,
+  });
+
+  if (error) {
+    logInviteError("Supabase resend invite failed", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+
+  await logAuditEvent(access.data.id, "RESEND_INVITE", "Profile", profile.id, {
+    email: profile.email,
+  });
+  await prisma.profile.update({
+    where: {
+      id: profile.id,
+    },
+    data: {
+      passwordSetupRequired: true,
+    },
+  });
+  revalidatePath("/admin/users");
+  updateTag("manage-users-list");
 
   return {
     success: true,
@@ -285,6 +411,7 @@ export async function setUserActiveStatus(
     },
   );
   revalidatePath("/admin/users");
+  updateTag("manage-users-list");
 
   return {
     success: true,

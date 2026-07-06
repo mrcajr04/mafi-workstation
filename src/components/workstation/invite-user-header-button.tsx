@@ -1,4 +1,4 @@
-import { UserPlus } from "lucide-react";
+import { Send } from "lucide-react";
 import Link from "next/link";
 
 export function InviteUserHeaderButton() {
@@ -9,7 +9,7 @@ export function InviteUserHeaderButton() {
       href="/admin/invite-user"
       title="Invite User"
     >
-      <UserPlus className="size-5" />
+      <Send className="size-5" />
     </Link>
   );
 }

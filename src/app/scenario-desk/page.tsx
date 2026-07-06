@@ -1,8 +1,10 @@
 import { ScenarioDeskList } from "@/app/scenario-desk/scenario-desk-list";
+import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 
 export default function ScenarioDeskPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <NavViewMarker section="scenarioDesk" />
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-mafi-blue-primary">
           Phase 3

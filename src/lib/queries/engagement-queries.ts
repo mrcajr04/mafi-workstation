@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentProfile } from "@/lib/rbac";
+import { timed } from "@/lib/timing";
 import { ContactStatus, RoleType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 
@@ -34,7 +35,8 @@ export async function getContactsNeedingOpportunityValue({
     ...(canViewAllContacts ? {} : { bdrId: profile.id }),
   };
 
-  return unstable_cache(
+  return timed("getContactsNeedingOpportunityValue (cached)", () =>
+   unstable_cache(
     async () => {
       const [contacts, totalCount] = await prisma.$transaction([
         prisma.contact.findMany({
@@ -89,7 +91,8 @@ export async function getContactsNeedingOpportunityValue({
       revalidate: 60,
       tags: ["engagement-queue", `engagement-queue-${profile.id}`],
     },
-  )();
+   )(),
+  );
 }
 
 export async function getContactForEngagement(contactId: string) {

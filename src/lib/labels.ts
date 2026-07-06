@@ -1,6 +1,7 @@
 import {
   AppraisalStatus,
   AssetType,
+  BorrowerType,
   ContactStatus,
   CreditAuthorizationStatus,
   DecisionBranch,
@@ -23,15 +24,11 @@ export const loanPurposeLabels = {
   [LoanPurpose.LIMITED_CASH_OUT]: "Limited Cash-Out",
 };
 
-export const borrowerTypeLabels: Record<string, string> = {
-  PRIMARY: "Primary",
-  SECOND_HOME: "Second Home",
-  SECOND_HOME_VACATION: "Second / Vacation",
-  SECONDOND_VACATION: "Second / Vacation",
-  INVESTMENT: "Investment",
-  OTHER: "Other",
-  Unknown: "N/A",
-  UNKNOWN: "N/A",
+export const borrowerTypeLabels = {
+  [BorrowerType.PRIMARY]: "Primary",
+  [BorrowerType.SECOND_HOME]: "Second Home",
+  [BorrowerType.INVESTMENT]: "Investment",
+  [BorrowerType.OTHER]: "Other",
 };
 
 export const vestingLabels: Record<string, string> = {
@@ -154,6 +151,7 @@ export const auditActionLabels: Record<string, string> = {
   INVITE_USER: "Invited User",
   PHASE4_DECISION_BRANCH: "Phase 4 Decision Branch",
   REACTIVATE_USER: "Reactivated User",
+  RESEND_INVITE: "Resent Invite",
   SEED_DEV_CONTACTS: "Seeded Dev Contacts",
   TEST_PHASE3_WRITE: "Tested Phase 3 Write Access",
   UPDATE_AUTOMATION_SETTINGS: "Updated Automation Settings",

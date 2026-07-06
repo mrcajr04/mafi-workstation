@@ -5,6 +5,7 @@ import {
   renderTemplateBody,
 } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 
 type RenderEmailTemplateInput = {
   loanOfficerName?: string | null;
@@ -31,13 +32,22 @@ export async function ensureDefaultEmailTemplates() {
 }
 
 export async function getEmailTemplates() {
-  await ensureDefaultEmailTemplates();
+  return unstable_cache(
+    async () => {
+      await ensureDefaultEmailTemplates();
 
-  return prisma.emailTemplate.findMany({
-    orderBy: {
-      templateKey: "asc",
+      return prisma.emailTemplate.findMany({
+        orderBy: {
+          templateKey: "asc",
+        },
+      });
     },
-  });
+    ["email-templates-list"],
+    {
+      revalidate: 3600,
+      tags: ["email-templates-list"],
+    },
+  )();
 }
 
 export async function renderEmailTemplate({

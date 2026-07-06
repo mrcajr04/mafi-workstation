@@ -32,6 +32,13 @@ enum LoanPurpose {
   LIMITED_CASH_OUT
 }
 
+enum BorrowerType {
+  PRIMARY
+  SECOND_HOME
+  INVESTMENT
+  OTHER
+}
+
 enum AssetType {
   CHECKING
   SAVINGS
@@ -143,15 +150,27 @@ enum NurtureTouchType {
 
 // User profile and role mapping, PRD Section 10 - Permissions
 model Profile {
-  id         String   @id @db.Uuid
-  fullName   String
-  email      String   @unique
-  phone      String?
-  role       RoleType
-  nmlsNumber String?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                      String    @id @db.Uuid
+  fullName                String
+  email                   String    @unique
+  phone                   String?
+  role                    RoleType
+  nmlsNumber              String?
+  isActive                Boolean   @default(true)
+  passwordSetupRequired   Boolean   @default(false)
+  facebookUrl             String?
+  linkedinUrl             String?
+  instagramUrl            String?
+  xTwitterUrl             String?
+  whatsappNumber          String?
+  googleBusinessUrl       String?
+  landingPageHeadline     String?
+  landingPageBio          String?   @db.Text
+  profilePhotoUrl         String?
+  lastViewedOpportunities DateTime?
+  lastViewedScenarioDesk  DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   contactsAsBDR               Contact[]            @relation("ContactBDR")
   contactsAsLO                Contact[]            @relation("ContactAssignedLO")
@@ -169,7 +188,7 @@ model Contact {
   prospectName     String
   prospectPhone    String
   prospectEmail    String?
-  borrowerType     String
+  borrowerType     BorrowerType
   loanPurpose      LoanPurpose
   vesting          String?
   welcomeEmailSent Boolean       @default(false)
@@ -389,4 +408,25 @@ model EmailTemplate {
   subject     String
   bodyHtml    String   @db.Text
   updatedAt   DateTime @updatedAt
+}
+
+// Loan Terms Library, PRD Section 10.2 - Educational reference only
+model LoanProduct {
+  id                    String   @id @default(uuid()) @db.Uuid
+  lender                String
+  loanType              String
+  loanSubtype           String?
+  minFico               Int
+  maxLtv                Decimal  @db.Decimal(5, 2)
+  eligibleBorrowerTypes String
+  eligiblePropertyTypes String
+  eligiblePurposes      String
+  description           String   @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([lender])
+  @@index([loanType])
+  @@index([minFico])
+  @@index([maxLtv])
 }

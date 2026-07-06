@@ -1,10 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import {
   AUTOMATION_SETTINGS_ID,
-  getAutomationSettings,
+  getFreshAutomationSettings,
 } from "@/lib/automation-settings";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -71,7 +71,7 @@ export async function updateAutomationSettings(
     };
   }
 
-  const before = await getAutomationSettings();
+  const before = await getFreshAutomationSettings();
   const nextSettings = {
     discoveryFollowUpDays,
     discoveryFollowUpEnabled: input.discoveryFollowUpEnabled,
@@ -98,6 +98,7 @@ export async function updateAutomationSettings(
   );
 
   revalidatePath("/admin/automation-settings");
+  updateTag("automation-settings");
 
   return {
     success: true,

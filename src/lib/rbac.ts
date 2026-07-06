@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { timed } from "@/lib/timing";
 
 export type ActionResult<T = undefined> =
   | { success: true; data: T }
@@ -19,7 +20,9 @@ export const phaseWritePermissions = {
 
 export const getCurrentUser = cache(async () => {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
+  const { data, error } = await timed("auth.getClaims", () =>
+    supabase.auth.getClaims(),
+  );
 
   if (error || !data?.claims.sub) {
     return null;
@@ -37,19 +40,21 @@ export const getCurrentProfile = cache(async () => {
     return null;
   }
 
-  return unstable_cache(
-    () =>
-      prisma.profile.findUnique({
-        where: {
-          id: user.id,
-        },
-      }),
-    [`profile-${user.id}`],
-    {
-      revalidate: 300,
-      tags: [`profile-${user.id}`],
-    },
-  )();
+  return timed("getCurrentProfile (cached)", () =>
+    unstable_cache(
+      () =>
+        prisma.profile.findUnique({
+          where: {
+            id: user.id,
+          },
+        }),
+      [`profile-${user.id}`],
+      {
+        revalidate: 300,
+        tags: [`profile-${user.id}`],
+      },
+    )(),
+  );
 });
 
 export async function requireRole(allowedRoles: RoleType[]) {

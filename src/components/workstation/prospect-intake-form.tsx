@@ -2,6 +2,7 @@
 
 import {
   AssetType,
+  BorrowerType,
   FicoSource,
   InsuranceType,
   LoanPurpose,
@@ -60,7 +61,7 @@ type ProspectIntakeFormState = {
   prospectName: string;
   prospectPhone: string;
   prospectEmail: string;
-  borrowerType: string;
+  borrowerType: BorrowerType | "";
   loanPurpose: LoanPurpose | "";
   vesting: string;
   coBorrowers: CoBorrowerRow[];
@@ -145,10 +146,10 @@ const loanPurposeLabels = {
 };
 
 const borrowerTypeLabels = {
-  PRIMARY: "Primary",
-  SECOND_HOME_VACATION: "Second / Vacation",
-  INVESTMENT: "Investment",
-  OTHER: "Other",
+  [BorrowerType.PRIMARY]: "Primary",
+  [BorrowerType.SECOND_HOME]: "Second Home",
+  [BorrowerType.INVESTMENT]: "Investment",
+  [BorrowerType.OTHER]: "Other",
 };
 
 const vestingLabels = {
@@ -427,7 +428,7 @@ export function ProspectIntakeForm({
         prospectName: form.prospectName,
         prospectPhone: form.prospectPhone,
         prospectEmail: form.prospectEmail,
-        borrowerType: form.borrowerType,
+        borrowerType: form.borrowerType || undefined,
         loanPurpose: form.loanPurpose as LoanPurpose,
         vesting: form.vesting,
       }).then((result) => {
@@ -449,7 +450,7 @@ export function ProspectIntakeForm({
       prospectName: form.prospectName,
       prospectPhone: form.prospectPhone,
       prospectEmail: form.prospectEmail,
-      borrowerType: form.borrowerType,
+      borrowerType: form.borrowerType || undefined,
       loanPurpose: form.loanPurpose as LoanPurpose,
       vesting: form.vesting,
     }).then((result) => {
@@ -800,6 +801,7 @@ export function ProspectIntakeForm({
 
     const payload: ProspectIntakeInput = {
       ...form,
+      borrowerType: form.borrowerType || undefined,
       loanPurpose: form.loanPurpose as LoanPurpose,
       insuranceType: form.insuranceType || undefined,
     };
@@ -925,7 +927,9 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="Borrower type">
                 <Select
-                  onValueChange={(value) => updateField("borrowerType", value)}
+                  onValueChange={(value) =>
+                    updateField("borrowerType", value as BorrowerType)
+                  }
                   value={form.borrowerType}
                 >
                   <SelectTrigger>

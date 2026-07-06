@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import { ProspectIntakeInitialData } from "@/components/workstation/prospect-intake-form";
+import { borrowerTypeLabels, labelFromMap } from "@/lib/labels";
 
 type OpportunityListContact = {
   id: string;
@@ -33,18 +34,6 @@ const loanPurposeLabels = {
   LIMITED_CASH_OUT: "Limited Cash-Out",
 } as const;
 
-function borrowerTypeLabel(value: string) {
-  const labels: Record<string, string> = {
-    PRIMARY: "Primary",
-    SECOND_HOME: "Second Home",
-    SECOND_HOME_VACATION: "Second / Vacation",
-    INVESTMENT: "Investment",
-    OTHER: "Other",
-  };
-
-  return labels[value] ?? (value || "N/A");
-}
-
 function emailOnly(value: string) {
   const parenthesizedEmail = value.match(/\(([^()\s]+@[^()\s]+)\)/);
 
@@ -57,7 +46,7 @@ function optimisticContact(
 ): OpportunityListContact {
   return {
     ...contact,
-    borrowerType: borrowerTypeLabel(form.borrowerType),
+    borrowerType: labelFromMap(form.borrowerType, borrowerTypeLabels),
     ficoLabel: form.ficoScore || "N/A",
     hasFicoInfo: Boolean(form.ficoScore),
     loanPurposeLabel:

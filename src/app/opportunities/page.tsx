@@ -9,6 +9,7 @@ import {
 import { DevDataControls } from "@/app/opportunities/dev-data-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import {
   opportunityStatusLabels,
@@ -80,6 +81,7 @@ export default async function OpportunitiesPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <NavViewMarker section="opportunities" />
       <div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>

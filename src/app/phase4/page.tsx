@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { RoleType, ScenarioDeskStatus } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { Card, CardContent } from "@/components/ui/card";
 import { loanPurposeLabels } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -13,8 +14,48 @@ function formatDate(value: Date) {
   });
 }
 
+const getCachedPhase4Contacts = unstable_cache(
+  () =>
+    prisma.contact.findMany({
+      where: {
+        scenarioDesk: {
+          status: ScenarioDeskStatus.FINALIZED,
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        loanPurpose: true,
+        prospectEmail: true,
+        prospectName: true,
+        prospectPhone: true,
+        bdr: {
+          select: {
+            email: true,
+            fullName: true,
+          },
+        },
+        phase4Pipeline: {
+          select: {
+            decisionBranch: true,
+            updatedAt: true,
+          },
+        },
+      },
+    }),
+  ["phase4-list"],
+  {
+    revalidate: 30,
+    tags: ["phase4-list"],
+  },
+);
+
 export default async function Phase4Page() {
   const access = await requireRole([
+    RoleType.BDR,
     RoleType.LICENSED_LO,
     RoleType.LOAN_PROCESSOR,
     RoleType.OWNER,
@@ -26,44 +67,15 @@ export default async function Phase4Page() {
       <div className="mx-auto max-w-6xl">
         <Card className="border-mafi-border bg-mafi-bg-white">
           <CardContent className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-            Not authorized. Phase 4 is available only to Licensed LO, Loan
-            Processor, Owner, and Compliance read-only roles.
+            Not authorized. Phase 4 is available only to active workstation
+            roles.
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const contacts = await prisma.contact.findMany({
-    where: {
-      scenarioDesk: {
-        status: ScenarioDeskStatus.FINALIZED,
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-    select: {
-      id: true,
-      createdAt: true,
-      loanPurpose: true,
-      prospectEmail: true,
-      prospectName: true,
-      prospectPhone: true,
-      bdr: {
-        select: {
-          email: true,
-          fullName: true,
-        },
-      },
-      phase4Pipeline: {
-        select: {
-          decisionBranch: true,
-          updatedAt: true,
-        },
-      },
-    },
-  });
+  const contacts = await getCachedPhase4Contacts();
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

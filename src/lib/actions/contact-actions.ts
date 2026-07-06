@@ -3,6 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import {
   AssetType,
+  BorrowerType,
   CommandCenterTag,
   ContactStatus,
   FicoSource,
@@ -36,7 +37,7 @@ export type ProspectIntakeInput = {
   prospectName: string;
   prospectPhone: string;
   prospectEmail?: string;
-  borrowerType?: string;
+  borrowerType?: BorrowerType;
   loanPurpose: LoanPurpose;
   vesting?: string;
   coBorrowers: CoBorrowerInput[];
@@ -57,7 +58,7 @@ export type ProspectContactBasicsInput = {
   prospectName: string;
   prospectPhone: string;
   prospectEmail?: string;
-  borrowerType?: string;
+  borrowerType?: BorrowerType;
   loanPurpose: LoanPurpose;
   vesting?: string;
 };
@@ -122,7 +123,7 @@ type ProspectEditDataResult =
         prospectName: string;
         prospectPhone: string;
         prospectEmail: string;
-        borrowerType: string;
+        borrowerType: BorrowerType;
         loanPurpose: LoanPurpose;
         vesting: string;
         coBorrowers: {
@@ -418,7 +419,7 @@ export async function createProspectContactBasics(
       prospectName: input.prospectName.trim(),
       prospectPhone: input.prospectPhone.trim(),
       prospectEmail: input.prospectEmail?.trim() || null,
-      borrowerType: input.borrowerType?.trim() || "Unknown",
+      borrowerType: input.borrowerType ?? BorrowerType.OTHER,
       loanPurpose: input.loanPurpose,
       vesting: input.vesting?.trim() || null,
     },
@@ -432,7 +433,7 @@ export async function createProspectContactBasics(
   });
 
   await logAuditEvent(access.data.id, "CREATE_CONTACT", "Contact", contact.id, {
-    borrowerType: input.borrowerType?.trim() || "Unknown",
+    borrowerType: input.borrowerType ?? BorrowerType.OTHER,
     email: input.prospectEmail?.trim() || null,
     loanPurpose: input.loanPurpose,
     phone: input.prospectPhone.trim(),
@@ -537,7 +538,7 @@ export async function updateProspectContactBasics(
     },
   });
   const nextContactBasics = {
-    borrowerType: input.borrowerType?.trim() || "Unknown",
+    borrowerType: input.borrowerType ?? BorrowerType.OTHER,
     loanPurpose: input.loanPurpose,
     prospectEmail: input.prospectEmail?.trim() || null,
     prospectName: input.prospectName.trim(),
@@ -865,7 +866,7 @@ export async function createProspectIntake(
         prospectName: input.prospectName.trim(),
         prospectPhone: input.prospectPhone.trim(),
         prospectEmail: input.prospectEmail?.trim() || null,
-        borrowerType: input.borrowerType?.trim() || "Unknown",
+        borrowerType: input.borrowerType ?? BorrowerType.OTHER,
         loanPurpose: input.loanPurpose,
         vesting: input.vesting?.trim() || null,
         coBorrowers: {
@@ -1128,6 +1129,7 @@ export async function createOpportunityValue(
   );
   refreshOpportunitiesList();
   refreshEngagementContact(contact.id);
+  updateTag("scenario-desk-list");
 
   return {
     success: true,
@@ -1260,7 +1262,7 @@ export async function seedDevContacts(count: number): Promise<DevDataActionResul
     "359 Windward Trace, Clearwater, FL 33755",
     "811 Golden Isles Pkwy, Boca Raton, FL 33432",
   ];
-  const borrowerTypes = ["PRIMARY", "SECOND_HOME_VACATION", "INVESTMENT", "OTHER"];
+  const borrowerTypes = Object.values(BorrowerType);
   const vestingTypes = ["INDIVIDUALS", "LLC_CORP", "TRUST", "OTHER"];
   const loanPurposes = Object.values(LoanPurpose);
   const assetTypes = Object.values(AssetType);

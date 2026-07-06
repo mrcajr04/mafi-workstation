@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ContactStatus, RoleType } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
@@ -12,6 +13,44 @@ function formatDate(value: Date) {
     year: "numeric",
   });
 }
+
+const getCachedScenarioDeskContacts = unstable_cache(
+  () =>
+    prisma.contact.findMany({
+      where: {
+        status: ContactStatus.IN_SCENARIO_REVIEW,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        loanPurpose: true,
+        prospectEmail: true,
+        prospectName: true,
+        prospectPhone: true,
+        bdr: {
+          select: {
+            email: true,
+            fullName: true,
+          },
+        },
+        opportunityValue: {
+          select: {
+            loanAmount: true,
+            propertyValue: true,
+            ltv: true,
+          },
+        },
+      },
+    }),
+  ["scenario-desk-list"],
+  {
+    revalidate: 30,
+    tags: ["scenario-desk-list"],
+  },
+);
 
 export async function ScenarioDeskList() {
   const access = await requireRole([RoleType.LICENSED_LO, RoleType.OWNER]);
@@ -27,35 +66,7 @@ export async function ScenarioDeskList() {
     );
   }
 
-  const contacts = await prisma.contact.findMany({
-    where: {
-      status: ContactStatus.IN_SCENARIO_REVIEW,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-    select: {
-      id: true,
-      createdAt: true,
-      loanPurpose: true,
-      prospectEmail: true,
-      prospectName: true,
-      prospectPhone: true,
-      bdr: {
-        select: {
-          email: true,
-          fullName: true,
-        },
-      },
-      opportunityValue: {
-        select: {
-          loanAmount: true,
-          propertyValue: true,
-          ltv: true,
-        },
-      },
-    },
-  });
+  const contacts = await getCachedScenarioDeskContacts();
 
   return (
     <Card className="border-mafi-border bg-mafi-bg-white">
