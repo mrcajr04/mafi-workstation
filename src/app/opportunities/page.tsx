@@ -1,16 +1,31 @@
 import Link from "next/link";
 import {
+  BorrowerType,
+  LoanPurpose,
+  OpportunityStatus,
   RoleType,
+  type Prisma,
 } from "@prisma/client";
+import {
+  borrowerTypeOptions,
+  loanPurposeOptions,
+  OpportunityClearFiltersButton,
+  OpportunityFilterHeader,
+  OpportunityMobileFilters,
+  opportunityStatusOptions,
+  OpportunitySortableHeader,
+} from "@/app/opportunities/opportunity-table-controls";
 import {
   OpportunityDesktopRow,
   OpportunityMobileCard,
 } from "@/app/opportunities/opportunity-list-item";
+import { opportunityDesktopGridClass } from "@/app/opportunities/opportunity-list-grid";
 import { DevDataControls } from "@/app/opportunities/dev-data-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
+import { formatCurrencyDisplay } from "@/lib/currency";
 import { formatDateForDisplay } from "@/lib/dates";
 import {
   opportunityStatusLabels,
@@ -19,27 +34,99 @@ import {
   loanPurposeLabels,
 } from "@/lib/labels";
 import { getContactsNeedingOpportunityValue } from "@/lib/queries/engagement-queries";
+import type { OpportunitySortKey } from "@/lib/queries/engagement-queries";
 
 function formatFico(ficoInfo: { score: number | null } | null) {
   return ficoInfo?.score ? String(ficoInfo.score) : "N/A";
 }
 
 const PAGE_SIZE = 15;
+const opportunitySortKeys = new Set<OpportunitySortKey>([
+  "borrowerType",
+  "createdAt",
+  "createdBy",
+  "fico",
+  "loanPurpose",
+  "opportunityStatus",
+  "opportunityValue",
+  "phone",
+  "prospectName",
+  "updatedAt",
+]);
 
 function formatCreatedAt(createdAt: Date | string) {
   return formatDateForDisplay(createdAt);
 }
 
+function formatOpportunityValue(
+  opportunityValue: { calculatedOpportunityValue: unknown } | null,
+) {
+  if (!opportunityValue?.calculatedOpportunityValue) {
+    return "No opportunity value yet";
+  }
+
+  return formatCurrencyDisplay(opportunityValue.calculatedOpportunityValue);
+}
+
+function enumParam<T extends string>(
+  value: string | undefined,
+  values: readonly T[],
+) {
+  return value && values.includes(value as T) ? (value as T) : undefined;
+}
+
+function sortParam(value: string | undefined): OpportunitySortKey {
+  return value && opportunitySortKeys.has(value as OpportunitySortKey)
+    ? (value as OpportunitySortKey)
+    : "updatedAt";
+}
+
 export default async function OpportunitiesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    borrowerType?: string;
+    direction?: string;
+    loanPurpose?: string;
+    opportunityStatus?: string;
+    page?: string;
+    search?: string;
+    sort?: string;
+  }>;
 }) {
-  const { page: pageParam } = await searchParams;
+  const params = await searchParams;
+  const {
+    borrowerType: borrowerTypeParam,
+    direction: directionParam,
+    loanPurpose: loanPurposeParam,
+    opportunityStatus: opportunityStatusParam,
+    page: pageParam,
+    search: searchParam,
+    sort: sortParamValue,
+  } = params;
   const currentPage = Math.max(1, Number(pageParam ?? 1) || 1);
+  const search = searchParam?.trim() ?? "";
+  const borrowerType = enumParam(
+    borrowerTypeParam,
+    Object.values(BorrowerType),
+  );
+  const loanPurpose = enumParam(loanPurposeParam, Object.values(LoanPurpose));
+  const opportunityStatus = enumParam(
+    opportunityStatusParam,
+    ["INCOMPLETE", "NOT_STARTED", ...Object.values(OpportunityStatus)] as const,
+  );
+  const sort = sortParam(sortParamValue);
+  const sortDirection: Prisma.SortOrder =
+    directionParam === "asc" ? "asc" : "desc";
   const { contacts, totalCount, viewerRole } = await getContactsNeedingOpportunityValue({
+    borrowerType,
+    loanPurpose,
+    opportunityStatus,
     page: currentPage,
     pageSize: PAGE_SIZE,
+    search,
+    sort,
+    sortDirection,
   });
   const canEditContacts =
     viewerRole === RoleType.BDR || viewerRole === RoleType.OWNER;
@@ -55,6 +142,39 @@ export default async function OpportunitiesPage({
   const firstRecordNumber =
     totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const lastRecordNumber = Math.min(currentPage * PAGE_SIZE, totalCount);
+  const pageHref = (page: number) => {
+    const nextParams = new URLSearchParams();
+    nextParams.set("page", String(page));
+
+    if (search) {
+      nextParams.set("search", search);
+    }
+
+    if (borrowerType) {
+      nextParams.set("borrowerType", borrowerType);
+    }
+
+    if (loanPurpose) {
+      nextParams.set("loanPurpose", loanPurpose);
+    }
+
+    if (opportunityStatus) {
+      nextParams.set("opportunityStatus", opportunityStatus);
+    }
+
+    if (sort !== "updatedAt") {
+      nextParams.set("sort", sort);
+    }
+
+    if (sortDirection !== "desc") {
+      nextParams.set("direction", sortDirection);
+    }
+
+    return `/opportunities?${nextParams.toString()}`;
+  };
+  const hasColumnFilters = Boolean(
+    borrowerType || loanPurpose || opportunityStatus,
+  );
   const contactItems = contacts.map((contact) => ({
     id: contact.id,
     createdBy: contact.bdr.email,
@@ -69,12 +189,13 @@ export default async function OpportunitiesPage({
     isPhase1Incomplete: !contact.ficoInfo || !contact.propertyDetails,
     opportunityStatusLabel: contact.opportunityValue
       ? opportunityStatusLabels[contact.opportunityValue.status]
-      : "No opportunity value yet",
+      : "Not started",
     opportunityStatusReason:
       contact.opportunityValue?.notMovingForwardReason ?? "",
     opportunityStatusTone: contact.opportunityValue
       ? contact.opportunityValue.status
       : "NOT_STARTED",
+    opportunityValueLabel: formatOpportunityValue(contact.opportunityValue),
   }));
 
   return (
@@ -95,11 +216,37 @@ export default async function OpportunitiesPage({
           </p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <Input
-              className="min-h-11 w-full sm:w-72"
-              placeholder="Search prospects..."
-              type="search"
-            />
+            <form action="/opportunities" className="w-full sm:w-72">
+              {borrowerType ? (
+                <input name="borrowerType" type="hidden" value={borrowerType} />
+              ) : null}
+              {loanPurpose ? (
+                <input name="loanPurpose" type="hidden" value={loanPurpose} />
+              ) : null}
+              {opportunityStatus ? (
+                <input
+                  name="opportunityStatus"
+                  type="hidden"
+                  value={opportunityStatus}
+                />
+              ) : null}
+              {sort !== "updatedAt" ? (
+                <input name="sort" type="hidden" value={sort} />
+              ) : null}
+              {sortDirection !== "desc" ? (
+                <input name="direction" type="hidden" value={sortDirection} />
+              ) : null}
+              <Input
+                className="min-h-11 w-full"
+                defaultValue={search}
+                name="search"
+                placeholder="Search prospects..."
+                type="search"
+              />
+              <button className="sr-only" type="submit">
+                Search
+              </button>
+            </form>
             {canCreateContacts ? <NewProspectModal /> : null}
           </div>
         </div>
@@ -110,6 +257,12 @@ export default async function OpportunitiesPage({
           {contacts.length ? (
             <>
               <div className="space-y-3 p-4 md:hidden">
+                <OpportunityMobileFilters
+                  borrowerType={borrowerType}
+                  loanPurpose={loanPurpose}
+                  opportunityStatus={opportunityStatus}
+                  showClearAll={hasColumnFilters}
+                />
                 {contactItems.map((contact) => (
                   <OpportunityMobileCard
                     canEdit={canEditContacts}
@@ -121,30 +274,60 @@ export default async function OpportunitiesPage({
               </div>
 
               <div className="hidden w-full overflow-x-auto md:block">
-                <div className="min-w-[1020px] w-full">
+                <div className="min-w-[1120px] w-full">
                   <div
-                    className={
-                      showBdrColumn
-                        ? "grid grid-cols-[minmax(5.5rem,0.7fr)_minmax(8rem,1.05fr)_minmax(9rem,1.45fr)_minmax(7rem,0.75fr)_minmax(7rem,0.9fr)_minmax(9rem,1.25fr)_minmax(10rem,1.3fr)_minmax(4rem,0.45fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
-                        : "grid grid-cols-[minmax(5.5rem,0.7fr)_minmax(10rem,1.55fr)_minmax(7rem,0.8fr)_minmax(7rem,0.9fr)_minmax(9rem,1.3fr)_minmax(10rem,1.35fr)_minmax(4rem,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
-                    }
+                    className={`grid ${opportunityDesktopGridClass(showBdrColumn)} items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark`}
                   >
-                    <div className="px-4 py-2 font-semibold">
+                    <OpportunitySortableHeader sortKey="createdAt">
                       Date Created
-                    </div>
+                    </OpportunitySortableHeader>
                     {showBdrColumn ? (
-                      <div className="px-4 py-2 font-semibold">Created By</div>
+                      <OpportunitySortableHeader sortKey="createdBy">
+                        Created By
+                      </OpportunitySortableHeader>
                     ) : null}
-                    <div className="px-4 py-2 font-semibold">Prospect</div>
-                    <div className="px-4 py-2 font-semibold">Phone</div>
-                    <div className="px-4 py-2 font-semibold">
+                    <OpportunitySortableHeader sortKey="prospectName">
+                      Prospect
+                    </OpportunitySortableHeader>
+                    <OpportunitySortableHeader sortKey="phone">
+                      Phone
+                    </OpportunitySortableHeader>
+                    <OpportunityFilterHeader
+                      filterLabel="Borrower type"
+                      filterParam="borrowerType"
+                      options={borrowerTypeOptions}
+                      selectedValue={borrowerType}
+                      sortKey="borrowerType"
+                    >
                       Borrower Type
-                    </div>
-                    <div className="px-4 py-2 font-semibold">
+                    </OpportunityFilterHeader>
+                    <OpportunityFilterHeader
+                      filterLabel="Loan purpose"
+                      filterParam="loanPurpose"
+                      options={loanPurposeOptions}
+                      selectedValue={loanPurpose}
+                      sortKey="loanPurpose"
+                    >
                       Loan purpose
+                    </OpportunityFilterHeader>
+                    <OpportunitySortableHeader sortKey="opportunityValue">
+                      Opportunity Value
+                    </OpportunitySortableHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <OpportunityFilterHeader
+                        filterLabel="Status"
+                        filterParam="opportunityStatus"
+                        options={opportunityStatusOptions}
+                        selectedValue={opportunityStatus}
+                        sortKey="opportunityStatus"
+                      >
+                        Status
+                      </OpportunityFilterHeader>
+                      {hasColumnFilters ? <OpportunityClearFiltersButton /> : null}
                     </div>
-                    <div className="px-4 py-2 font-semibold">Status</div>
-                    <div className="px-4 py-2 font-semibold">FICO</div>
+                    <OpportunitySortableHeader sortKey="fico">
+                      FICO
+                    </OpportunitySortableHeader>
                   </div>
                   {contactItems.map((contact) => (
                     <OpportunityDesktopRow
@@ -175,7 +358,7 @@ export default async function OpportunitiesPage({
                   <Link
                     aria-label="Previous page"
                     className="inline-flex size-8 items-center justify-center rounded-md text-mafi-text-mid hover:bg-mafi-bg-light hover:text-mafi-blue-primary"
-                    href={`/opportunities?page=${currentPage - 1}`}
+                    href={pageHref(currentPage - 1)}
                   >
                     {"<"}
                   </Link>
@@ -188,7 +371,7 @@ export default async function OpportunitiesPage({
                   <Link
                     aria-label="Next page"
                     className="inline-flex size-8 items-center justify-center rounded-md text-mafi-text-mid hover:bg-mafi-bg-light hover:text-mafi-blue-primary"
-                    href={`/opportunities?page=${currentPage + 1}`}
+                    href={pageHref(currentPage + 1)}
                   >
                     {">"}
                   </Link>
