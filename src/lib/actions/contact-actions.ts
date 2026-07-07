@@ -1129,118 +1129,126 @@ export async function createOpportunityValue(
     };
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.contact.update({
-      where: {
-        id: contact.id,
-      },
-      data: {
-        updatedAt: new Date(),
-      },
-    });
-
-    await tx.opportunityValue.upsert({
-      where: {
-        contactId: contact.id,
-      },
-      create: {
-        contactId: contact.id,
-        propertyValue,
-        purchasePrice: purchasePrice ?? 0,
-        loanAmount,
-        hasRealtor: input.hasRealtor,
-        // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
-        calculatedOpportunityValue: loanAmount,
-        ltv,
-        status: input.status,
-        notMovingForwardReason:
-          input.status === OpportunityStatus.NOT_MOVING_FORWARD
-            ? input.notMovingForwardReason?.trim()
-            : null,
-      },
-      update: {
-        propertyValue,
-        purchasePrice: purchasePrice ?? 0,
-        loanAmount,
-        hasRealtor: input.hasRealtor,
-        // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
-        calculatedOpportunityValue: loanAmount,
-        ltv,
-        status: input.status,
-        notMovingForwardReason:
-          input.status === OpportunityStatus.NOT_MOVING_FORWARD
-            ? input.notMovingForwardReason?.trim()
-            : null,
-      },
-    });
-
-    if (input.status === OpportunityStatus.READY_FOR_REVIEW) {
+  try {
+    await prisma.$transaction(async (tx) => {
       await tx.contact.update({
         where: {
           id: contact.id,
         },
         data: {
-          status: ContactStatus.IN_SCENARIO_REVIEW,
+          updatedAt: new Date(),
         },
       });
 
-      await tx.commandCenterEntry.deleteMany({
-        where: {
-          contactId: contact.id,
-        },
-      });
-    }
-
-    if (input.status === OpportunityStatus.NOT_MOVING_FORWARD) {
-      await tx.contact.update({
-        where: {
-          id: contact.id,
-        },
-        data: {
-          status: ContactStatus.ACTIVE,
-        },
-      });
-
-      // Command Center list UI does not exist yet; this only routes the data for a future view.
-      await tx.commandCenterEntry.upsert({
+      await tx.opportunityValue.upsert({
         where: {
           contactId: contact.id,
         },
         create: {
-          assignedBDRId: contact.bdrId,
           contactId: contact.id,
-          lastContactDate: new Date(),
-          nextScheduledTouch: null,
-          sourcePhase: "Phase 2 - Opportunity Value",
-          tag: CommandCenterTag.RE_ENGAGEMENT,
+          propertyValue,
+          purchasePrice: purchasePrice ?? 0,
+          loanAmount,
+          hasRealtor: input.hasRealtor,
+          // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
+          calculatedOpportunityValue: loanAmount,
+          ltv,
+          status: input.status,
+          notMovingForwardReason:
+            input.status === OpportunityStatus.NOT_MOVING_FORWARD
+              ? input.notMovingForwardReason?.trim()
+              : null,
         },
         update: {
-          assignedBDRId: contact.bdrId,
-          lastContactDate: new Date(),
-          nextScheduledTouch: null,
-          sourcePhase: "Phase 2 - Opportunity Value",
-          tag: CommandCenterTag.RE_ENGAGEMENT,
-        },
-      });
-    }
-
-    if (input.status === OpportunityStatus.NOT_DECIDED) {
-      await tx.contact.update({
-        where: {
-          id: contact.id,
-        },
-        data: {
-          status: ContactStatus.ACTIVE,
+          propertyValue,
+          purchasePrice: purchasePrice ?? 0,
+          loanAmount,
+          hasRealtor: input.hasRealtor,
+          // Placeholder formula: stakeholder-defined opportunity value logic is TBD.
+          calculatedOpportunityValue: loanAmount,
+          ltv,
+          status: input.status,
+          notMovingForwardReason:
+            input.status === OpportunityStatus.NOT_MOVING_FORWARD
+              ? input.notMovingForwardReason?.trim()
+              : null,
         },
       });
 
-      await tx.commandCenterEntry.deleteMany({
-        where: {
-          contactId: contact.id,
-        },
-      });
-    }
-  });
+      if (input.status === OpportunityStatus.READY_FOR_REVIEW) {
+        await tx.contact.update({
+          where: {
+            id: contact.id,
+          },
+          data: {
+            status: ContactStatus.IN_SCENARIO_REVIEW,
+          },
+        });
+
+        await tx.commandCenterEntry.deleteMany({
+          where: {
+            contactId: contact.id,
+          },
+        });
+      }
+
+      if (input.status === OpportunityStatus.NOT_MOVING_FORWARD) {
+        await tx.contact.update({
+          where: {
+            id: contact.id,
+          },
+          data: {
+            status: ContactStatus.ACTIVE,
+          },
+        });
+
+        // Command Center list UI does not exist yet; this only routes the data for a future view.
+        await tx.commandCenterEntry.upsert({
+          where: {
+            contactId: contact.id,
+          },
+          create: {
+            assignedBDRId: contact.bdrId,
+            contactId: contact.id,
+            lastContactDate: new Date(),
+            nextScheduledTouch: null,
+            sourcePhase: "Phase 2 - Opportunity Value",
+            tag: CommandCenterTag.RE_ENGAGEMENT,
+          },
+          update: {
+            assignedBDRId: contact.bdrId,
+            lastContactDate: new Date(),
+            nextScheduledTouch: null,
+            sourcePhase: "Phase 2 - Opportunity Value",
+            tag: CommandCenterTag.RE_ENGAGEMENT,
+          },
+        });
+      }
+
+      if (input.status === OpportunityStatus.NOT_DECIDED) {
+        await tx.contact.update({
+          where: {
+            id: contact.id,
+          },
+          data: {
+            status: ContactStatus.ACTIVE,
+          },
+        });
+
+        await tx.commandCenterEntry.deleteMany({
+          where: {
+            contactId: contact.id,
+          },
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Failed to save Opportunity Value.", error);
+    return {
+      success: false,
+      error: "Couldn't save Opportunity Value - check your connection and try again.",
+    };
+  }
 
   await logAuditEvent(
     access.data.id,

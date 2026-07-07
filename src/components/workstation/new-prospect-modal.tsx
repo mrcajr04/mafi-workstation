@@ -155,10 +155,14 @@ export function NewProspectModal({
                   onCancel={() => setIsOpen(false)}
                   onOptimisticSaved={(form) => {
                     if (loadedData?.contactId) {
-                      onOptimisticSaved?.({
+                      const nextData = {
+                        ...loadedData,
                         ...form,
                         contactId: loadedData.contactId,
-                      });
+                      };
+
+                      setLoadedData(nextData);
+                      onOptimisticSaved?.(nextData);
                     }
                   }}
                   onSaved={() => {

@@ -74,8 +74,8 @@ function optimisticContact(
 
 function desktopGridClass(showBdrColumn: boolean) {
   return showBdrColumn
-    ? "grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.5fr)]"
-    : "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)_minmax(0,0.5fr)]";
+    ? "grid-cols-[minmax(5.5rem,0.7fr)_minmax(8rem,1.05fr)_minmax(9rem,1.45fr)_minmax(7rem,0.75fr)_minmax(7rem,0.9fr)_minmax(9rem,1.25fr)_minmax(10rem,1.3fr)_minmax(4rem,0.45fr)]"
+    : "grid-cols-[minmax(5.5rem,0.7fr)_minmax(10rem,1.55fr)_minmax(7rem,0.8fr)_minmax(7rem,0.9fr)_minmax(9rem,1.3fr)_minmax(10rem,1.35fr)_minmax(4rem,0.5fr)]";
 }
 
 export function OpportunityMobileCard({
@@ -84,6 +84,10 @@ export function OpportunityMobileCard({
   showBdrColumn,
 }: OpportunityListItemProps) {
   const [displayContact, setDisplayContact] = useState(contact);
+  if (displayContact.opportunityStatusTone === "READY_FOR_REVIEW") {
+    return null;
+  }
+
   const createdByEmail = emailOnly(displayContact.createdBy);
   const content = (
     <>
@@ -145,6 +149,10 @@ export function OpportunityDesktopRow({
   showBdrColumn,
 }: OpportunityListItemProps) {
   const [displayContact, setDisplayContact] = useState(contact);
+  if (displayContact.opportunityStatusTone === "READY_FOR_REVIEW") {
+    return null;
+  }
+
   const createdByEmail = emailOnly(displayContact.createdBy);
   const rowClassName = `grid w-full ${desktopGridClass(showBdrColumn)} items-center border-b border-mafi-border text-left text-[13px] transition last:border-b-0`;
   const cells = (

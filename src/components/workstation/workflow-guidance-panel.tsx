@@ -202,10 +202,12 @@ export function WorkflowGuidancePanel({
 export function WorkflowScriptCard({
   className,
   context,
+  showReminder = false,
   showEyebrow = true,
 }: {
   className?: string;
   context: WorkflowGuidanceContext;
+  showReminder?: boolean;
   showEyebrow?: boolean;
 }) {
   return (
@@ -214,6 +216,7 @@ export function WorkflowScriptCard({
       content={guidanceContent[context]}
       isCompact
       showEyebrow={showEyebrow}
+      showReminder={showReminder}
     />
   );
 }
@@ -223,11 +226,13 @@ function GuidanceCard({
   content,
   isCompact = false,
   showEyebrow = true,
+  showReminder = true,
 }: {
   className?: string;
   content: (typeof guidanceContent)[WorkflowGuidanceContext];
   isCompact?: boolean;
   showEyebrow?: boolean;
+  showReminder?: boolean;
 }) {
   return (
     <div className={cn("space-y-4 p-4", className)}>
@@ -252,8 +257,8 @@ function GuidanceCard({
           <p key={paragraph}>{paragraph}</p>
         ))}
       </div>
-      {content.reminder ? (
-        <div className="rounded-md border border-mafi-gold-light bg-mafi-gold-light/30 p-3 text-xs leading-5 text-mafi-text-dark">
+      {showReminder && content.reminder ? (
+        <div className="rounded-md border border-red-200 bg-red-50/70 p-3 text-xs leading-5 text-mafi-text-dark">
           {content.reminder}
         </div>
       ) : null}

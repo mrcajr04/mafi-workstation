@@ -919,67 +919,73 @@ export function ProspectIntakeForm({
       return;
     }
 
-    const closeOptimistically = Boolean(onCancel);
-
     setIsGlobalSaving(true);
-
-    if (closeOptimistically) {
-      onOptimisticSaved?.(form);
-      onCancel?.();
-    }
 
     void (async () => {
       try {
-        const savedContactId = await createContactBasicsInBackground();
+        const savedContactId =
+          isEditMode && contactId && !isContactEditing
+            ? contactId
+            : await createContactBasicsInBackground();
 
         if (!savedContactId) {
-          if (closeOptimistically) {
-            toast.error("Couldn't save prospect - check your connection and try again.");
-          }
+          toast.error("Couldn't save prospect - check your connection and try again.");
           return;
         }
 
-        const financialSaved = await saveFinancialSnapshot();
+        const shouldSaveOpportunity = isEditMode || isOpportunityValueExpanded;
 
-        if (!financialSaved) {
-          if (closeOptimistically) {
-            toast.error("Couldn't save prospect - check your connection and try again.");
-          }
-          return;
-        }
-
-        const propertyResult = await updateProspectPropertyDetails({
-          contactId: savedContactId,
-          propertyAddress: form.propertyAddress,
-          propertyType: form.propertyType,
-          propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
-          propertyTaxesPresentYear: currencyInputToRaw(
-            form.propertyTaxesPresentYear,
-          ),
-          insuranceType: form.insuranceType || undefined,
-          hoaName: form.hoaName,
-          hoaManagementInfo: form.hoaManagementInfo,
-          additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
-        });
-
-        if (!propertyResult.success) {
-          if (!closeOptimistically) {
-            setError(propertyResult.error);
-          }
-          toast.error(propertyResult.error);
-          return;
-        }
-
-        if (isEditMode || isOpportunityValueExpanded) {
-          const opportunitySaved =
-            await saveOpportunityValueRequest(savedContactId);
+        if (shouldSaveOpportunity) {
+          const opportunitySaved = await saveOpportunityValueRequest(savedContactId);
 
           if (!opportunitySaved) {
-            if (closeOptimistically) {
-              toast.error("Couldn't save Opportunity Value - check your connection and try again.");
-            }
             return;
           }
+        }
+
+        onOptimisticSaved?.(form);
+        onCancel?.();
+
+        if (isEditMode && !isFinancialEditing && !isPropertyEditing) {
+          toast.success("Prospect saved.");
+          if (onSaved) {
+            onSaved();
+          } else {
+            router.refresh();
+          }
+          return;
+        }
+
+        const financialSaved =
+          !isEditMode || isFinancialEditing
+            ? await saveFinancialSnapshot()
+            : true;
+
+        if (!financialSaved) {
+          toast.error("Couldn't save prospect - check your connection and try again.");
+          return;
+        }
+
+        const propertyResult =
+          !isEditMode || isPropertyEditing
+            ? await updateProspectPropertyDetails({
+                contactId: savedContactId,
+                propertyAddress: form.propertyAddress,
+                propertyType: form.propertyType,
+                propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
+                propertyTaxesPresentYear: currencyInputToRaw(
+                  form.propertyTaxesPresentYear,
+                ),
+                insuranceType: form.insuranceType || undefined,
+                hoaName: form.hoaName,
+                hoaManagementInfo: form.hoaManagementInfo,
+                additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
+              })
+            : { success: true as const };
+
+        if (!propertyResult.success) {
+          toast.error(propertyResult.error);
+          return;
         }
 
         toast.success("Prospect saved.");
@@ -990,16 +996,12 @@ export function ProspectIntakeForm({
         }
       } catch (error) {
         console.error("Failed to save prospect.", error);
-        if (!closeOptimistically) {
-          setError("Couldn't save prospect - check your connection and try again.");
-        }
+        setError("Couldn't save prospect - check your connection and try again.");
         toast.error("Couldn't save prospect - check your connection and try again.");
       } finally {
-        if (!closeOptimistically) {
-          setIsGlobalSaving(false);
-        }
+        setIsGlobalSaving(false);
       }
-    });
+    })();
   }
 
   function savePropertyDetailsAndFinish() {
@@ -1064,7 +1066,7 @@ export function ProspectIntakeForm({
       return false;
     }
 
-    const result = await createOpportunityValue({
+    const payload = {
       contactId: targetContactId,
       propertyValue: currencyInputToRaw(form.opportunityPropertyValue),
       purchasePrice: "0",
@@ -1075,6 +1077,9 @@ export function ProspectIntakeForm({
         form.notMovingForwardReason === "Other"
           ? form.notMovingForwardOtherReason
           : form.notMovingForwardReason,
+    };
+    const result = await createOpportunityValue({
+      ...payload,
     });
 
     if (!result.success) {
@@ -2217,6 +2222,10 @@ export function ProspectIntakeForm({
 
         {dense && isEditMode ? (
           <div className={cn("space-y-3", shouldUseRecordLayout && "lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:self-start lg:sticky lg:top-0 lg:border-l lg:border-mafi-border lg:pl-4")}>
+            <div className="rounded-md border border-red-200 bg-red-50/70 p-3 text-xs leading-5 text-mafi-text-dark">
+              Do not quote rates, payments, or final terms. Route ready
+              prospects for licensed scenario review.
+            </div>
             <h3 className={inlineSectionToggleClass}>
               Opportunity Value (optional)
             </h3>

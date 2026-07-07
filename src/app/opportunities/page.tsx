@@ -78,7 +78,7 @@ export default async function OpportunitiesPage({
   }));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="w-full space-y-6">
       <NavViewMarker section="opportunities" />
       <div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -120,13 +120,13 @@ export default async function OpportunitiesPage({
                 ))}
               </div>
 
-              <div className="hidden overflow-x-auto md:block">
-                <div className="w-full">
+              <div className="hidden w-full overflow-x-auto md:block">
+                <div className="min-w-[1020px] w-full">
                   <div
                     className={
                       showBdrColumn
-                        ? "grid grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
-                        : "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        ? "grid grid-cols-[minmax(5.5rem,0.7fr)_minmax(8rem,1.05fr)_minmax(9rem,1.45fr)_minmax(7rem,0.75fr)_minmax(7rem,0.9fr)_minmax(9rem,1.25fr)_minmax(10rem,1.3fr)_minmax(4rem,0.45fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        : "grid grid-cols-[minmax(5.5rem,0.7fr)_minmax(10rem,1.55fr)_minmax(7rem,0.8fr)_minmax(7rem,0.9fr)_minmax(9rem,1.3fr)_minmax(10rem,1.35fr)_minmax(4rem,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
                     }
                   >
                     <div className="px-4 py-2 font-semibold">
