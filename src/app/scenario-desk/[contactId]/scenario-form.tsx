@@ -18,6 +18,7 @@ import {
   finalizeScenarioDesk,
   ScenarioInput,
 } from "@/lib/actions/scenario-actions";
+import { currencyInputToRaw, formatCurrencyInput } from "@/lib/currency";
 
 type ScenarioFormProps = {
   contactId: string;
@@ -101,7 +102,15 @@ export function ScenarioForm({
     startTransition(async () => {
       const result = await finalizeScenarioDesk({
         contactId,
-        scenarios,
+        scenarios: scenarios.map((scenario) => ({
+          ...scenario,
+          originationPay: currencyInputToRaw(scenario.originationPay),
+          pitia: currencyInputToRaw(scenario.pitia),
+          principalAndInterest: currencyInputToRaw(
+            scenario.principalAndInterest,
+          ),
+          processingFee: currencyInputToRaw(scenario.processingFee),
+        })),
         selectedScenarioNumber: selectedScenario,
       });
 
@@ -199,7 +208,7 @@ export function ScenarioForm({
                       updateScenario(
                         scenario.scenarioNumber,
                         "principalAndInterest",
-                        event.target.value,
+                        formatCurrencyInput(event.target.value),
                       )
                     }
                     value={scenario.principalAndInterest}
@@ -212,7 +221,7 @@ export function ScenarioForm({
                       updateScenario(
                         scenario.scenarioNumber,
                         "pitia",
-                        event.target.value,
+                        formatCurrencyInput(event.target.value),
                       )
                     }
                     value={scenario.pitia}
@@ -245,7 +254,7 @@ export function ScenarioForm({
                       updateScenario(
                         scenario.scenarioNumber,
                         "originationPay",
-                        event.target.value,
+                        formatCurrencyInput(event.target.value),
                       )
                     }
                     value={scenario.originationPay}
@@ -258,7 +267,7 @@ export function ScenarioForm({
                       updateScenario(
                         scenario.scenarioNumber,
                         "processingFee",
-                        event.target.value,
+                        formatCurrencyInput(event.target.value),
                       )
                     }
                     value={scenario.processingFee}

@@ -246,7 +246,7 @@ const loanProductSeeds = [
 const seedContacts = [
   {
     prospectName: "SEED_Test Prospect 1",
-    prospectPhone: "555-0101",
+    prospectPhone: "+13055550101",
     prospectEmail: "SEED_test.prospect1@example.test",
     borrowerType: BorrowerType.PRIMARY,
     loanPurpose: LoanPurpose.PURCHASE,
@@ -254,7 +254,7 @@ const seedContacts = [
     coBorrowers: [
       {
         name: "SEED_Co Borrower 1A",
-        phone: "555-1101",
+        phone: "+13055551101",
         email: "SEED_coborrower1a@example.test",
         order: 1,
       },
@@ -277,7 +277,7 @@ const seedContacts = [
   },
   {
     prospectName: "SEED_Test Prospect 2",
-    prospectPhone: "555-0102",
+    prospectPhone: "+13055550102",
     prospectEmail: "SEED_test.prospect2@example.test",
     borrowerType: BorrowerType.SECOND_HOME,
     loanPurpose: LoanPurpose.RATE_TERM_REFI,
@@ -300,7 +300,7 @@ const seedContacts = [
   },
   {
     prospectName: "SEED_Test Prospect 3",
-    prospectPhone: "555-0103",
+    prospectPhone: "+13055550103",
     prospectEmail: "SEED_test.prospect3@example.test",
     borrowerType: BorrowerType.INVESTMENT,
     loanPurpose: LoanPurpose.CASH_OUT_REFI,
@@ -308,13 +308,13 @@ const seedContacts = [
     coBorrowers: [
       {
         name: "SEED_Co Borrower 3A",
-        phone: "555-1301",
+        phone: "+13055551301",
         email: "SEED_coborrower3a@example.test",
         order: 1,
       },
       {
         name: "SEED_Co Borrower 3B",
-        phone: "555-1302",
+        phone: "+13055551302",
         email: "SEED_coborrower3b@example.test",
         order: 2,
       },
@@ -341,7 +341,7 @@ const seedContacts = [
   },
   {
     prospectName: "SEED_Test Prospect 4",
-    prospectPhone: "555-0104",
+    prospectPhone: "+13055550104",
     prospectEmail: "SEED_test.prospect4@example.test",
     borrowerType: BorrowerType.PRIMARY,
     loanPurpose: LoanPurpose.LIMITED_CASH_OUT,
@@ -349,7 +349,7 @@ const seedContacts = [
     coBorrowers: [
       {
         name: "SEED_Co Borrower 4A",
-        phone: "555-1401",
+        phone: "+13055551401",
         email: "SEED_coborrower4a@example.test",
         order: 1,
       },
@@ -381,7 +381,7 @@ const seedContacts = [
   },
   {
     prospectName: "SEED_Test Prospect 5",
-    prospectPhone: "555-0105",
+    prospectPhone: "+13055550105",
     prospectEmail: "SEED_test.prospect5@example.test",
     borrowerType: BorrowerType.OTHER,
     loanPurpose: LoanPurpose.PURCHASE,

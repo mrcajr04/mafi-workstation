@@ -4,6 +4,7 @@ import { Prisma, RoleType } from "@prisma/client";
 import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
+import { optionalUSPhoneToE164, US_PHONE_ERROR } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -93,6 +94,15 @@ export async function inviteUser(
     };
   }
 
+  const phone = optionalUSPhoneToE164(input.phone);
+
+  if (phone === "INVALID_PHONE") {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   const supabase = createAdminClient();
   const appUrl = await getAppUrl();
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(
@@ -117,7 +127,7 @@ export async function inviteUser(
         fullName: input.fullName,
         email: input.email,
         passwordSetupRequired: true,
-        phone: input.phone || null,
+        phone,
         role: input.role,
       },
     });
@@ -209,13 +219,22 @@ export async function updateUserProfile(
     }
   }
 
+  const phone = optionalUSPhoneToE164(input.phone);
+
+  if (phone === "INVALID_PHONE") {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   const nextProfile = {
     fullName,
     nmlsNumber:
       input.role === RoleType.LICENSED_LO || input.role === RoleType.OWNER
         ? input.nmlsNumber?.trim() || null
         : null,
-    phone: input.phone?.trim() || null,
+    phone,
     role: input.role,
   };
 

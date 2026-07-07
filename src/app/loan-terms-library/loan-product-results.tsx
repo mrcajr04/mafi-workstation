@@ -3,6 +3,7 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { formatRatioPercentDisplay } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 export type LoanProductListItem = {
@@ -173,5 +174,5 @@ function Info({ label, value }: { label: string; value: number | string }) {
 }
 
 function formatLtv(value: string) {
-  return `${Number(value).toFixed(2).replace(/\.00$/, "")}%`;
+  return formatRatioPercentDisplay(value);
 }

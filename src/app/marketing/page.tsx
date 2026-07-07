@@ -4,15 +4,19 @@ import { MarketingProfileForm } from "@/app/marketing/marketing-profile-form";
 import { requireRole } from "@/lib/rbac";
 
 export default async function MarketingPage() {
-  const access = await requireRole([RoleType.BDR, RoleType.LICENSED_LO]);
+  const access = await requireRole([
+    RoleType.BDR,
+    RoleType.LICENSED_LO,
+    RoleType.OWNER,
+  ]);
 
   if (!access.success) {
     return (
       <main className="mx-auto max-w-5xl">
         <Card className="border-mafi-border bg-mafi-bg-white">
           <CardContent className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-            Not authorized. Marketing is available only to BDR and Licensed LO
-            roles.
+            Not authorized. Marketing is available only to BDR, Licensed LO,
+            and Owner roles.
           </CardContent>
         </Card>
       </main>

@@ -11,6 +11,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  currencyInputToNumber,
+  formatCurrencyDisplay,
+  formatCurrencyInput,
+  formatRatioPercentDisplay,
+} from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 type CalculatorTab = "standard" | "amortization" | "ltv" | "dti";
@@ -36,16 +42,10 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("en-US", {
-    currency: "USD",
-    maximumFractionDigits: 2,
-    style: "currency",
-  });
-}
+function formatInterestRateInput(value: string) {
+  const parsed = parseNumber(value);
 
-function formatPercent(value: number) {
-  return `${value.toFixed(2)}%`;
+  return parsed ? parsed.toFixed(3) : "";
 }
 
 function monthlyPrincipalAndInterest(
@@ -150,15 +150,15 @@ function StandardCalculator({
   const [insurance, setInsurance] = useState("");
   const [hoa, setHoa] = useState("");
   const principalAndInterest = monthlyPrincipalAndInterest(
-    parseNumber(loanAmount),
+    currencyInputToNumber(loanAmount),
     parseNumber(interestRate),
     parseNumber(loanTerm),
   );
   const totalMonthly =
     principalAndInterest +
-    parseNumber(propertyTax) / 12 +
-    parseNumber(insurance) / 12 +
-    parseNumber(hoa);
+    currencyInputToNumber(propertyTax) / 12 +
+    currencyInputToNumber(insurance) / 12 +
+    currencyInputToNumber(hoa);
 
   return (
     <CalculatorShell
@@ -167,27 +167,31 @@ function StandardCalculator({
     >
       <MortgageInputGrid>
         <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(event.target.value)} />
+          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
         </Field>
         <Field label="Interest Rate (%)">
-          <Input value={interestRate} onChange={(event) => setInterestRate(event.target.value)} />
+          <Input
+            value={interestRate}
+            onBlur={(event) => setInterestRate(formatInterestRateInput(event.target.value))}
+            onChange={(event) => setInterestRate(event.target.value)}
+          />
         </Field>
         <Field label="Loan Term (years)">
           <Input value={loanTerm} onChange={(event) => setLoanTerm(event.target.value)} />
         </Field>
         <Field label="Property Tax (annual)">
-          <Input value={propertyTax} onChange={(event) => setPropertyTax(event.target.value)} />
+          <Input value={propertyTax} onChange={(event) => setPropertyTax(formatCurrencyInput(event.target.value))} />
         </Field>
         <Field label="Home Insurance (annual)">
-          <Input value={insurance} onChange={(event) => setInsurance(event.target.value)} />
+          <Input value={insurance} onChange={(event) => setInsurance(formatCurrencyInput(event.target.value))} />
         </Field>
         <Field label="HOA (monthly)">
-          <Input value={hoa} onChange={(event) => setHoa(event.target.value)} />
+          <Input value={hoa} onChange={(event) => setHoa(formatCurrencyInput(event.target.value))} />
         </Field>
       </MortgageInputGrid>
       <OutputGrid>
-        <Output label="Monthly Principal & Interest" value={formatCurrency(principalAndInterest)} />
-        <Output label="Estimated PITIA-style Payment" value={formatCurrency(totalMonthly)} />
+        <Output label="Monthly Principal & Interest" value={formatCurrencyDisplay(principalAndInterest)} />
+        <Output label="Estimated PITIA-style Payment" value={formatCurrencyDisplay(totalMonthly)} />
       </OutputGrid>
     </CalculatorShell>
   );
@@ -205,7 +209,7 @@ function AmortizationCalculator({
   const schedule = useMemo(
     () =>
       buildAmortizationSchedule(
-        parseNumber(loanAmount),
+        currencyInputToNumber(loanAmount),
         parseNumber(interestRate),
         parseNumber(loanTerm),
       ),
@@ -220,10 +224,14 @@ function AmortizationCalculator({
     >
       <MortgageInputGrid>
         <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(event.target.value)} />
+          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
         </Field>
         <Field label="Interest Rate (%)">
-          <Input value={interestRate} onChange={(event) => setInterestRate(event.target.value)} />
+          <Input
+            value={interestRate}
+            onBlur={(event) => setInterestRate(formatInterestRateInput(event.target.value))}
+            onChange={(event) => setInterestRate(event.target.value)}
+          />
         </Field>
         <Field label="Loan Term (years)">
           <Input value={loanTerm} onChange={(event) => setLoanTerm(event.target.value)} />
@@ -244,9 +252,9 @@ function AmortizationCalculator({
               visibleSchedule.map((row) => (
                 <tr className="border-t border-mafi-border" key={row.paymentNumber}>
                   <td className="px-3 py-2">{row.paymentNumber}</td>
-                  <td className="px-3 py-2">{formatCurrency(row.principalPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrency(row.interestPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrency(row.remainingBalance)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplay(row.principalPaid)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplay(row.interestPaid)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplay(row.remainingBalance)}</td>
                 </tr>
               ))
             ) : (
@@ -275,8 +283,8 @@ function AmortizationCalculator({
 function LtvCalculator() {
   const [propertyValue, setPropertyValue] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
-  const parsedPropertyValue = parseNumber(propertyValue);
-  const parsedLoanAmount = parseNumber(loanAmount);
+  const parsedPropertyValue = currencyInputToNumber(propertyValue);
+  const parsedLoanAmount = currencyInputToNumber(loanAmount);
   const ltv =
     parsedPropertyValue && parsedLoanAmount
       ? (parsedLoanAmount / parsedPropertyValue) * 100
@@ -289,14 +297,14 @@ function LtvCalculator() {
     >
       <MortgageInputGrid>
         <Field label="Property Value">
-          <Input value={propertyValue} onChange={(event) => setPropertyValue(event.target.value)} />
+          <Input value={propertyValue} onChange={(event) => setPropertyValue(formatCurrencyInput(event.target.value))} />
         </Field>
         <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(event.target.value)} />
+          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
         </Field>
       </MortgageInputGrid>
       <OutputGrid>
-        <Output label="LTV" value={parsedPropertyValue ? formatPercent(ltv) : "—"} />
+        <Output label="LTV" value={parsedPropertyValue ? formatRatioPercentDisplay(ltv) : "—"} />
       </OutputGrid>
     </CalculatorShell>
   );
@@ -305,8 +313,8 @@ function LtvCalculator() {
 function DtiCalculator() {
   const [grossIncome, setGrossIncome] = useState("");
   const [debts, setDebts] = useState([""]);
-  const totalDebts = debts.reduce((sum, debt) => sum + parseNumber(debt), 0);
-  const income = parseNumber(grossIncome);
+  const totalDebts = debts.reduce((sum, debt) => sum + currencyInputToNumber(debt), 0);
+  const income = currencyInputToNumber(grossIncome);
   const dti = income ? (totalDebts / income) * 100 : 0;
 
   return (
@@ -316,7 +324,7 @@ function DtiCalculator() {
     >
       <MortgageInputGrid>
         <Field label="Monthly Gross Income">
-          <Input value={grossIncome} onChange={(event) => setGrossIncome(event.target.value)} />
+          <Input value={grossIncome} onChange={(event) => setGrossIncome(formatCurrencyInput(event.target.value))} />
         </Field>
       </MortgageInputGrid>
       <div className="rounded-md border border-mafi-border bg-mafi-bg-off p-4">
@@ -345,7 +353,7 @@ function DtiCalculator() {
                 onChange={(event) =>
                   setDebts((current) =>
                     current.map((currentDebt, currentIndex) =>
-                      currentIndex === index ? event.target.value : currentDebt,
+                      currentIndex === index ? formatCurrencyInput(event.target.value) : currentDebt,
                     ),
                   )
                 }
@@ -368,8 +376,8 @@ function DtiCalculator() {
         </div>
       </div>
       <OutputGrid>
-        <Output label="Total Monthly Debts" value={formatCurrency(totalDebts)} />
-        <Output label="DTI" value={income ? formatPercent(dti) : "—"} />
+        <Output label="Total Monthly Debts" value={formatCurrencyDisplay(totalDebts)} />
+        <Output label="DTI" value={income ? formatRatioPercentDisplay(dti) : "—"} />
       </OutputGrid>
     </CalculatorShell>
   );

@@ -6,6 +6,11 @@ import { loanEstimateTemplate } from "@/lib/documents/loan-estimate-template";
 import { loanPreApprovalTemplate } from "@/lib/documents/loan-pre-approval-template";
 import { LoanDocumentData } from "@/lib/documents/document-types";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
+import {
+  formatCurrencyDisplay,
+  formatInterestRateDisplay,
+} from "@/lib/currency";
+import { formatDateForDisplay } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -21,27 +26,8 @@ type GenerateLoanDocumentResult =
     }
   | { success: false; error: string };
 
-function formatCurrency(value?: { toString(): string } | null) {
-  if (!value) {
-    return "Not provided";
-  }
-
-  return Number(value.toString()).toLocaleString("en-US", {
-    currency: "USD",
-    style: "currency",
-  });
-}
-
-function formatRate(value?: { toString(): string } | null) {
-  return value ? `${Number(value.toString()).toFixed(3)}%` : "Not provided";
-}
-
 function formatDate(value: Date) {
-  return value.toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return formatDateForDisplay(value);
 }
 
 async function htmlToPdfBase64(html: string) {
@@ -153,18 +139,18 @@ export async function generateLoanDocument(
   const documentData: LoanDocumentData = {
     borrowerName: contact.prospectName,
     documentDate: formatDate(new Date()),
-    interestRate: formatRate(finalizedScenario.interestRate),
+    interestRate: formatInterestRateDisplay(finalizedScenario.interestRate),
     lenderAndProduct: finalizedScenario.lenderAndProduct,
-    loanAmount: formatCurrency(null),
+    loanAmount: formatCurrencyDisplay(null),
     loanOfficerName: contact.assignedLO?.fullName ?? access.data.fullName,
     loanOfficerNmls:
       contact.assignedLO?.nmlsNumber ?? access.data.nmlsNumber ?? "Not provided",
-    originationPay: formatCurrency(finalizedScenario.originationPay),
-    pitia: formatCurrency(finalizedScenario.pitia),
-    principalAndInterest: formatCurrency(
+    originationPay: formatCurrencyDisplay(finalizedScenario.originationPay),
+    pitia: formatCurrencyDisplay(finalizedScenario.pitia),
+    principalAndInterest: formatCurrencyDisplay(
       finalizedScenario.principalAndInterest,
     ),
-    processingFee: formatCurrency(finalizedScenario.processingFee),
+    processingFee: formatCurrencyDisplay(finalizedScenario.processingFee),
     propertyAddress: contact.propertyDetails?.address ?? "Not provided",
     scenarioEscrowed: finalizedScenario.escrowed ? "Escrowed" : "Not escrowed",
   };
@@ -178,7 +164,7 @@ export async function generateLoanDocument(
     },
   });
 
-  documentData.loanAmount = formatCurrency(opportunityValue?.loanAmount);
+  documentData.loanAmount = formatCurrencyDisplay(opportunityValue?.loanAmount);
 
   const html =
     docType === "PRE_APPROVAL"

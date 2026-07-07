@@ -20,7 +20,7 @@ export const navItems: NavItem[] = [
   {
     label: "Marketing",
     href: "/marketing",
-    roles: [RoleType.BDR, RoleType.LICENSED_LO],
+    roles: [RoleType.BDR, RoleType.LICENSED_LO, RoleType.OWNER],
   },
   { label: "Loan Pre-Approval", href: "/phase4" },
   { label: "Loan Terms Library", href: "/loan-terms-library" },

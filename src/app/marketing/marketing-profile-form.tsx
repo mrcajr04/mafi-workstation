@@ -4,7 +4,7 @@ import { RoleType } from "@prisma/client";
 import { ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateMarketingProfile } from "@/lib/actions/profile-actions";
+import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 const urlField = z
@@ -36,7 +37,12 @@ const marketingProfileSchema = z.object({
   landingPageHeadline: z.string().optional(),
   linkedinUrl: urlField,
   profilePhotoUrl: urlField,
-  whatsappNumber: z.string().optional(),
+  whatsappNumber: z
+    .string()
+    .optional()
+    .refine((value) => !value?.trim() || isValidUSPhone(value), {
+      message: US_PHONE_ERROR,
+    }),
   xTwitterUrl: urlField,
 });
 
@@ -78,7 +84,9 @@ export function MarketingProfileForm({ profile }: MarketingProfileFormProps) {
       landingPageHeadline: profile.landingPageHeadline ?? "",
       linkedinUrl: profile.linkedinUrl ?? "",
       profilePhotoUrl: profile.profilePhotoUrl ?? "",
-      whatsappNumber: profile.whatsappNumber ?? "",
+      whatsappNumber: profile.whatsappNumber
+        ? formatUSPhone(profile.whatsappNumber, "")
+        : "",
       xTwitterUrl: profile.xTwitterUrl ?? "",
     },
     mode: "onSubmit",
@@ -134,7 +142,7 @@ export function MarketingProfileForm({ profile }: MarketingProfileFormProps) {
           <CardContent className="grid gap-4 pt-5 md:grid-cols-2">
             <ReadOnlyInfo label="Name" value={profile.fullName} />
             <ReadOnlyInfo label="Email" value={profile.email} />
-            <ReadOnlyInfo label="Phone" value={profile.phone || "Not provided"} />
+            <ReadOnlyInfo label="Phone" value={formatUSPhone(profile.phone)} />
             {profile.role === RoleType.LICENSED_LO ? (
               <ReadOnlyInfo
                 label="NMLS #"
@@ -180,7 +188,29 @@ export function MarketingProfileForm({ profile }: MarketingProfileFormProps) {
             />
             <div className="space-y-2">
               <Label htmlFor="whatsappNumber">WhatsApp number</Label>
-              <Input id="whatsappNumber" {...register("whatsappNumber")} />
+              <Controller
+                control={control}
+                name="whatsappNumber"
+                render={({ field }) => (
+                  <Input
+                    aria-invalid={Boolean(errors.whatsappNumber)}
+                    className={cn(
+                      errors.whatsappNumber && "border-destructive",
+                    )}
+                    id="whatsappNumber"
+                    onChange={(event) =>
+                      field.onChange(maskUSPhoneInput(event.target.value))
+                    }
+                    type="tel"
+                    value={field.value ?? ""}
+                  />
+                )}
+              />
+              {errors.whatsappNumber ? (
+                <p className="text-sm text-destructive">
+                  {errors.whatsappNumber.message}
+                </p>
+              ) : null}
             </div>
             <UrlInput
               error={errors.googleBusinessUrl?.message}

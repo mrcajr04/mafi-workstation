@@ -3,6 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma, RoleType } from "@prisma/client";
+import { optionalUSPhoneToE164, US_PHONE_ERROR } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getCurrentProfile } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
@@ -16,13 +17,22 @@ type CreateProfileInput = {
 };
 
 export async function createProfile(input: CreateProfileInput) {
+  const phone = optionalUSPhoneToE164(input.phone);
+
+  if (phone === "INVALID_PHONE") {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   try {
     await prisma.profile.create({
       data: {
         id: input.id,
         fullName: input.fullName,
         email: input.email,
-        phone: input.phone || null,
+        phone,
         role: input.role,
       },
     });

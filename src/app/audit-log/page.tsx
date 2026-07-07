@@ -3,7 +3,12 @@ import { Prisma, RoleType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { AuditLogList } from "@/app/audit-log/audit-log-list";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  formatTimestampForDisplay,
+  recentRelativeTime,
+} from "@/lib/dates";
 import { auditActionLabels, labelFromMap } from "@/lib/labels";
+import { formatUSPhone, isValidUSPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -15,11 +20,29 @@ type AuditLogSearchParams = {
   userId?: string;
 };
 
-function formatTimestamp(value: Date) {
-  return value.toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+function formatPhoneValuesInDetails(value: unknown, key = ""): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => formatPhoneValuesInDetails(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        formatPhoneValuesInDetails(entryValue, entryKey),
+      ]),
+    );
+  }
+
+  if (
+    typeof value === "string" &&
+    /phone|whatsapp/i.test(key) &&
+    isValidUSPhone(value)
+  ) {
+    return formatUSPhone(value);
+  }
+
+  return value;
 }
 
 function detailsJson(value: unknown) {
@@ -27,7 +50,7 @@ function detailsJson(value: unknown) {
     return "No details.";
   }
 
-  return JSON.stringify(value, null, 2);
+  return JSON.stringify(formatPhoneValuesInDetails(value), null, 2);
 }
 
 function pageHref(
@@ -154,10 +177,19 @@ export default async function AuditLogPage({
     entityId: log.entityId,
     entityType: log.entityType,
     id: log.id,
-    timestampLabel: formatTimestamp(log.timestamp),
+    timestampLabel: formatTimestampForDisplay(log.timestamp),
+    timestampRelativeLabel: recentRelativeTime(log.timestamp),
     userFullName: log.user.fullName,
   }));
   const listPageKey = `${currentPage}:${selectedAction ?? "ALL"}:${selectedUserId ?? "ALL"}`;
+  const actionFilterOptions = actionOptions.map((option) => ({
+    label: labelFromMap(option.action, auditActionLabels),
+    value: option.action,
+  }));
+  const userFilterOptions = userOptions.map((option) => ({
+    label: option.user.fullName,
+    value: option.userId,
+  }));
 
   return (
     <main className="mx-auto max-w-6xl space-y-6">
@@ -173,67 +205,31 @@ export default async function AuditLogPage({
         </p>
       </div>
 
-      <form className="grid gap-3 rounded-md border border-mafi-border bg-mafi-bg-off p-4 sm:grid-cols-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <div className="space-y-1">
-          <label
-            className="text-xs font-semibold uppercase text-mafi-text-mid"
-            htmlFor="action"
-          >
-            Action
-          </label>
-          <select
-            className="h-10 w-full rounded-md border border-mafi-border bg-white px-3 text-sm text-mafi-text-dark"
-            defaultValue={selectedAction ?? "ALL"}
-            id="action"
-            name="action"
-          >
-            <option value="ALL">All actions</option>
-            {actionOptions.map((option) => (
-              <option key={option.action} value={option.action}>
-                {labelFromMap(option.action, auditActionLabels)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label
-            className="text-xs font-semibold uppercase text-mafi-text-mid"
-            htmlFor="userId"
-          >
-            User
-          </label>
-          <select
-            className="h-10 w-full rounded-md border border-mafi-border bg-white px-3 text-sm text-mafi-text-dark"
-            defaultValue={selectedUserId ?? "ALL"}
-            id="userId"
-            name="userId"
-          >
-            <option value="ALL">All users</option>
-            {userOptions.map((option) => (
-              <option key={option.userId} value={option.userId}>
-                {option.user.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-end">
-          <button
-            className="h-10 rounded-md bg-mafi-blue-primary px-4 text-sm font-semibold text-white hover:bg-mafi-blue-dark"
-            type="submit"
-          >
-            Apply filters
-          </button>
-        </div>
-      </form>
-
       <Card className="border-mafi-border bg-mafi-bg-white">
         <CardContent className="p-0">
           {logs.length ? (
-            <AuditLogList key={listPageKey} logs={logItems} />
+            <AuditLogList
+              actionOptions={actionFilterOptions}
+              key={listPageKey}
+              logs={logItems}
+              selectedAction={selectedAction}
+              selectedUserId={selectedUserId}
+              userOptions={userFilterOptions}
+            />
           ) : (
-            <div className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-              No audit log entries found.
-            </div>
+            <>
+              <AuditLogList
+                actionOptions={actionFilterOptions}
+                key={listPageKey}
+                logs={logItems}
+                selectedAction={selectedAction}
+                selectedUserId={selectedUserId}
+                userOptions={userFilterOptions}
+              />
+              <div className="px-6 py-10 text-center text-sm text-mafi-text-mid">
+                No audit log entries found.
+              </div>
+            </>
           )}
 
           {totalCount > 0 ? (

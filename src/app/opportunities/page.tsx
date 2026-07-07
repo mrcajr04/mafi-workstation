@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
+import { formatDateForDisplay } from "@/lib/dates";
 import {
   opportunityStatusLabels,
   borrowerTypeLabels,
@@ -26,11 +27,7 @@ function formatFico(ficoInfo: { score: number | null } | null) {
 const PAGE_SIZE = 15;
 
 function formatCreatedAt(createdAt: Date | string) {
-  return new Date(createdAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDateForDisplay(createdAt);
 }
 
 export default async function OpportunitiesPage({
@@ -69,6 +66,7 @@ export default async function OpportunitiesPage({
     loanPurposeLabel: loanPurposeLabels[contact.loanPurpose],
     ficoLabel: formatFico(contact.ficoInfo),
     hasFicoInfo: Boolean(contact.ficoInfo?.score),
+    isPhase1Incomplete: !contact.ficoInfo || !contact.propertyDetails,
     opportunityStatusLabel: contact.opportunityValue
       ? opportunityStatusLabels[contact.opportunityValue.status]
       : "No opportunity value yet",
@@ -127,8 +125,8 @@ export default async function OpportunitiesPage({
                   <div
                     className={
                       showBdrColumn
-                        ? "grid grid-cols-[minmax(0,0.75fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
-                        : "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        ? "grid grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
+                        : "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)_minmax(0,0.5fr)] items-center border-b border-mafi-border bg-mafi-bg-lighter text-[13px] text-mafi-text-dark"
                     }
                   >
                     <div className="px-4 py-2 font-semibold">
@@ -139,7 +137,6 @@ export default async function OpportunitiesPage({
                     ) : null}
                     <div className="px-4 py-2 font-semibold">Prospect</div>
                     <div className="px-4 py-2 font-semibold">Phone</div>
-                    <div className="px-4 py-2 font-semibold">Email</div>
                     <div className="px-4 py-2 font-semibold">
                       Borrower Type
                     </div>

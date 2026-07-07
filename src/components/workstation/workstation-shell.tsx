@@ -57,7 +57,9 @@ export function WorkstationShell({
 
       <main
         className={
-          hideAppChrome ? "min-h-screen" : "min-h-screen pt-16 md:pl-56"
+          hideAppChrome
+            ? "min-h-screen"
+            : "min-h-screen pt-16 md:pl-56"
         }
       >
         <div className="p-6">{children}</div>

@@ -2,16 +2,14 @@ import Link from "next/link";
 import { ContactStatus, RoleType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDateForDisplay } from "@/lib/dates";
+import { formatUSPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 import { loanPurposeLabels } from "@/lib/labels";
 
 function formatDate(value: Date) {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDateForDisplay(value);
 }
 
 const getCachedScenarioDeskContacts = unstable_cache(
@@ -84,7 +82,7 @@ export async function ScenarioDeskList() {
                     {contact.prospectName}
                   </p>
                   <p className="text-xs text-mafi-text-mid">
-                    {contact.prospectPhone || "No phone"} ·{" "}
+                    {formatUSPhone(contact.prospectPhone, "No phone")} ·{" "}
                     {contact.prospectEmail || "No email"}
                   </p>
                 </div>

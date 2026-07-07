@@ -67,6 +67,11 @@ export async function getContactsNeedingOpportunityValue({
                 score: true,
               },
             },
+            propertyDetails: {
+              select: {
+                id: true,
+              },
+            },
             opportunityValue: {
               select: {
                 notMovingForwardReason: true,

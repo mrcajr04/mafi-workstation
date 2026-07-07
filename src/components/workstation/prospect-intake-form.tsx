@@ -3,6 +3,7 @@
 import {
   AssetType,
   BorrowerType,
+  ContactStatus,
   FicoSource,
   InsuranceType,
   LoanPurpose,
@@ -10,7 +11,18 @@ import {
   PropertyType,
   RealtorStatus,
 } from "@prisma/client";
-import { ChevronDown, Plus } from "lucide-react";
+import {
+  BadgeDollarSign,
+  ChevronDown,
+  CreditCard,
+  Mail,
+  Pencil,
+  Phone,
+  Plus,
+  ShieldCheck,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -41,7 +53,18 @@ import {
   updateProspectFinancialSnapshot,
   updateProspectPropertyDetails,
 } from "@/lib/actions/contact-actions";
-import { formatCurrencyInput } from "@/lib/currency";
+import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
+import {
+  WorkflowScriptCard,
+  type WorkflowGuidanceContext,
+} from "@/components/workstation/workflow-guidance-panel";
+import {
+  currencyInputToRaw,
+  formatCurrencyInput,
+  formatRatioPercentDisplay,
+} from "@/lib/currency";
+import type { DuplicatePropertyContact } from "@/lib/duplicate-property-contacts";
+import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -93,9 +116,13 @@ type OpportunityValueFieldErrors = {
 
 export type ProspectIntakeInitialData = ProspectIntakeFormState & {
   contactId: string;
+  contactStatus?: ContactStatus;
   createdByEmail?: string;
   createdByName?: string;
   createdOnLabel?: string;
+  duplicatePropertyContacts?: DuplicatePropertyContact[];
+  hasFinancialSnapshot?: boolean;
+  hasPropertyDetails?: boolean;
 };
 
 const initialCoBorrower: CoBorrowerRow = {
@@ -216,10 +243,16 @@ const notMovingForwardReasons = [
 ];
 
 const requiredLabel = <span className="text-destructive">*</span>;
+const inlineSectionToggleClass =
+  "text-left text-base font-semibold text-mafi-blue-primary hover:underline";
 
 const prospectIntakeRequiredSchema = z.object({
   prospectName: z.string().trim().min(1, "Prospect name is required."),
-  prospectPhone: z.string().trim().min(1, "Phone is required."),
+  prospectPhone: z
+    .string()
+    .trim()
+    .min(1, "Phone is required.")
+    .refine(isValidUSPhone, US_PHONE_ERROR),
   loanPurpose: z.string().trim().min(1, "Loan purpose is required."),
   propertyAddress: z.string().trim().min(1, "Property address is required."),
 });
@@ -249,6 +282,19 @@ type ProspectIntakeFormProps = {
   onSaved?: () => void;
 };
 
+function formatInitialFormPhoneValues(form: ProspectIntakeFormState) {
+  return {
+    ...form,
+    coBorrowers: form.coBorrowers.map((coBorrower) => ({
+      ...coBorrower,
+      phone: coBorrower.phone ? formatUSPhone(coBorrower.phone, "") : "",
+    })),
+    prospectPhone: form.prospectPhone
+      ? formatUSPhone(form.prospectPhone, "")
+      : "",
+  };
+}
+
 export function ProspectIntakeForm({
   dense = false,
   initialData,
@@ -258,13 +304,19 @@ export function ProspectIntakeForm({
 }: ProspectIntakeFormProps) {
   const router = useRouter();
   const isEditMode = Boolean(initialData?.contactId);
+  const initialProspectPhoneDisplay = initialData?.prospectPhone
+    ? formatUSPhone(initialData.prospectPhone, "")
+    : "";
   const [form, setForm] = useState<ProspectIntakeFormState>(
-    initialData ?? initialForm,
+    initialData ? formatInitialFormPhoneValues(initialData) : initialForm,
   );
   const [error, setError] = useState("");
+  const [coBorrowerPhoneErrors, setCoBorrowerPhoneErrors] = useState<
+    Record<number, string>
+  >({});
   const [opportunityErrors, setOpportunityErrors] =
     useState<OpportunityValueFieldErrors>({});
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(isEditMode ? 2 : 1);
   const [contactId, setContactId] = useState<string | null>(
     initialData?.contactId ?? null,
   );
@@ -274,12 +326,21 @@ export function ProspectIntakeForm({
   const [isAssetsExpanded, setIsAssetsExpanded] = useState(
     Boolean(initialData?.assets.length),
   );
-  const [isOpportunityValueExpanded, setIsOpportunityValueExpanded] = useState(
-    Boolean(
+  const [isOpportunityValueExpanded] = useState(
+    isEditMode ||
+      Boolean(
       initialData?.opportunityPropertyValue ||
         initialData?.opportunityPurchasePrice ||
         initialData?.opportunityLoanAmount,
-    ),
+      ),
+  );
+  const [isProspectPhoneEdited, setIsProspectPhoneEdited] = useState(false);
+  const [isContactEditing, setIsContactEditing] = useState(!isEditMode);
+  const [isFinancialEditing, setIsFinancialEditing] = useState(
+    !isEditMode || !initialData?.hasFinancialSnapshot,
+  );
+  const [isPropertyEditing, setIsPropertyEditing] = useState(
+    !isEditMode || !initialData?.hasPropertyDetails,
   );
   const [isPending, startTransition] = useTransition();
   const contactCreatePromiseRef = useRef<Promise<string | null> | null>(null);
@@ -293,7 +354,7 @@ export function ProspectIntakeForm({
   } = useForm<ProspectIntakeRequiredValues>({
     defaultValues: {
       prospectName: initialData?.prospectName ?? "",
-      prospectPhone: initialData?.prospectPhone ?? "",
+      prospectPhone: initialProspectPhoneDisplay,
       loanPurpose: initialData?.loanPurpose ?? "",
       propertyAddress: initialData?.propertyAddress ?? "",
     },
@@ -305,9 +366,18 @@ export function ProspectIntakeForm({
     field: T,
     value: (typeof form)[T],
   ) {
+    const nextValue =
+      field === "prospectPhone" && typeof value === "string"
+        ? maskUSPhoneInput(value)
+        : value;
+
+    if (field === "prospectPhone") {
+      setIsProspectPhoneEdited(true);
+    }
+
     setForm((currentForm) => ({
       ...currentForm,
-      [field]: value,
+      [field]: nextValue,
     }));
 
     if (
@@ -316,7 +386,7 @@ export function ProspectIntakeForm({
       field === "loanPurpose" ||
       field === "propertyAddress"
     ) {
-      setValue(field, String(value));
+      setValue(field, String(nextValue));
     }
 
     if (
@@ -333,10 +403,20 @@ export function ProspectIntakeForm({
     field: keyof CoBorrowerRow,
     value: string,
   ) {
+    const nextValue = field === "phone" ? maskUSPhoneInput(value) : value;
+
+    if (field === "phone") {
+      setCoBorrowerPhoneErrors((currentErrors) => {
+        const nextErrors = { ...currentErrors };
+        delete nextErrors[index];
+        return nextErrors;
+      });
+    }
+
     setForm((currentForm) => ({
       ...currentForm,
       coBorrowers: currentForm.coBorrowers.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: value } : row,
+        rowIndex === index ? { ...row, [field]: nextValue } : row,
       ),
     }));
   }
@@ -401,11 +481,19 @@ export function ProspectIntakeForm({
 
   function validateContactBasics() {
     clearErrors(["prospectName", "prospectPhone", "loanPurpose"]);
+    const allowUntouchedLegacyPhone =
+      isEditMode &&
+      !isProspectPhoneEdited &&
+      form.prospectPhone.trim() === initialProspectPhoneDisplay.trim() &&
+      Boolean(form.prospectPhone.trim()) &&
+      !isValidUSPhone(form.prospectPhone);
 
     return !applyValidationErrors(
       contactBasicsSchema.safeParse({
         prospectName: form.prospectName,
-        prospectPhone: form.prospectPhone,
+        prospectPhone: allowUntouchedLegacyPhone
+          ? "(555) 555-5555"
+          : form.prospectPhone,
         loanPurpose: form.loanPurpose,
       }),
     );
@@ -419,6 +507,20 @@ export function ProspectIntakeForm({
         propertyAddress: form.propertyAddress,
       }),
     );
+  }
+
+  function validateFinancialSnapshotPhones() {
+    const nextErrors: Record<number, string> = {};
+
+    form.coBorrowers.forEach((coBorrower, index) => {
+      if (coBorrower.phone.trim() && !isValidUSPhone(coBorrower.phone)) {
+        nextErrors[index] = US_PHONE_ERROR;
+      }
+    });
+
+    setCoBorrowerPhoneErrors(nextErrors);
+
+    return Object.keys(nextErrors).length === 0;
   }
 
   function createContactBasicsInBackground() {
@@ -453,6 +555,7 @@ export function ProspectIntakeForm({
       borrowerType: form.borrowerType || undefined,
       loanPurpose: form.loanPurpose as LoanPurpose,
       vesting: form.vesting,
+      coBorrowers: form.coBorrowers,
     }).then((result) => {
       if (!result.success) {
         setError(result.error);
@@ -470,33 +573,16 @@ export function ProspectIntakeForm({
     return createPromise;
   }
 
-  function saveContactBasicsAndContinue() {
+  function saveNewProspectContactOnly() {
     setError("");
 
     if (!validateContactBasics()) {
       return;
     }
 
-    setStep(2);
-
-    if (!contactCreatePromiseRef.current) {
-      void createContactBasicsInBackground();
-    }
-  }
-
-  function saveContactBasicsOnly() {
-    setError("");
-
-    if (!validateContactBasics()) {
+    if (!validateFinancialSnapshotPhones()) {
       return;
     }
-
-    if (!validateOpportunityValue()) {
-      return;
-    }
-
-    onOptimisticSaved?.(form);
-    onCancel?.();
 
     startTransition(async () => {
       const savedContactId = await createContactBasicsInBackground();
@@ -505,11 +591,9 @@ export function ProspectIntakeForm({
         return;
       }
 
-      if (isOpportunityValueExpanded) {
-        await saveOpportunityValueRequest(savedContactId);
-      }
-
-      toast.success("Contact Basics saved.");
+      onOptimisticSaved?.(form);
+      onCancel?.();
+      toast.success("Prospect created.");
       if (onSaved) {
         onSaved();
       } else {
@@ -527,6 +611,10 @@ export function ProspectIntakeForm({
   }
 
   async function saveFinancialSnapshot() {
+      if (!validateFinancialSnapshotPhones()) {
+        return false;
+      }
+
       const savedContactId =
         contactId ?? (await contactCreatePromiseRef.current);
 
@@ -540,7 +628,10 @@ export function ProspectIntakeForm({
       const result = await updateProspectFinancialSnapshot({
         contactId: savedContactId,
         coBorrowers: form.coBorrowers,
-        assets: form.assets,
+        assets: form.assets.map((asset) => ({
+          ...asset,
+          amount: currencyInputToRaw(asset.amount),
+        })),
         ficoSource: form.ficoSource,
         ficoScore: form.ficoScore,
       });
@@ -568,7 +659,7 @@ export function ProspectIntakeForm({
       const saved = await saveFinancialSnapshot();
 
       if (saved) {
-        if (isOpportunityValueExpanded) {
+        if (isEditMode || isOpportunityValueExpanded) {
           await saveOpportunityValueRequest();
         }
 
@@ -592,7 +683,10 @@ export function ProspectIntakeForm({
 
       if (!saved) {
         setStep(2);
+        return;
       }
+
+      setIsFinancialEditing(false);
     })();
   }
 
@@ -643,12 +737,14 @@ export function ProspectIntakeForm({
         contactId: resolvedContactId,
         propertyAddress: form.propertyAddress,
         propertyType: form.propertyType,
-        propertyTaxesLastYear: form.propertyTaxesLastYear,
-        propertyTaxesPresentYear: form.propertyTaxesPresentYear,
+        propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
+        propertyTaxesPresentYear: currencyInputToRaw(
+          form.propertyTaxesPresentYear,
+        ),
         insuranceType: form.insuranceType || undefined,
         hoaName: form.hoaName,
         hoaManagementInfo: form.hoaManagementInfo,
-        additionalHoaFees: form.additionalHoaFees,
+        additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
       });
 
       if (!result.success) {
@@ -658,7 +754,7 @@ export function ProspectIntakeForm({
       }
 
       if (!finish) {
-        if (isOpportunityValueExpanded) {
+        if (isEditMode || isOpportunityValueExpanded) {
           await saveOpportunityValueRequest(resolvedContactId);
         }
 
@@ -675,6 +771,7 @@ export function ProspectIntakeForm({
       setStep(1);
       setContactId(initialData?.contactId ?? null);
       contactCreatePromiseRef.current = null;
+      setIsProspectPhoneEdited(false);
       setIsCoBorrowersExpanded(false);
       setIsAssetsExpanded(false);
       resetValidation();
@@ -760,9 +857,9 @@ export function ProspectIntakeForm({
 
     const result = await createOpportunityValue({
       contactId: targetContactId,
-      propertyValue: form.opportunityPropertyValue,
+      propertyValue: currencyInputToRaw(form.opportunityPropertyValue),
       purchasePrice: "0",
-      loanAmount: form.opportunityLoanAmount,
+      loanAmount: currencyInputToRaw(form.opportunityLoanAmount),
       hasRealtor: form.hasRealtor,
       status: form.opportunityStatus,
       notMovingForwardReason:
@@ -793,7 +890,7 @@ export function ProspectIntakeForm({
       return "—";
     }
 
-    return `${((loanAmount / propertyValue) * 100).toFixed(2)}%`;
+    return formatRatioPercentDisplay((loanAmount / propertyValue) * 100, "-");
   }
 
   function handleSubmit() {
@@ -830,6 +927,65 @@ export function ProspectIntakeForm({
       }
     });
   }
+  const stepGuidanceContext: WorkflowGuidanceContext =
+    isEditMode && isOpportunityValueExpanded
+      ? "phase2"
+      : step === 1
+        ? "phase1-step1"
+        : step === 2
+          ? "phase1-step2"
+          : "phase1-step3";
+  const shouldUseRecordLayout = dense && isEditMode;
+  const canShowScriptPanel =
+    dense &&
+    isEditMode &&
+    (!initialData?.contactStatus ||
+      initialData.contactStatus === ContactStatus.ACTIVE) &&
+    form.opportunityStatus !== OpportunityStatus.READY_FOR_REVIEW;
+  function cancelContactEdit() {
+    if (initialData) {
+      setForm((currentForm) => ({
+        ...currentForm,
+        borrowerType: initialData.borrowerType,
+        loanPurpose: initialData.loanPurpose,
+        prospectEmail: initialData.prospectEmail,
+        prospectName: initialData.prospectName,
+        prospectPhone: initialProspectPhoneDisplay,
+      }));
+      setValue("loanPurpose", initialData.loanPurpose);
+      setValue("prospectName", initialData.prospectName);
+      setValue("prospectPhone", initialProspectPhoneDisplay);
+    }
+
+    clearErrors();
+    setError("");
+    setIsContactEditing(false);
+  }
+
+  function saveContactBasicsInline() {
+    setError("");
+
+    if (!validateContactBasics()) {
+      return;
+    }
+
+    startTransition(async () => {
+      const savedContactId = await createContactBasicsInBackground();
+
+      if (!savedContactId) {
+        return;
+      }
+
+      onOptimisticSaved?.(form);
+      setIsContactEditing(false);
+      toast.success("Contact details saved.");
+      if (onSaved) {
+        router.refresh();
+      } else {
+        router.refresh();
+      }
+    });
+  }
 
   return (
     <div className={cn("mx-auto max-w-6xl text-left", dense ? "space-y-3" : "space-y-6")}>
@@ -856,9 +1012,15 @@ export function ProspectIntakeForm({
             : handleValidatedSubmit(() => handleSubmit())
         }
       >
-        {dense ? <WizardSteps onStepClick={setStep} step={step} /> : null}
-
-        {(!dense || step === 1) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none")}>
+        <div>
+          <div
+            className={cn(
+              "space-y-3",
+              shouldUseRecordLayout &&
+                "grid gap-4 space-y-0 lg:grid-cols-[minmax(0,1fr)_20rem]",
+            )}
+          >
+        {(!dense || step === 1 || shouldUseRecordLayout) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "order-first border-b border-mafi-border pb-4 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:self-start lg:sticky lg:top-0 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-4")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
             <CardTitle className="text-mafi-blue-primary">
               Section A — Contact Information
@@ -878,7 +1040,65 @@ export function ProspectIntakeForm({
                 </p>
               </div>
             ) : null}
-            <div className={cn("grid md:grid-cols-3", dense ? "gap-3 md:grid-cols-2" : "gap-4")}>
+            {dense && isEditMode && !isContactEditing ? (
+              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <UserRound className="size-4 shrink-0 text-mafi-text-mid" />
+                    <p className="truncate text-sm font-semibold text-mafi-text-dark">
+                      {form.prospectName || "Not provided"}
+                    </p>
+                  </div>
+                  <Button
+                    aria-label="Edit contact information"
+                    className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                    onClick={() => setIsContactEditing(true)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2 text-sm text-mafi-text-mid">
+                  <div className="flex items-center gap-2">
+                    <Phone className="size-4 shrink-0" />
+                    <span className="truncate">
+                      {form.prospectPhone || "Not provided"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 shrink-0" />
+                    <span className="truncate">
+                      {form.prospectEmail || "Not provided"}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
+                  <p>
+                    Borrower type:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.borrowerType
+                        ? borrowerTypeLabels[form.borrowerType]
+                        : "Not provided"}
+                    </span>
+                  </p>
+                  <p>
+                    Loan purpose:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.loanPurpose
+                        ? loanPurposeLabels[form.loanPurpose]
+                        : "Not provided"}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+            <div
+              className={cn(
+                "grid md:grid-cols-3",
+                dense ? "gap-3 md:grid-cols-2" : "gap-4",
+              )}
+            >
               <Field label="Prospect name" required>
                 <Input
                   aria-invalid={Boolean(errors.prospectName)}
@@ -911,6 +1131,16 @@ export function ProspectIntakeForm({
                 {errors.prospectPhone ? (
                   <p className="text-sm text-destructive">
                     {errors.prospectPhone.message}
+                  </p>
+                ) : null}
+                {isEditMode &&
+                !isProspectPhoneEdited &&
+                form.prospectPhone.trim() === initialProspectPhoneDisplay.trim() &&
+                Boolean(form.prospectPhone.trim()) &&
+                !isValidUSPhone(form.prospectPhone) ? (
+                  <p className="text-sm text-mafi-gold-dark">
+                    This phone number doesn&apos;t match the expected format.
+                    Update it or continue.
                   </p>
                 ) : null}
               </Field>
@@ -971,28 +1201,102 @@ export function ProspectIntakeForm({
                   </p>
                 ) : null}
               </Field>
-              <Field label="Vesting">
-                <Select
-                  onValueChange={(value) => updateField("vesting", value)}
-                  value={form.vesting}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select vesting" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(vestingLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
             </div>
+            )}
+            {dense && isEditMode && isContactEditing ? (
+              <div className="flex justify-end gap-2">
+                <Button onClick={cancelContactEdit} type="button" variant="outline">
+                  Cancel
+                </Button>
+                <Button
+                  disabled={isPending}
+                  onClick={saveContactBasicsInline}
+                  type="button"
+                >
+                  Save
+                </Button>
+              </div>
+            ) : null}
+            {dense && !isEditMode ? (
+              <RepeatableSection
+                addLabel="Add co-borrower"
+                count={form.coBorrowers.length}
+                emptyMessage="No co-borrowers added yet."
+                isExpanded={isCoBorrowersExpanded}
+                onAdd={addCoBorrower}
+                onToggle={() =>
+                  setIsCoBorrowersExpanded((isExpanded) => !isExpanded)
+                }
+                title="Co-borrowers"
+              >
+                {form.coBorrowers.map((coBorrower, index) => (
+                  <div
+                    className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"
+                    key={index}
+                  >
+                    <Input
+                      autoComplete="name"
+                      name={`new-co-borrower-${index}-name`}
+                      onChange={(event) =>
+                        updateCoBorrower(index, "name", event.target.value)
+                      }
+                      placeholder="Name"
+                      value={coBorrower.name}
+                    />
+                    <div className="space-y-1">
+                      <Input
+                        aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
+                        autoComplete="tel"
+                        className={cn(
+                          coBorrowerPhoneErrors[index] && "border-destructive",
+                        )}
+                        name={`new-co-borrower-${index}-phone`}
+                        onChange={(event) =>
+                          updateCoBorrower(index, "phone", event.target.value)
+                        }
+                        placeholder="Phone"
+                        type="tel"
+                        value={coBorrower.phone}
+                      />
+                      {coBorrowerPhoneErrors[index] ? (
+                        <p className="text-sm text-destructive">
+                          {coBorrowerPhoneErrors[index]}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Input
+                      autoComplete="email"
+                      name={`new-co-borrower-${index}-email`}
+                      onChange={(event) =>
+                        updateCoBorrower(index, "email", event.target.value)
+                      }
+                      placeholder="Email"
+                      type="email"
+                      value={coBorrower.email}
+                    />
+                    <Button
+                      onClick={() => removeCoBorrower(index)}
+                      type="button"
+                      variant="outline"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </RepeatableSection>
+            ) : null}
+            {canShowScriptPanel ? (
+              <div className="border-t border-mafi-border pt-3">
+                <WorkflowScriptCard
+                  context={stepGuidanceContext}
+                  showEyebrow={false}
+                />
+              </div>
+            ) : null}
           </CardContent>
         </Card> : null}
 
-        {(!dense || step === 2) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none")}>
+        {(!dense || step === 2) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "lg:col-start-1")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
             <CardTitle className="text-mafi-blue-primary">
               Section B - Financial Snapshot
@@ -1013,6 +1317,66 @@ export function ProspectIntakeForm({
               </div>
             ) : null}
 
+            {dense && isEditMode && !isFinancialEditing ? (
+              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-mafi-text-dark">
+                      Financial Snapshot
+                    </p>
+                    <p className="mt-1 text-xs text-mafi-text-mid">
+                      Co-borrowers, assets, title, and credit score details.
+                    </p>
+                  </div>
+                  <Button
+                    aria-label="Edit financial snapshot"
+                    className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                    onClick={() => setIsFinancialEditing(true)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
+                <div className="space-y-3 rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
+                  <SummaryIconRow icon={UsersRound} label="Co-borrowers">
+                    {form.coBorrowers.length
+                      ? form.coBorrowers
+                          .map((coBorrower) => coBorrower.name)
+                          .filter(Boolean)
+                          .join(", ") || `${form.coBorrowers.length} added`
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={BadgeDollarSign} label="Assets">
+                    {form.assets.length
+                      ? form.assets
+                          .map((asset) =>
+                            `${assetLabels[asset.type]}${asset.amount ? ` ${asset.amount}` : ""}`,
+                          )
+                          .join(", ")
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={ShieldCheck} label="Title">
+                    {form.vesting
+                      ? vestingLabels[
+                          form.vesting as keyof typeof vestingLabels
+                        ] ?? form.vesting
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={CreditCard} label="FICO">
+                    {
+                      ficoLabels[
+                        form.ficoSource === FicoSource.KNOWN_CREDIT_KARMA
+                          ? FicoSource.KNOWN_BANK
+                          : form.ficoSource
+                      ]
+                    }
+                    {form.ficoScore ? ` / ${form.ficoScore}` : ""}
+                  </SummaryIconRow>
+                </div>
+              </div>
+            ) : (
+            <>
             <RepeatableSection
               addLabel="Add co-borrower"
               count={form.coBorrowers.length}
@@ -1035,16 +1399,27 @@ export function ProspectIntakeForm({
                     placeholder="Name"
                     value={coBorrower.name}
                   />
-                  <Input
-                    autoComplete="tel"
-                    name={`co-borrower-${index}-phone`}
-                    onChange={(event) =>
-                      updateCoBorrower(index, "phone", event.target.value)
-                    }
-                    placeholder="Phone"
-                    type="tel"
-                    value={coBorrower.phone}
-                  />
+                  <div className="space-y-1">
+                    <Input
+                      aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
+                      autoComplete="tel"
+                      className={cn(
+                        coBorrowerPhoneErrors[index] && "border-destructive",
+                      )}
+                      name={`co-borrower-${index}-phone`}
+                      onChange={(event) =>
+                        updateCoBorrower(index, "phone", event.target.value)
+                      }
+                      placeholder="Phone"
+                      type="tel"
+                      value={coBorrower.phone}
+                    />
+                    {coBorrowerPhoneErrors[index] ? (
+                      <p className="text-sm text-destructive">
+                        {coBorrowerPhoneErrors[index]}
+                      </p>
+                    ) : null}
+                  </div>
                   <Input
                     autoComplete="email"
                     name={`co-borrower-${index}-email`}
@@ -1097,9 +1472,6 @@ export function ProspectIntakeForm({
                   <Input
                     inputMode="decimal"
                     onChange={(event) =>
-                      updateAsset(index, "amount", event.target.value)
-                    }
-                    onBlur={(event) =>
                       updateAsset(
                         index,
                         "amount",
@@ -1122,7 +1494,24 @@ export function ProspectIntakeForm({
             </RepeatableSection>
 
             <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
-              <Field label="FICO">
+              <Field label="How would you like to hold title on the property?">
+                <Select
+                  onValueChange={(value) => updateField("vesting", value)}
+                  value={form.vesting}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select answer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(vestingLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Do you know your credit score? It's okay if not - we can use an estimate.">
                 <Select
                   onValueChange={(value) => updateFicoSource(value as FicoSource)}
                   value={
@@ -1157,10 +1546,12 @@ export function ProspectIntakeForm({
                 </Field>
               ) : null}
             </div>
+            </>
+            )}
           </CardContent>
         </Card> : null}
 
-        {(!dense || step === 3) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none")}>
+        {(!dense || step === 3) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "lg:col-start-1")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
             <CardTitle className="text-mafi-blue-primary">
               Section C - Property Details
@@ -1180,6 +1571,76 @@ export function ProspectIntakeForm({
                 </p>
               </div>
             ) : null}
+            {dense && isEditMode && !isPropertyEditing ? (
+              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-mafi-text-dark">
+                      Property Details
+                    </p>
+                    <p className="mt-1 text-xs text-mafi-text-mid">
+                      Address, property type, taxes, insurance, and HOA.
+                    </p>
+                  </div>
+                  <Button
+                    aria-label="Edit property details"
+                    className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                    onClick={() => setIsPropertyEditing(true)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2 rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
+                  <p>
+                    Address:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.propertyAddress || "Not provided"}
+                    </span>
+                  </p>
+                  <p>
+                    Property type:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {propertyTypeLabels[form.propertyType] ?? "Not provided"}
+                    </span>
+                  </p>
+                  <p>
+                    Taxes:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.propertyTaxesLastYear || form.propertyTaxesPresentYear
+                        ? `${form.propertyTaxesLastYear || "Not provided"} last year / ${form.propertyTaxesPresentYear || "Not provided"} present year`
+                        : "Not provided"}
+                    </span>
+                  </p>
+                  <p>
+                    Insurance:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.insuranceType
+                        ? insuranceLabels[form.insuranceType]
+                        : "Not provided"}
+                    </span>
+                  </p>
+                  <p>
+                    HOA:{" "}
+                    <span className="font-medium text-mafi-text-dark">
+                      {form.hoaName ||
+                      form.hoaManagementInfo ||
+                      form.additionalHoaFees
+                        ? [
+                            form.hoaName,
+                            form.hoaManagementInfo,
+                            form.additionalHoaFees,
+                          ]
+                            .filter(Boolean)
+                            .join(" / ")
+                        : "Not provided"}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
             <Field label="Property address" required>
               <Input
                 aria-invalid={Boolean(errors.propertyAddress)}
@@ -1197,6 +1658,9 @@ export function ProspectIntakeForm({
                 </p>
               ) : null}
             </Field>
+            <PropertyDuplicateNotice
+              matches={initialData?.duplicatePropertyContacts ?? []}
+            />
             <div className="flex flex-wrap gap-2">
               {["Zillow", "Redfin", "Realtor"].map((lookup) => (
                 <Button
@@ -1236,9 +1700,6 @@ export function ProspectIntakeForm({
                 <Input
                   inputMode="decimal"
                   onChange={(event) =>
-                    updateField("propertyTaxesLastYear", event.target.value)
-                  }
-                  onBlur={(event) =>
                     updateField(
                       "propertyTaxesLastYear",
                       formatCurrencyInput(event.target.value),
@@ -1252,9 +1713,6 @@ export function ProspectIntakeForm({
                 <Input
                   inputMode="decimal"
                   onChange={(event) =>
-                    updateField("propertyTaxesPresentYear", event.target.value)
-                  }
-                  onBlur={(event) =>
                     updateField(
                       "propertyTaxesPresentYear",
                       formatCurrencyInput(event.target.value),
@@ -1301,9 +1759,6 @@ export function ProspectIntakeForm({
                 <Input
                   inputMode="decimal"
                   onChange={(event) =>
-                    updateField("additionalHoaFees", event.target.value)
-                  }
-                  onBlur={(event) =>
                     updateField(
                       "additionalHoaFees",
                       formatCurrencyInput(event.target.value),
@@ -1314,37 +1769,19 @@ export function ProspectIntakeForm({
                 />
               </Field>
             </div>
+              </>
+            )}
 
           </CardContent>
         </Card> : null}
 
         {dense && isEditMode ? (
-          <Card className="border-mafi-border bg-mafi-bg-lighter shadow-sm">
-            <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-mafi-blue-primary">
-                    Phase 2
-                  </p>
-                  <CardTitle className="text-base text-mafi-blue-primary">
-                    Opportunity Value (optional)
-                  </CardTitle>
-                  <CardDescription>
-                    Add this only when the prospect is warm enough for scenario review.
-                  </CardDescription>
-                </div>
-                {!isOpportunityValueExpanded ? (
-                  <Button
-                    onClick={() => setIsOpportunityValueExpanded(true)}
-                    type="button"
-                  >
-                    Add Opportunity Value
-                  </Button>
-                ) : null}
-              </div>
-            </CardHeader>
-            {isOpportunityValueExpanded ? (
-              <CardContent className="space-y-4 pt-4">
+          <div className={cn("space-y-3", shouldUseRecordLayout && "lg:col-start-1")}>
+            <h3 className={inlineSectionToggleClass}>
+              Opportunity Value (optional)
+            </h3>
+              <Card className="border-mafi-border bg-mafi-bg-lighter shadow-sm">
+                <CardContent className="space-y-4 pt-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <Field
                     label="Property value"
@@ -1362,14 +1799,11 @@ export function ProspectIntakeForm({
                           "border-destructive",
                       )}
                       inputMode="decimal"
-                      onBlur={(event) =>
+                      onChange={(event) =>
                         updateField(
                           "opportunityPropertyValue",
                           formatCurrencyInput(event.target.value),
                         )
-                      }
-                      onChange={(event) =>
-                        updateField("opportunityPropertyValue", event.target.value)
                       }
                       type="text"
                       value={form.opportunityPropertyValue}
@@ -1394,14 +1828,11 @@ export function ProspectIntakeForm({
                           "border-destructive",
                       )}
                       inputMode="decimal"
-                      onBlur={(event) =>
+                      onChange={(event) =>
                         updateField(
                           "opportunityLoanAmount",
                           formatCurrencyInput(event.target.value),
                         )
-                      }
-                      onChange={(event) =>
-                        updateField("opportunityLoanAmount", event.target.value)
                       }
                       type="text"
                       value={form.opportunityLoanAmount}
@@ -1502,18 +1933,14 @@ export function ProspectIntakeForm({
                     </Field>
                   ) : null}
                 </div>
-              </CardContent>
-            ) : (
-              <CardContent className="pt-4">
-                <p className="text-sm text-mafi-text-mid">
-                  Phase 2 has not started for this prospect.
-                </p>
-              </CardContent>
-            )}
-          </Card>
+                </CardContent>
+              </Card>
+          </div>
         ) : null}
 
-        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+        {error ? <p className={cn("text-sm font-medium text-destructive", shouldUseRecordLayout && "lg:col-start-1")}>{error}</p> : null}
+          </div>
+        </div>
         <div
           className={cn(
             "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
@@ -1535,7 +1962,7 @@ export function ProspectIntakeForm({
             <span />
           )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            {dense && step > 1 ? (
+            {dense && step > 1 && (!isEditMode || step > 2) ? (
               <Button
                 onClick={() =>
                   setStep((currentStep) => (currentStep === 3 ? 2 : 1))
@@ -1546,17 +1973,7 @@ export function ProspectIntakeForm({
                 Back
               </Button>
             ) : null}
-            {dense && isEditMode && step === 1 ? (
-              <Button
-                disabled={isPending}
-                onClick={saveContactBasicsOnly}
-                type="button"
-                variant="outline"
-              >
-                Save & Close
-              </Button>
-            ) : null}
-            {dense && isEditMode && step === 2 ? (
+            {dense && isEditMode && step === 2 && isFinancialEditing ? (
               <Button
                 disabled={isPending}
                 onClick={saveFinancialSnapshotOnly}
@@ -1566,7 +1983,7 @@ export function ProspectIntakeForm({
                 Save & Close
               </Button>
             ) : null}
-            {dense && isEditMode && step === 3 ? (
+            {dense && isEditMode && step === 3 && isPropertyEditing ? (
               <Button
                 disabled={isPending}
                 onClick={savePropertyDetailsOnly}
@@ -1576,12 +1993,23 @@ export function ProspectIntakeForm({
                 Save & Close
               </Button>
             ) : null}
-            {dense && step === 1 ? (
-              <Button onClick={saveContactBasicsAndContinue} type="button">
-                Next
+            {dense && step === 1 && !isEditMode ? (
+              <Button
+                disabled={isPending}
+                onClick={saveNewProspectContactOnly}
+                type="button"
+              >
+                Create Prospect
               </Button>
-            ) : dense && step === 2 ? (
-              <Button onClick={saveFinancialSnapshotAndContinue} type="button">
+            ) : dense && step === 1 && isEditMode ? null : dense && step === 2 ? (
+              <Button
+                onClick={
+                  isFinancialEditing
+                    ? saveFinancialSnapshotAndContinue
+                    : () => setStep(3)
+                }
+                type="button"
+              >
                 Next
               </Button>
             ) : dense && step === 3 ? (
@@ -1625,58 +2053,22 @@ function Field({
   );
 }
 
-function WizardSteps({
-  onStepClick,
-  step,
+function SummaryIconRow({
+  children,
+  icon: Icon,
+  label,
 }: {
-  onStepClick: (step: 1 | 2 | 3) => void;
-  step: 1 | 2 | 3;
+  children: React.ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
 }) {
-  const steps = [
-    { number: 1, label: "Contact Basics" },
-    { number: 2, label: "Financial Snapshot" },
-    { number: 3, label: "Property Details" },
-  ] as const;
-
   return (
-    <div className="flex items-center gap-3">
-      {steps.map((item, index) => {
-        const isActive = step === item.number;
-        const isComplete = step > item.number;
-
-        return (
-          <div className="flex flex-1 items-center gap-3" key={item.number}>
-            <button
-              aria-current={isActive ? "step" : undefined}
-              className="flex min-h-9 items-center gap-2 rounded-md text-left transition hover:text-mafi-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary"
-              onClick={() => onStepClick(item.number)}
-              type="button"
-            >
-              <span
-                className={cn(
-                  "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-                  isActive || isComplete
-                    ? "bg-mafi-blue-primary text-white"
-                    : "bg-mafi-bg-lighter text-mafi-text-light",
-                )}
-              >
-                {item.number}
-              </span>
-              <span
-                className={cn(
-                  "text-xs font-semibold",
-                  isActive ? "text-mafi-text-dark" : "text-mafi-text-light",
-                )}
-              >
-                {item.label}
-              </span>
-            </button>
-            {index < steps.length - 1 ? (
-              <div className="h-px flex-1 bg-mafi-border" />
-            ) : null}
-          </div>
-        );
-      })}
+    <div className="flex items-start gap-2">
+      <Icon className="mt-1 size-4 shrink-0 text-mafi-text-mid" />
+      <p className="min-w-0">
+        {label}:{" "}
+        <span className="font-medium text-mafi-text-dark">{children}</span>
+      </p>
     </div>
   );
 }

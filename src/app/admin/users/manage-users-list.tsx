@@ -38,6 +38,7 @@ import {
   setUserActiveStatus,
   updateUserProfile,
 } from "@/lib/actions/admin-actions";
+import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 type ManagedUser = {
@@ -68,7 +69,12 @@ const userProfileSchema = z
   .object({
     fullName: z.string().trim().min(1, "Full name is required."),
     nmlsNumber: z.string().optional(),
-    phone: z.string().optional(),
+    phone: z
+      .string()
+      .optional()
+      .refine((value) => !value?.trim() || isValidUSPhone(value), {
+        message: US_PHONE_ERROR,
+      }),
     role: z.nativeEnum(RoleType, {
       error: "Role is required.",
     }),
@@ -158,7 +164,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
                 {user.email}
               </div>
               <div className="truncate px-4 py-3 text-mafi-text-mid">
-                {user.phone || "Not provided"}
+                {formatUSPhone(user.phone)}
               </div>
               <div className="truncate px-4 py-3 text-mafi-text-mid">
                 {user.role}
@@ -230,7 +236,7 @@ function UserCard({
               Email: {user.email}
             </p>
             <p className="mt-1 truncate text-xs text-mafi-text-mid">
-              Phone: {user.phone || "Not provided"}
+              Phone: {formatUSPhone(user.phone)}
             </p>
           </div>
           <StatusBadge isActive={user.isActive} />
@@ -297,7 +303,7 @@ function UserEditModal({
     defaultValues: {
       fullName: user.fullName,
       nmlsNumber: user.nmlsNumber,
-      phone: user.phone,
+      phone: formatUSPhone(user.phone, ""),
       role: user.role,
     },
     mode: "onSubmit",
@@ -330,7 +336,7 @@ function UserEditModal({
     onUpdated({
       fullName: values.fullName,
       nmlsNumber: showNmls ? values.nmlsNumber ?? "" : "",
-      phone: values.phone ?? "",
+      phone: values.phone ? formatUSPhone(values.phone, "") : "",
       role: values.role,
     });
     toast.success("User profile updated.");
@@ -427,7 +433,27 @@ function UserEditModal({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" type="tel" {...register("phone")} />
+                <Controller
+                  control={control}
+                  name="phone"
+                  render={({ field }) => (
+                    <Input
+                      aria-invalid={Boolean(errors.phone)}
+                      className={cn(errors.phone && "border-destructive")}
+                      id="phone"
+                      onChange={(event) =>
+                        field.onChange(maskUSPhoneInput(event.target.value))
+                      }
+                      type="tel"
+                      value={field.value ?? ""}
+                    />
+                  )}
+                />
+                {errors.phone ? (
+                  <p className="text-sm text-destructive">
+                    {errors.phone.message}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>

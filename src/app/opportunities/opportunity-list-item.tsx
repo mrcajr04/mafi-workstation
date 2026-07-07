@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import { ProspectIntakeInitialData } from "@/components/workstation/prospect-intake-form";
 import { borrowerTypeLabels, labelFromMap } from "@/lib/labels";
+import { formatUSPhone } from "@/lib/phone";
 
 type OpportunityListContact = {
   id: string;
@@ -16,6 +17,7 @@ type OpportunityListContact = {
   loanPurposeLabel: string;
   ficoLabel: string;
   hasFicoInfo: boolean;
+  isPhase1Incomplete: boolean;
   opportunityStatusLabel: string;
   opportunityStatusReason: string;
   opportunityStatusTone: string;
@@ -49,6 +51,7 @@ function optimisticContact(
     borrowerType: labelFromMap(form.borrowerType, borrowerTypeLabels),
     ficoLabel: form.ficoScore || "N/A",
     hasFicoInfo: Boolean(form.ficoScore),
+    isPhase1Incomplete: !form.propertyAddress.trim(),
     loanPurposeLabel:
       loanPurposeLabels[form.loanPurpose as keyof typeof loanPurposeLabels] ??
       contact.loanPurposeLabel,
@@ -71,8 +74,8 @@ function optimisticContact(
 
 function desktopGridClass(showBdrColumn: boolean) {
   return showBdrColumn
-    ? "grid-cols-[minmax(0,0.75fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)]"
-    : "grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.5fr)]";
+    ? "grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.5fr)]"
+    : "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1fr)_minmax(0,0.5fr)]";
 }
 
 export function OpportunityMobileCard({
@@ -90,12 +93,12 @@ export function OpportunityMobileCard({
         {showBdrColumn ? (
           <InfoLine label="Created By" value={createdByEmail} />
         ) : null}
-        <InfoLine label="Phone" value={displayContact.prospectPhone || "No phone"} />
-        <InfoLine label="Email" value={displayContact.prospectEmail || "No email"} />
+        <InfoLine label="Phone" value={formatUSPhone(displayContact.prospectPhone, "No phone")} />
         <InfoLine label="Borrower type" value={displayContact.borrowerType} />
         <InfoLine label="Loan purpose" value={displayContact.loanPurposeLabel} />
         <div className="flex items-center gap-2">
           <span className="font-medium text-mafi-text-dark">Status:</span>
+          {displayContact.isPhase1Incomplete ? <IncompleteBadge /> : null}
           <StatusBadge
             label={displayContact.opportunityStatusLabel}
             reason={displayContact.opportunityStatusReason}
@@ -160,23 +163,26 @@ export function OpportunityDesktopRow({
         </p>
       </div>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {displayContact.prospectPhone || "No phone"}
-      </div>
-      <div className="truncate px-4 py-2 text-mafi-text-mid">
-        {displayContact.prospectEmail || "No email"}
+        {formatUSPhone(displayContact.prospectPhone, "No phone")}
       </div>
       <div className="truncate px-4 py-2 text-mafi-text-mid">
         {displayContact.borrowerType}
       </div>
-      <div className="px-4 py-2 text-mafi-text-mid">
+      <div
+        className="truncate whitespace-nowrap px-4 py-2 text-mafi-text-mid"
+        title={displayContact.loanPurposeLabel}
+      >
         {displayContact.loanPurposeLabel}
       </div>
       <div className="min-w-0 px-4 py-2">
-        <StatusBadge
-          label={displayContact.opportunityStatusLabel}
-          reason={displayContact.opportunityStatusReason}
-          tone={displayContact.opportunityStatusTone}
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {displayContact.isPhase1Incomplete ? <IncompleteBadge /> : null}
+          <StatusBadge
+            label={displayContact.opportunityStatusLabel}
+            reason={displayContact.opportunityStatusReason}
+            tone={displayContact.opportunityStatusTone}
+          />
+        </div>
       </div>
       <div
         className={
@@ -212,6 +218,14 @@ export function OpportunityDesktopRow({
         </button>
       )}
     />
+  );
+}
+
+function IncompleteBadge() {
+  return (
+    <span className="inline-flex max-w-full items-center rounded-full border border-mafi-gold bg-mafi-gold-light/50 px-2 py-1 text-[11px] font-semibold leading-none text-mafi-gold-dark">
+      Incomplete
+    </span>
   );
 }
 

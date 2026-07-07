@@ -6,6 +6,14 @@ import {
 } from "@prisma/client";
 import { ScenarioForm } from "@/app/scenario-desk/[contactId]/scenario-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
+import {
+  formatCurrencyDisplay,
+  formatInterestRateDisplay,
+  formatRatioPercentDisplay,
+} from "@/lib/currency";
+import { formatDateForDisplay } from "@/lib/dates";
+import { getVisibleDuplicatePropertyContacts } from "@/lib/duplicate-property-contacts";
 import {
   assetLabels,
   borrowerTypeLabels,
@@ -18,36 +26,14 @@ import {
   realtorLabels,
   vestingLabels,
 } from "@/lib/labels";
+import { formatUSPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
 const EMPTY_VALUE = "Not provided";
 
-function formatCurrency(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return EMPTY_VALUE;
-  }
-
-  return Number(value.toString()).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-}
-
-function formatPercent(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return EMPTY_VALUE;
-  }
-
-  return `${Number(value.toString()).toFixed(2)}%`;
-}
-
 function formatDate(value: Date) {
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDateForDisplay(value);
 }
 
 export default async function ScenarioDeskDetailPage({
@@ -125,14 +111,23 @@ export default async function ScenarioDeskDetailPage({
   const initialScenarios =
     contact.scenarioDesk?.scenarios.map((scenario) => ({
       escrowed: scenario.escrowed,
-      interestRate: scenario.interestRate.toString(),
+      interestRate: formatInterestRateDisplay(scenario.interestRate, ""),
       lenderAndProduct: scenario.lenderAndProduct,
-      originationPay: formatCurrency(scenario.originationPay),
-      pitia: formatCurrency(scenario.pitia),
-      principalAndInterest: formatCurrency(scenario.principalAndInterest),
-      processingFee: formatCurrency(scenario.processingFee),
+      originationPay: formatCurrencyDisplay(scenario.originationPay, ""),
+      pitia: formatCurrencyDisplay(scenario.pitia, ""),
+      principalAndInterest: formatCurrencyDisplay(
+        scenario.principalAndInterest,
+        "",
+      ),
+      processingFee: formatCurrencyDisplay(scenario.processingFee, ""),
       scenarioNumber: scenario.scenarioNumber,
     })) ?? [];
+  const duplicatePropertyContacts = await getVisibleDuplicatePropertyContacts({
+    address: contact.propertyDetails?.address,
+    contactId: contact.id,
+    viewerId: access.data.id,
+    viewerRole: access.data.role,
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -160,7 +155,7 @@ export default async function ScenarioDeskDetailPage({
       <div className="grid gap-4 lg:grid-cols-3">
         <SummaryCard title="Contact Information">
           <SummaryItem label="Name" value={contact.prospectName} />
-          <SummaryItem label="Phone" value={contact.prospectPhone} />
+          <SummaryItem label="Phone" value={formatUSPhone(contact.prospectPhone)} />
           <SummaryItem
             label="Email"
             value={contact.prospectEmail ?? EMPTY_VALUE}
@@ -187,22 +182,25 @@ export default async function ScenarioDeskDetailPage({
           />
           <SummaryList
             items={contact.coBorrowers.map((coBorrower) =>
-              `${coBorrower.name} · ${coBorrower.phone ?? EMPTY_VALUE} · ${
-                coBorrower.email ?? EMPTY_VALUE
-              }`,
+              [
+                coBorrower.name,
+                formatUSPhone(coBorrower.phone, EMPTY_VALUE),
+                coBorrower.email ?? EMPTY_VALUE,
+              ].join(" - "),
             )}
             label="Co-borrowers"
           />
           <SummaryList
             items={contact.assets.map(
               (asset) =>
-                `${assetLabels[asset.type]} · ${formatCurrency(asset.amount)}`,
+                `${assetLabels[asset.type]} · ${formatCurrencyDisplay(asset.amount)}`,
             )}
             label="Assets"
           />
         </SummaryCard>
 
         <SummaryCard title="Property Details">
+          <PropertyDuplicateNotice matches={duplicatePropertyContacts} />
           <SummaryItem
             label="Address"
             value={contact.propertyDetails?.address ?? EMPTY_VALUE}
@@ -217,13 +215,13 @@ export default async function ScenarioDeskDetailPage({
           />
           <SummaryItem
             label="Taxes Last Year"
-            value={formatCurrency(
+            value={formatCurrencyDisplay(
               contact.propertyDetails?.propertyTaxesLastYear,
             )}
           />
           <SummaryItem
             label="Taxes Present Year"
-            value={formatCurrency(
+            value={formatCurrencyDisplay(
               contact.propertyDetails?.propertyTaxesPresentYear,
             )}
           />
@@ -245,22 +243,22 @@ export default async function ScenarioDeskDetailPage({
           />
           <SummaryItem
             label="HOA Fees"
-            value={formatCurrency(contact.propertyDetails?.additionalHoaFees)}
+            value={formatCurrencyDisplay(contact.propertyDetails?.additionalHoaFees)}
           />
         </SummaryCard>
 
         <SummaryCard title="Opportunity Value">
           <SummaryItem
             label="Property Value"
-            value={formatCurrency(contact.opportunityValue?.propertyValue)}
+            value={formatCurrencyDisplay(contact.opportunityValue?.propertyValue)}
           />
           <SummaryItem
             label="Loan Amount"
-            value={formatCurrency(contact.opportunityValue?.loanAmount)}
+            value={formatCurrencyDisplay(contact.opportunityValue?.loanAmount)}
           />
           <SummaryItem
             label="LTV"
-            value={formatPercent(contact.opportunityValue?.ltv)}
+            value={formatRatioPercentDisplay(contact.opportunityValue?.ltv)}
           />
           <SummaryItem
             label="Has Realtor"

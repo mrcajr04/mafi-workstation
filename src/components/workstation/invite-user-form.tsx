@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { inviteUser } from "@/lib/actions/admin-actions";
+import { isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 const roles = [
@@ -36,7 +37,12 @@ const roles = [
 const inviteUserSchema = z.object({
   fullName: z.string().trim().min(1, "Full name is required."),
   email: z.string().trim().min(1, "Email is required.").email("Enter a valid email address."),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine((value) => !value?.trim() || isValidUSPhone(value), {
+      message: US_PHONE_ERROR,
+    }),
   role: z.nativeEnum(RoleType, {
     error: "Role is required.",
   }),
@@ -133,10 +139,25 @@ export function InviteUserForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              {...register("phone")}
+            <Controller
+              control={control}
+              name="phone"
+              render={({ field }) => (
+                <Input
+                  aria-invalid={Boolean(errors.phone)}
+                  className={cn(errors.phone && "border-destructive")}
+                  id="phone"
+                  onChange={(event) =>
+                    field.onChange(maskUSPhoneInput(event.target.value))
+                  }
+                  type="tel"
+                  value={field.value ?? ""}
+                />
+              )}
             />
+            {errors.phone ? (
+              <p className="text-sm text-destructive">{errors.phone.message}</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label>Role</Label>

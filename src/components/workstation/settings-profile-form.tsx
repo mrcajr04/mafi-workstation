@@ -3,7 +3,7 @@
 import { RoleType } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,13 +18,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateOwnProfile } from "@/lib/actions/profile-actions";
+import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 function buildSettingsProfileSchema(role: RoleType) {
   return z
     .object({
       fullName: z.string().trim().min(1, "Full name is required."),
-      phone: z.string().optional(),
+      phone: z
+        .string()
+        .optional()
+        .refine((value) => !value?.trim() || isValidUSPhone(value), {
+          message: US_PHONE_ERROR,
+        }),
       nmlsNumber: z.string().optional(),
     })
     .superRefine((values, context) => {
@@ -61,11 +67,12 @@ export function SettingsProfileForm({ profile }: SettingsProfileFormProps) {
   const {
     formState: { errors },
     handleSubmit,
+    control,
     register,
   } = useForm<SettingsProfileValues>({
     defaultValues: {
       fullName: profile.fullName,
-      phone: profile.phone ?? "",
+      phone: profile.phone ? formatUSPhone(profile.phone, "") : "",
       nmlsNumber: profile.nmlsNumber ?? "",
     },
     mode: "onSubmit",
@@ -134,7 +141,27 @@ export function SettingsProfileForm({ profile }: SettingsProfileFormProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
-              <Input id="phone" type="tel" {...register("phone")} />
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <Input
+                    aria-invalid={Boolean(errors.phone)}
+                    className={cn(errors.phone && "border-destructive")}
+                    id="phone"
+                    onChange={(event) =>
+                      field.onChange(maskUSPhoneInput(event.target.value))
+                    }
+                    type="tel"
+                    value={field.value ?? ""}
+                  />
+                )}
+              />
+              {errors.phone ? (
+                <p className="text-sm text-destructive">
+                  {errors.phone.message}
+                </p>
+              ) : null}
             </div>
             {canEditNmls ? (
               <div className="space-y-2">

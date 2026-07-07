@@ -16,9 +16,20 @@ import {
 } from "@prisma/client";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { getAutomationSettings } from "@/lib/automation-settings";
-import { normalizeCurrencyInput } from "@/lib/currency";
+import { formatCurrencyDisplay, normalizeCurrencyInput } from "@/lib/currency";
+import { formatDateForDisplay } from "@/lib/dates";
+import {
+  getVisibleDuplicatePropertyContacts,
+  type DuplicatePropertyContact,
+} from "@/lib/duplicate-property-contacts";
 import { sendEmail } from "@/lib/email";
 import { renderEmailTemplate } from "@/lib/email-template-store";
+import {
+  formatUSPhone,
+  optionalUSPhoneToE164,
+  requiredUSPhoneToE164,
+  US_PHONE_ERROR,
+} from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -61,6 +72,7 @@ export type ProspectContactBasicsInput = {
   borrowerType?: BorrowerType;
   loanPurpose: LoanPurpose;
   vesting?: string;
+  coBorrowers?: CoBorrowerInput[];
 };
 
 export type UpdateProspectContactBasicsInput = ProspectContactBasicsInput & {
@@ -116,10 +128,14 @@ type ProspectEditDataResult =
   | {
       success: true;
       data: {
-        contactId: string;
-        createdByEmail?: string;
-        createdByName?: string;
+      contactId: string;
+      contactStatus: ContactStatus;
+      createdByEmail?: string;
+      createdByName?: string;
         createdOnLabel?: string;
+        duplicatePropertyContacts: DuplicatePropertyContact[];
+        hasFinancialSnapshot: boolean;
+        hasPropertyDetails: boolean;
         prospectName: string;
         prospectPhone: string;
         prospectEmail: string;
@@ -166,19 +182,16 @@ function optionalInt(value?: string) {
   return trimmed ? Number(trimmed) : undefined;
 }
 
+function normalizeOptionalPhone(value?: string) {
+  return optionalUSPhoneToE164(value);
+}
+
 function hasValidEmail(value?: string | null) {
   return Boolean(value?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()));
 }
 
 function formatCurrencyForForm(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return "";
-  }
-
-  return Number(value.toString()).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
+  return formatCurrencyDisplay(value, "");
 }
 
 function refreshOpportunitiesList() {
@@ -250,6 +263,7 @@ export async function getProspectIntakeEditData(
       prospectEmail: true,
       borrowerType: true,
       loanPurpose: true,
+      status: true,
       vesting: true,
       coBorrowers: {
         orderBy: {
@@ -312,17 +326,24 @@ export async function getProspectIntakeEditData(
     };
   }
 
+  const duplicatePropertyContacts = await getVisibleDuplicatePropertyContacts({
+    address: contact.propertyDetails?.address,
+    contactId: contact.id,
+    viewerId: access.data.id,
+    viewerRole: access.data.role,
+  });
+
   return {
     success: true,
     data: {
       contactId: contact.id,
+      contactStatus: contact.status,
       createdByEmail: contact.bdr.email,
       createdByName: contact.bdr.fullName,
-      createdOnLabel: contact.createdAt.toLocaleDateString("en-US", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
+      createdOnLabel: formatDateForDisplay(contact.createdAt),
+      duplicatePropertyContacts,
+      hasFinancialSnapshot: Boolean(contact.ficoInfo),
+      hasPropertyDetails: Boolean(contact.propertyDetails),
       prospectName: contact.prospectName,
       prospectPhone: contact.prospectPhone,
       prospectEmail: contact.prospectEmail ?? "",
@@ -406,6 +427,8 @@ export async function createProspectContactBasics(
     };
   }
 
+  const prospectPhone = requiredUSPhoneToE164(input.prospectPhone);
+
   if (!input.prospectName || !input.prospectPhone || !input.loanPurpose) {
     return {
       success: false,
@@ -413,15 +436,50 @@ export async function createProspectContactBasics(
     };
   }
 
+  if (!prospectPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+  let hasInvalidCoBorrowerPhone = false;
+  const coBorrowers =
+    input.coBorrowers
+      ?.filter((coBorrower) => coBorrower.name.trim())
+      .map((coBorrower, index) => {
+        const phone = normalizeOptionalPhone(coBorrower.phone);
+
+        if (phone === "INVALID_PHONE") {
+          hasInvalidCoBorrowerPhone = true;
+        }
+
+        return {
+          name: coBorrower.name.trim(),
+          phone: phone === "INVALID_PHONE" ? null : phone,
+          email: coBorrower.email?.trim() || null,
+          order: index + 1,
+        };
+      }) ?? [];
+
+  if (hasInvalidCoBorrowerPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   const contact = await prisma.contact.create({
     data: {
       bdrId: access.data.id,
       prospectName: input.prospectName.trim(),
-      prospectPhone: input.prospectPhone.trim(),
+      prospectPhone,
       prospectEmail: input.prospectEmail?.trim() || null,
       borrowerType: input.borrowerType ?? BorrowerType.OTHER,
       loanPurpose: input.loanPurpose,
       vesting: input.vesting?.trim() || null,
+      coBorrowers: {
+        create: coBorrowers,
+      },
     },
     select: {
       bdrId: true,
@@ -436,7 +494,7 @@ export async function createProspectContactBasics(
     borrowerType: input.borrowerType ?? BorrowerType.OTHER,
     email: input.prospectEmail?.trim() || null,
     loanPurpose: input.loanPurpose,
-    phone: input.prospectPhone.trim(),
+    phone: prospectPhone,
     prospectName: input.prospectName.trim(),
     source: "Prospect Intake Step 1",
     vesting: input.vesting?.trim() || null,
@@ -537,12 +595,29 @@ export async function updateProspectContactBasics(
       vesting: true,
     },
   });
+  const existingPhoneDisplay = beforeContactBasics?.prospectPhone
+    ? formatUSPhone(beforeContactBasics.prospectPhone, "")
+    : "";
+  const prospectPhone = requiredUSPhoneToE164(input.prospectPhone);
+  const isUntouchedLegacyPhone =
+    !prospectPhone &&
+    Boolean(existingPhoneDisplay) &&
+    input.prospectPhone.trim() === existingPhoneDisplay;
+
+  if (!prospectPhone && !isUntouchedLegacyPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   const nextContactBasics = {
     borrowerType: input.borrowerType ?? BorrowerType.OTHER,
     loanPurpose: input.loanPurpose,
     prospectEmail: input.prospectEmail?.trim() || null,
     prospectName: input.prospectName.trim(),
-    prospectPhone: input.prospectPhone.trim(),
+    prospectPhone:
+      prospectPhone ?? beforeContactBasics?.prospectPhone ?? input.prospectPhone.trim(),
     vesting: input.vesting?.trim() || null,
   };
 
@@ -623,6 +698,31 @@ export async function updateProspectFinancialSnapshot(
       existingFinancialSnapshot._count.assets === 0 &&
       existingFinancialSnapshot._count.coBorrowers === 0,
   );
+  let hasInvalidCoBorrowerPhone = false;
+  const coBorrowers = input.coBorrowers
+    .filter((coBorrower) => coBorrower.name.trim())
+    .map((coBorrower, index) => {
+      const phone = normalizeOptionalPhone(coBorrower.phone);
+
+      if (phone === "INVALID_PHONE") {
+        hasInvalidCoBorrowerPhone = true;
+      }
+
+      return {
+        contactId: contact.id,
+        name: coBorrower.name.trim(),
+        phone: phone === "INVALID_PHONE" ? null : phone,
+        email: coBorrower.email?.trim() || null,
+        order: index + 1,
+      };
+    });
+
+  if (hasInvalidCoBorrowerPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.contact.update({
@@ -639,16 +739,6 @@ export async function updateProspectFinancialSnapshot(
         contactId: contact.id,
       },
     });
-
-    const coBorrowers = input.coBorrowers
-      .filter((coBorrower) => coBorrower.name.trim())
-      .map((coBorrower, index) => ({
-        contactId: contact.id,
-        name: coBorrower.name.trim(),
-        phone: coBorrower.phone?.trim() || null,
-        email: coBorrower.email?.trim() || null,
-        order: index + 1,
-      }));
 
     if (coBorrowers.length) {
       await tx.coBorrower.createMany({
@@ -845,10 +935,19 @@ export async function createProspectIntake(
     };
   }
 
+  const prospectPhone = requiredUSPhoneToE164(input.prospectPhone);
+
   if (!input.prospectName || !input.prospectPhone || !input.loanPurpose) {
     return {
       success: false,
       error: "Missing required contact fields.",
+    };
+  }
+
+  if (!prospectPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
     };
   }
 
@@ -859,25 +958,43 @@ export async function createProspectIntake(
     };
   }
 
+  let hasInvalidCoBorrowerPhone = false;
+  const coBorrowers = input.coBorrowers
+    .filter((coBorrower) => coBorrower.name.trim())
+    .map((coBorrower, index) => {
+      const phone = normalizeOptionalPhone(coBorrower.phone);
+
+      if (phone === "INVALID_PHONE") {
+        hasInvalidCoBorrowerPhone = true;
+      }
+
+      return {
+        name: coBorrower.name.trim(),
+        phone: phone === "INVALID_PHONE" ? null : phone,
+        email: coBorrower.email?.trim() || null,
+        order: index + 1,
+      };
+    });
+
+  if (hasInvalidCoBorrowerPhone) {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   const contact = await prisma.$transaction((tx) =>
     tx.contact.create({
       data: {
         bdrId: access.data.id,
         prospectName: input.prospectName.trim(),
-        prospectPhone: input.prospectPhone.trim(),
+        prospectPhone,
         prospectEmail: input.prospectEmail?.trim() || null,
         borrowerType: input.borrowerType ?? BorrowerType.OTHER,
         loanPurpose: input.loanPurpose,
         vesting: input.vesting?.trim() || null,
         coBorrowers: {
-          create: input.coBorrowers
-            .filter((coBorrower) => coBorrower.name.trim())
-            .map((coBorrower, index) => ({
-              name: coBorrower.name.trim(),
-              phone: coBorrower.phone?.trim() || null,
-              email: coBorrower.email?.trim() || null,
-              order: index + 1,
-            })),
+          create: coBorrowers,
         },
         assets: {
           create: input.assets
@@ -1227,16 +1344,16 @@ export async function seedDevContacts(count: number): Promise<DevDataActionResul
     "Monica Reynolds",
   ];
   const phones = [
-    "3055550142",
-    "4075550198",
-    "5615550127",
-    "7865550164",
-    "9545550181",
-    "8135550155",
-    "7275550119",
-    "2395550173",
-    "3525550138",
-    "9045550106",
+    "+13055550142",
+    "+14075550198",
+    "+15615550127",
+    "+17865550164",
+    "+19545550181",
+    "+18135550155",
+    "+17275550119",
+    "+12395550173",
+    "+13525550138",
+    "+19045550106",
   ];
   const emails = [
     "andrea.morrison@example.com",

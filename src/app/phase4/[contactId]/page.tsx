@@ -6,6 +6,14 @@ import {
 import { Phase4Documents } from "@/app/phase4/[contactId]/phase4-documents";
 import { Phase4Form } from "@/app/phase4/[contactId]/phase4-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
+import {
+  formatCurrencyDisplay,
+  formatInterestRateDisplay,
+  formatRatioPercentDisplay,
+} from "@/lib/currency";
+import { formatTimestampForDisplay } from "@/lib/dates";
+import { getVisibleDuplicatePropertyContacts } from "@/lib/duplicate-property-contacts";
 import {
   assetLabels,
   borrowerTypeLabels,
@@ -18,29 +26,11 @@ import {
   realtorLabels,
   vestingLabels,
 } from "@/lib/labels";
+import { formatUSPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
 const EMPTY_VALUE = "Not provided";
-
-function formatCurrency(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return EMPTY_VALUE;
-  }
-
-  return Number(value.toString()).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-}
-
-function formatPercent(value?: { toString(): string } | string | null) {
-  if (!value) {
-    return EMPTY_VALUE;
-  }
-
-  return `${Number(value.toString()).toFixed(2)}%`;
-}
 
 function formatDateInput(value?: Date | null) {
   if (!value) {
@@ -48,18 +38,6 @@ function formatDateInput(value?: Date | null) {
   }
 
   return value.toISOString().slice(0, 10);
-}
-
-function formatGeneratedAt(value?: Date | null) {
-  if (!value) {
-    return undefined;
-  }
-
-  return value.toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 export default async function Phase4DetailPage({
@@ -153,6 +131,12 @@ export default async function Phase4DetailPage({
     RoleType.OWNER,
   ];
   const canEdit = phase4WriteRoles.includes(access.data.role);
+  const duplicatePropertyContacts = await getVisibleDuplicatePropertyContacts({
+    address: contact.propertyDetails?.address,
+    contactId: contact.id,
+    viewerId: access.data.id,
+    viewerRole: access.data.role,
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -178,7 +162,7 @@ export default async function Phase4DetailPage({
 
       <div className="grid gap-4 lg:grid-cols-4">
         <SummaryCard title="Contact">
-          <SummaryItem label="Phone" value={contact.prospectPhone} />
+          <SummaryItem label="Phone" value={formatUSPhone(contact.prospectPhone)} />
           <SummaryItem label="Email" value={contact.prospectEmail ?? EMPTY_VALUE} />
           <SummaryItem
             label="Borrower Type"
@@ -203,7 +187,7 @@ export default async function Phase4DetailPage({
           <SummaryList
             items={contact.coBorrowers.map(
               (coBorrower) =>
-                `${coBorrower.name} - ${coBorrower.phone ?? EMPTY_VALUE} - ${
+                `${coBorrower.name} - ${formatUSPhone(coBorrower.phone, EMPTY_VALUE)} - ${
                   coBorrower.email ?? EMPTY_VALUE
                 }`,
             )}
@@ -212,13 +196,14 @@ export default async function Phase4DetailPage({
           <SummaryList
             items={contact.assets.map(
               (asset) =>
-                `${assetLabels[asset.type]} - ${formatCurrency(asset.amount)}`,
+                `${assetLabels[asset.type]} - ${formatCurrencyDisplay(asset.amount)}`,
             )}
             label="Assets"
           />
         </SummaryCard>
 
         <SummaryCard title="Property">
+          <PropertyDuplicateNotice matches={duplicatePropertyContacts} />
           <SummaryItem
             label="Address"
             value={contact.propertyDetails?.address ?? EMPTY_VALUE}
@@ -233,11 +218,11 @@ export default async function Phase4DetailPage({
           />
           <SummaryItem
             label="Taxes Last Year"
-            value={formatCurrency(contact.propertyDetails?.propertyTaxesLastYear)}
+            value={formatCurrencyDisplay(contact.propertyDetails?.propertyTaxesLastYear)}
           />
           <SummaryItem
             label="Taxes Present Year"
-            value={formatCurrency(
+            value={formatCurrencyDisplay(
               contact.propertyDetails?.propertyTaxesPresentYear,
             )}
           />
@@ -254,13 +239,13 @@ export default async function Phase4DetailPage({
         <SummaryCard title="Opportunity">
           <SummaryItem
             label="Property Value"
-            value={formatCurrency(contact.opportunityValue?.propertyValue)}
+            value={formatCurrencyDisplay(contact.opportunityValue?.propertyValue)}
           />
           <SummaryItem
             label="Loan Amount"
-            value={formatCurrency(contact.opportunityValue?.loanAmount)}
+            value={formatCurrencyDisplay(contact.opportunityValue?.loanAmount)}
           />
-          <SummaryItem label="LTV" value={formatPercent(contact.opportunityValue?.ltv)} />
+          <SummaryItem label="LTV" value={formatRatioPercentDisplay(contact.opportunityValue?.ltv)} />
           <SummaryItem
             label="Has Realtor"
             value={
@@ -294,15 +279,15 @@ export default async function Phase4DetailPage({
           />
           <SummaryItem
             label="Interest Rate"
-            value={selectedScenario ? `${selectedScenario.interestRate}%` : EMPTY_VALUE}
+            value={selectedScenario ? formatInterestRateDisplay(selectedScenario.interestRate) : EMPTY_VALUE}
           />
           <SummaryItem
             label="P&I"
-            value={formatCurrency(selectedScenario?.principalAndInterest)}
+            value={formatCurrencyDisplay(selectedScenario?.principalAndInterest)}
           />
           <SummaryItem
             label="PITIA"
-            value={formatCurrency(selectedScenario?.pitia)}
+            value={formatCurrencyDisplay(selectedScenario?.pitia)}
           />
           <SummaryItem
             label="Escrowed"
@@ -310,11 +295,11 @@ export default async function Phase4DetailPage({
           />
           <SummaryItem
             label="Origination Pay"
-            value={formatCurrency(selectedScenario?.originationPay)}
+            value={formatCurrencyDisplay(selectedScenario?.originationPay)}
           />
           <SummaryItem
             label="Processing Fee"
-            value={formatCurrency(selectedScenario?.processingFee)}
+            value={formatCurrencyDisplay(selectedScenario?.processingFee)}
           />
         </SummaryCard>
       </div>
@@ -324,12 +309,12 @@ export default async function Phase4DetailPage({
           contactId={contact.id}
           loanEstimateGeneratedAt={
             contact.phase4Pipeline?.loanEstimateHtml
-              ? formatGeneratedAt(contact.phase4Pipeline.updatedAt)
+              ? formatTimestampForDisplay(contact.phase4Pipeline.updatedAt)
               : undefined
           }
           loanPreApprovalGeneratedAt={
             contact.phase4Pipeline?.loanPreApprovalHtml
-              ? formatGeneratedAt(contact.phase4Pipeline.updatedAt)
+              ? formatTimestampForDisplay(contact.phase4Pipeline.updatedAt)
               : undefined
           }
           prospectName={contact.prospectName}

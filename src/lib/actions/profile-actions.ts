@@ -2,6 +2,7 @@
 
 import { RoleType } from "@prisma/client";
 import { updateTag } from "next/cache";
+import { optionalUSPhoneToE164, US_PHONE_ERROR } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getCurrentProfile } from "@/lib/rbac";
 
@@ -81,13 +82,22 @@ export async function updateOwnProfile(
     };
   }
 
+  const phone = optionalUSPhoneToE164(input.phone);
+
+  if (phone === "INVALID_PHONE") {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   await prisma.profile.update({
     where: {
       id: profile.id,
     },
     data: {
       fullName,
-      phone: input.phone?.trim() || null,
+      phone,
       ...(canEditNmls
         ? {
             nmlsNumber: input.nmlsNumber?.trim() || null,
@@ -115,7 +125,11 @@ export async function updateMarketingProfile(
     };
   }
 
-  if (profile.role !== RoleType.BDR && profile.role !== RoleType.LICENSED_LO) {
+  if (
+    profile.role !== RoleType.BDR &&
+    profile.role !== RoleType.LICENSED_LO &&
+    profile.role !== RoleType.OWNER
+  ) {
     return {
       success: false,
       error: "FORBIDDEN",
@@ -131,6 +145,15 @@ export async function updateMarketingProfile(
     }
   }
 
+  const whatsappNumber = optionalUSPhoneToE164(input.whatsappNumber);
+
+  if (whatsappNumber === "INVALID_PHONE") {
+    return {
+      success: false,
+      error: US_PHONE_ERROR,
+    };
+  }
+
   await prisma.profile.update({
     where: {
       id: profile.id,
@@ -143,7 +166,7 @@ export async function updateMarketingProfile(
       landingPageHeadline: input.landingPageHeadline?.trim() || null,
       linkedinUrl: optionalUrl(input.linkedinUrl) || null,
       profilePhotoUrl: optionalUrl(input.profilePhotoUrl) || null,
-      whatsappNumber: input.whatsappNumber?.trim() || null,
+      whatsappNumber,
       xTwitterUrl: optionalUrl(input.xTwitterUrl) || null,
     },
   });
