@@ -18,6 +18,7 @@ const getCachedManageUsers = unstable_cache(
           id: true,
           isActive: true,
           nmlsNumber: true,
+          passwordSetupRequired: true,
           phone: true,
           role: true,
         },
@@ -39,7 +40,9 @@ const getCachedManageUsers = unstable_cache(
       return {
         ...profile,
         canResendInvite:
-          authUsersAvailable && profile.isActive && !authUser?.last_sign_in_at,
+          authUsersAvailable &&
+          profile.isActive &&
+          (!authUser?.last_sign_in_at || profile.passwordSetupRequired),
       };
     });
   },

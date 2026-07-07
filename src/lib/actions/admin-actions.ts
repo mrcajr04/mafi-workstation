@@ -281,6 +281,7 @@ export async function resendInvite(userId: string): Promise<AdminActionResult> {
       email: true,
       id: true,
       isActive: true,
+      passwordSetupRequired: true,
     },
   });
 
@@ -313,7 +314,7 @@ export async function resendInvite(userId: string): Promise<AdminActionResult> {
     };
   }
 
-  if (authUserData.user.last_sign_in_at) {
+  if (authUserData.user.last_sign_in_at && !profile.passwordSetupRequired) {
     return {
       success: false,
       error: "This user has already signed in.",
