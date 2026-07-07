@@ -13,13 +13,20 @@ import {
 } from "@prisma/client";
 import {
   BadgeDollarSign,
+  Building2,
   ChevronDown,
   CreditCard,
+  Home,
   Mail,
+  MapPin,
   Pencil,
   Phone,
   Plus,
+  Receipt,
+  Search,
   ShieldCheck,
+  Trash2,
+  Umbrella,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -73,6 +80,8 @@ type CoBorrowerRow = {
   phone: string;
   email: string;
 };
+
+type CoBorrowerField = keyof CoBorrowerRow;
 
 type AssetRow = {
   type: AssetType;
@@ -242,6 +251,11 @@ const notMovingForwardReasons = [
   "Other",
 ];
 
+function buildZillowLookupUrl(address: string) {
+  const encodedAddress = encodeURIComponent(address.trim());
+  return `https://www.zillow.com/homes/${encodedAddress}_rb/`;
+}
+
 const requiredLabel = <span className="text-destructive">*</span>;
 const inlineSectionToggleClass =
   "text-left text-base font-semibold text-mafi-blue-primary hover:underline";
@@ -307,8 +321,11 @@ export function ProspectIntakeForm({
   const initialProspectPhoneDisplay = initialData?.prospectPhone
     ? formatUSPhone(initialData.prospectPhone, "")
     : "";
+  const savedInitialForm = initialData
+    ? formatInitialFormPhoneValues(initialData)
+    : initialForm;
   const [form, setForm] = useState<ProspectIntakeFormState>(
-    initialData ? formatInitialFormPhoneValues(initialData) : initialForm,
+    savedInitialForm,
   );
   const [error, setError] = useState("");
   const [coBorrowerPhoneErrors, setCoBorrowerPhoneErrors] = useState<
@@ -323,9 +340,6 @@ export function ProspectIntakeForm({
   const [isCoBorrowersExpanded, setIsCoBorrowersExpanded] = useState(
     Boolean(initialData?.coBorrowers.length),
   );
-  const [isAssetsExpanded, setIsAssetsExpanded] = useState(
-    Boolean(initialData?.assets.length),
-  );
   const [isOpportunityValueExpanded] = useState(
     isEditMode ||
       Boolean(
@@ -336,12 +350,14 @@ export function ProspectIntakeForm({
   );
   const [isProspectPhoneEdited, setIsProspectPhoneEdited] = useState(false);
   const [isContactEditing, setIsContactEditing] = useState(!isEditMode);
+  const [isCoBorrowersEditing, setIsCoBorrowersEditing] = useState(false);
   const [isFinancialEditing, setIsFinancialEditing] = useState(
     !isEditMode || !initialData?.hasFinancialSnapshot,
   );
   const [isPropertyEditing, setIsPropertyEditing] = useState(
     !isEditMode || !initialData?.hasPropertyDetails,
   );
+  const [isGlobalSaving, setIsGlobalSaving] = useState(false);
   const [isPending, startTransition] = useTransition();
   const contactCreatePromiseRef = useRef<Promise<string | null> | null>(null);
   const {
@@ -452,7 +468,6 @@ export function ProspectIntakeForm({
       ...currentForm,
       assets: [...currentForm.assets, { ...initialAsset }],
     }));
-    setIsAssetsExpanded(true);
   }
 
   function removeAsset(index: number) {
@@ -627,6 +642,8 @@ export function ProspectIntakeForm({
 
       const result = await updateProspectFinancialSnapshot({
         contactId: savedContactId,
+        borrowerType: form.borrowerType || undefined,
+        loanPurpose: form.loanPurpose || undefined,
         coBorrowers: form.coBorrowers,
         assets: form.assets.map((asset) => ({
           ...asset,
@@ -645,30 +662,69 @@ export function ProspectIntakeForm({
       return true;
   }
 
-  function saveFinancialSnapshotOnly() {
+  function renderCoBorrowerInlineValue(
+    coBorrower: CoBorrowerRow,
+    field: CoBorrowerField,
+    fallback: string,
+    className?: string,
+  ) {
+    return (
+      <span className={cn("block w-full truncate text-left", className)}>
+        {coBorrower[field] || fallback}
+      </span>
+    );
+  }
+
+  function cancelCoBorrowersEdit() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      coBorrowers: savedInitialForm.coBorrowers.map((coBorrower) => ({
+        ...coBorrower,
+      })),
+    }));
+    setCoBorrowerPhoneErrors({});
+    setError("");
+    setIsCoBorrowersEditing(false);
+  }
+
+  function saveCoBorrowersSection() {
     setError("");
 
-    if (!validateOpportunityValue()) {
+    if (!validateFinancialSnapshotPhones()) {
       return;
     }
 
-    onOptimisticSaved?.(form);
-    onCancel?.();
+    setIsCoBorrowersEditing(false);
 
     startTransition(async () => {
       const saved = await saveFinancialSnapshot();
 
       if (saved) {
-        if (isEditMode || isOpportunityValueExpanded) {
-          await saveOpportunityValueRequest();
-        }
+        toast.success("Co-borrowers saved.");
+        router.refresh();
+      } else {
+        setIsCoBorrowersEditing(true);
+      }
+    });
+  }
 
+  function saveFinancialSnapshotInline() {
+    setError("");
+
+    if (!validateFinancialSnapshotPhones()) {
+      return;
+    }
+
+    setIsFinancialEditing(false);
+
+    startTransition(async () => {
+      const saved = await saveFinancialSnapshot();
+
+      if (saved) {
         toast.success("Financial Snapshot saved.");
-        if (onSaved) {
-          onSaved();
-        } else {
-          router.refresh();
-        }
+        router.refresh();
+      } else {
+        setIsFinancialEditing(true);
       }
     });
   }
@@ -773,7 +829,6 @@ export function ProspectIntakeForm({
       contactCreatePromiseRef.current = null;
       setIsProspectPhoneEdited(false);
       setIsCoBorrowersExpanded(false);
-      setIsAssetsExpanded(false);
       resetValidation();
       toast.success(
         isEditMode
@@ -789,8 +844,162 @@ export function ProspectIntakeForm({
     });
   }
 
-  function savePropertyDetailsOnly() {
-    savePropertyDetails({ closeImmediately: true, finish: false });
+  function savePropertyDetailsInline() {
+    setError("");
+
+    if (!validatePropertyDetails()) {
+      return;
+    }
+
+    const savedContactId = contactId ?? contactCreatePromiseRef.current;
+
+    if (!savedContactId) {
+      const message = "Save contact basics before finishing.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    setIsPropertyEditing(false);
+
+    startTransition(async () => {
+      const resolvedContactId =
+        typeof savedContactId === "string" ? savedContactId : await savedContactId;
+
+      if (!resolvedContactId) {
+        const message = "Couldn't save Property Details - check your connection and try again.";
+        setError(message);
+        toast.error(message);
+        setIsPropertyEditing(true);
+        return;
+      }
+
+      const result = await updateProspectPropertyDetails({
+        contactId: resolvedContactId,
+        propertyAddress: form.propertyAddress,
+        propertyType: form.propertyType,
+        propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
+        propertyTaxesPresentYear: currencyInputToRaw(
+          form.propertyTaxesPresentYear,
+        ),
+        insuranceType: form.insuranceType || undefined,
+        hoaName: form.hoaName,
+        hoaManagementInfo: form.hoaManagementInfo,
+        additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
+      });
+
+      if (!result.success) {
+        setError(result.error);
+        toast.error(result.error);
+        setIsPropertyEditing(true);
+        return;
+      }
+
+      toast.success("Property Details saved.");
+      router.refresh();
+    });
+  }
+
+  function saveAllAndClose() {
+    setError("");
+
+    if (!validateContactBasics()) {
+      return;
+    }
+
+    if (!validateFinancialSnapshotPhones()) {
+      return;
+    }
+
+    if (!validatePropertyDetails()) {
+      return;
+    }
+
+    if (!validateOpportunityValue()) {
+      return;
+    }
+
+    const closeOptimistically = Boolean(onCancel);
+
+    setIsGlobalSaving(true);
+
+    if (closeOptimistically) {
+      onOptimisticSaved?.(form);
+      onCancel?.();
+    }
+
+    void (async () => {
+      try {
+        const savedContactId = await createContactBasicsInBackground();
+
+        if (!savedContactId) {
+          if (closeOptimistically) {
+            toast.error("Couldn't save prospect - check your connection and try again.");
+          }
+          return;
+        }
+
+        const financialSaved = await saveFinancialSnapshot();
+
+        if (!financialSaved) {
+          if (closeOptimistically) {
+            toast.error("Couldn't save prospect - check your connection and try again.");
+          }
+          return;
+        }
+
+        const propertyResult = await updateProspectPropertyDetails({
+          contactId: savedContactId,
+          propertyAddress: form.propertyAddress,
+          propertyType: form.propertyType,
+          propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
+          propertyTaxesPresentYear: currencyInputToRaw(
+            form.propertyTaxesPresentYear,
+          ),
+          insuranceType: form.insuranceType || undefined,
+          hoaName: form.hoaName,
+          hoaManagementInfo: form.hoaManagementInfo,
+          additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
+        });
+
+        if (!propertyResult.success) {
+          if (!closeOptimistically) {
+            setError(propertyResult.error);
+          }
+          toast.error(propertyResult.error);
+          return;
+        }
+
+        if (isEditMode || isOpportunityValueExpanded) {
+          const opportunitySaved =
+            await saveOpportunityValueRequest(savedContactId);
+
+          if (!opportunitySaved) {
+            if (closeOptimistically) {
+              toast.error("Couldn't save Opportunity Value - check your connection and try again.");
+            }
+            return;
+          }
+        }
+
+        toast.success("Prospect saved.");
+        if (onSaved) {
+          onSaved();
+        } else {
+          router.refresh();
+        }
+      } catch (error) {
+        console.error("Failed to save prospect.", error);
+        if (!closeOptimistically) {
+          setError("Couldn't save prospect - check your connection and try again.");
+        }
+        toast.error("Couldn't save prospect - check your connection and try again.");
+      } finally {
+        if (!closeOptimistically) {
+          setIsGlobalSaving(false);
+        }
+      }
+    });
   }
 
   function savePropertyDetailsAndFinish() {
@@ -916,7 +1125,6 @@ export function ProspectIntakeForm({
       setStep(1);
       setContactId(null);
       setIsCoBorrowersExpanded(false);
-      setIsAssetsExpanded(false);
       resetValidation();
       toast.success("Prospect intake saved successfully.");
       if (onSaved) {
@@ -962,6 +1170,39 @@ export function ProspectIntakeForm({
     setIsContactEditing(false);
   }
 
+  function cancelFinancialSnapshotEdit() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      assets: savedInitialForm.assets.map((asset) => ({ ...asset })),
+      borrowerType: savedInitialForm.borrowerType,
+      ficoScore: savedInitialForm.ficoScore,
+      ficoSource: savedInitialForm.ficoSource,
+      loanPurpose: savedInitialForm.loanPurpose,
+      vesting: savedInitialForm.vesting,
+    }));
+    setCoBorrowerPhoneErrors({});
+    setError("");
+    setIsFinancialEditing(false);
+  }
+
+  function cancelPropertyDetailsEdit() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      additionalHoaFees: savedInitialForm.additionalHoaFees,
+      hoaManagementInfo: savedInitialForm.hoaManagementInfo,
+      hoaName: savedInitialForm.hoaName,
+      insuranceType: savedInitialForm.insuranceType,
+      propertyAddress: savedInitialForm.propertyAddress,
+      propertyTaxesLastYear: savedInitialForm.propertyTaxesLastYear,
+      propertyTaxesPresentYear: savedInitialForm.propertyTaxesPresentYear,
+      propertyType: savedInitialForm.propertyType,
+    }));
+    setValue("propertyAddress", savedInitialForm.propertyAddress);
+    clearErrors("propertyAddress");
+    setError("");
+    setIsPropertyEditing(false);
+  }
+
   function saveContactBasicsInline() {
     setError("");
 
@@ -969,10 +1210,20 @@ export function ProspectIntakeForm({
       return;
     }
 
+    if (!validateFinancialSnapshotPhones()) {
+      return;
+    }
+
     startTransition(async () => {
       const savedContactId = await createContactBasicsInBackground();
 
       if (!savedContactId) {
+        return;
+      }
+
+      const snapshotSaved = await saveFinancialSnapshot();
+
+      if (!snapshotSaved) {
         return;
       }
 
@@ -1017,10 +1268,15 @@ export function ProspectIntakeForm({
             className={cn(
               "space-y-3",
               shouldUseRecordLayout &&
-                "grid gap-4 space-y-0 lg:grid-cols-[minmax(0,1fr)_20rem]",
+                "grid gap-1 space-y-0 lg:grid-cols-[minmax(0,1fr)_20rem]",
             )}
           >
-        {(!dense || step === 1 || shouldUseRecordLayout) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "order-first border-b border-mafi-border pb-4 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:self-start lg:sticky lg:top-0 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-4")}>
+            <div
+              className={cn(
+                shouldUseRecordLayout ? "space-y-4 lg:col-start-1" : "contents",
+              )}
+            >
+        {(!dense || step === 1 || shouldUseRecordLayout) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "order-first lg:col-start-1")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
             <CardTitle className="text-mafi-blue-primary">
               Section A — Contact Information
@@ -1040,56 +1296,239 @@ export function ProspectIntakeForm({
                 </p>
               </div>
             ) : null}
-            {dense && isEditMode && !isContactEditing ? (
+            {dense && isEditMode ? (
               <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <UserRound className="size-4 shrink-0 text-mafi-text-mid" />
-                    <p className="truncate text-sm font-semibold text-mafi-text-dark">
-                      {form.prospectName || "Not provided"}
-                    </p>
+                <div className="relative space-y-2 pr-10">
+                  <div className="flex items-start gap-2">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <UserRound className="mt-0.5 size-4 shrink-0 text-mafi-text-mid" />
+                      <p className="text-sm font-semibold text-mafi-text-dark">
+                        Prospect
+                      </p>
+                    </div>
                   </div>
                   <Button
                     aria-label="Edit contact information"
-                    className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                    className="absolute right-0 top-0 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
                     onClick={() => setIsContactEditing(true)}
                     type="button"
                     variant="ghost"
                   >
                     <Pencil className="size-4" />
                   </Button>
+                  {isContactEditing ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="Prospect name" required>
+                        <Input
+                          aria-invalid={Boolean(errors.prospectName)}
+                          autoComplete="name"
+                          className={cn(
+                            errors.prospectName && "border-destructive",
+                          )}
+                          name="prospect-name"
+                          onChange={(event) =>
+                            updateField("prospectName", event.target.value)
+                          }
+                          value={form.prospectName}
+                        />
+                        {errors.prospectName ? (
+                          <p className="text-sm text-destructive">
+                            {errors.prospectName.message}
+                          </p>
+                        ) : null}
+                      </Field>
+                      <Field label="Phone" required>
+                        <Input
+                          aria-invalid={Boolean(errors.prospectPhone)}
+                          autoComplete="tel"
+                          className={cn(
+                            errors.prospectPhone && "border-destructive",
+                          )}
+                          name="prospect-phone"
+                          onChange={(event) =>
+                            updateField("prospectPhone", event.target.value)
+                          }
+                          type="tel"
+                          value={form.prospectPhone}
+                        />
+                        {errors.prospectPhone ? (
+                          <p className="text-sm text-destructive">
+                            {errors.prospectPhone.message}
+                          </p>
+                        ) : null}
+                        {isEditMode &&
+                        !isProspectPhoneEdited &&
+                        form.prospectPhone.trim() ===
+                          initialProspectPhoneDisplay.trim() &&
+                        Boolean(form.prospectPhone.trim()) &&
+                        !isValidUSPhone(form.prospectPhone) ? (
+                          <p className="text-sm text-mafi-gold-dark">
+                            This phone number doesn&apos;t match the expected
+                            format. Update it or continue.
+                          </p>
+                        ) : null}
+                      </Field>
+                      <Field label="Email">
+                        <Input
+                          autoComplete="email"
+                          name="prospect-email"
+                          onChange={(event) =>
+                            updateField("prospectEmail", event.target.value)
+                          }
+                          type="email"
+                          value={form.prospectEmail}
+                        />
+                      </Field>
+                      <div className="flex items-end justify-end gap-2">
+                        <Button
+                          onClick={cancelContactEdit}
+                          type="button"
+                          variant="outline"
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={saveContactBasicsInline} type="button">
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <ContactSummaryEntry
+                      email={form.prospectEmail || "Not provided"}
+                      name={form.prospectName || "Not provided"}
+                      phone={form.prospectPhone || "Not provided"}
+                    />
+                  )}
                 </div>
-                <div className="space-y-2 text-sm text-mafi-text-mid">
-                  <div className="flex items-center gap-2">
-                    <Phone className="size-4 shrink-0" />
-                    <span className="truncate">
-                      {form.prospectPhone || "Not provided"}
+                <div className="relative space-y-2 border-t border-mafi-border pt-3 pr-10">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-mafi-text-dark">
+                    <UsersRound className="size-4 shrink-0 text-mafi-text-mid" />
+                    <span>
+                      Co-borrowers
+                      {form.coBorrowers.length ? ` (${form.coBorrowers.length})` : ""}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="size-4 shrink-0" />
-                    <span className="truncate">
-                      {form.prospectEmail || "Not provided"}
-                    </span>
-                  </div>
-                </div>
-                <div className="rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
-                  <p>
-                    Borrower type:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.borrowerType
-                        ? borrowerTypeLabels[form.borrowerType]
-                        : "Not provided"}
-                    </span>
-                  </p>
-                  <p>
-                    Loan purpose:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.loanPurpose
-                        ? loanPurposeLabels[form.loanPurpose]
-                        : "Not provided"}
-                    </span>
-                  </p>
+                  <Button
+                    aria-label="Edit co-borrowers"
+                    className="absolute right-0 top-2 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                    onClick={() => setIsCoBorrowersEditing(true)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  {isCoBorrowersEditing ? (
+                    <div className="space-y-3">
+                      {form.coBorrowers.length ? (
+                        <div className="space-y-2">
+                          {form.coBorrowers.map((coBorrower, index) => (
+                            <div
+                              className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+                              key={index}
+                            >
+                              <Input
+                                autoComplete="name"
+                                onChange={(event) =>
+                                  updateCoBorrower(index, "name", event.target.value)
+                                }
+                                placeholder="Name"
+                                value={coBorrower.name}
+                              />
+                              <div className="space-y-1">
+                                <Input
+                                  aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
+                                  autoComplete="tel"
+                                  className={cn(
+                                    coBorrowerPhoneErrors[index] && "border-destructive",
+                                  )}
+                                  onChange={(event) =>
+                                    updateCoBorrower(index, "phone", event.target.value)
+                                  }
+                                  placeholder="Phone"
+                                  type="tel"
+                                  value={coBorrower.phone}
+                                />
+                                {coBorrowerPhoneErrors[index] ? (
+                                  <p className="text-sm text-destructive">
+                                    {coBorrowerPhoneErrors[index]}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Input
+                                autoComplete="email"
+                                onChange={(event) =>
+                                  updateCoBorrower(index, "email", event.target.value)
+                                }
+                                placeholder="Email"
+                                type="email"
+                                value={coBorrower.email}
+                              />
+                              <Button
+                                onClick={() => removeCoBorrower(index)}
+                                type="button"
+                                variant="outline"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-mafi-text-light">
+                          No co-borrowers added yet.
+                        </p>
+                      )}
+                      <Button
+                        className="h-auto px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                        onClick={addCoBorrower}
+                        type="button"
+                        variant="link"
+                      >
+                        <Plus className="mr-1 size-4" />
+                        Add co-borrower
+                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={cancelCoBorrowersEdit}
+                          type="button"
+                          variant="outline"
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={saveCoBorrowersSection} type="button">
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : form.coBorrowers.length ? (
+                    <div className="space-y-2">
+                      {form.coBorrowers.map((coBorrower, index) => (
+                        <ContactSummaryEntry
+                          email={renderCoBorrowerInlineValue(
+                            coBorrower,
+                            "email",
+                            "No email",
+                          )}
+                          key={`${coBorrower.email}-${index}`}
+                          name={renderCoBorrowerInlineValue(
+                            coBorrower,
+                            "name",
+                            "Not provided",
+                            "font-medium text-mafi-text-dark",
+                          )}
+                          phone={renderCoBorrowerInlineValue(
+                            coBorrower,
+                            "phone",
+                            "No phone",
+                          )}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-mafi-text-light">
+                      No co-borrowers added yet.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1155,68 +1594,58 @@ export function ProspectIntakeForm({
                   value={form.prospectEmail}
                 />
               </Field>
-              <Field label="Borrower type">
-                <Select
-                  onValueChange={(value) =>
-                    updateField("borrowerType", value as BorrowerType)
-                  }
-                  value={form.borrowerType}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select borrower type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(borrowerTypeLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Loan purpose" required>
-                <Select
-                  onValueChange={(value) =>
-                    updateField("loanPurpose", value as LoanPurpose)
-                  }
-                  value={form.loanPurpose}
-                >
-                  <SelectTrigger
-                    aria-invalid={Boolean(errors.loanPurpose)}
-                    className={cn(errors.loanPurpose && "border-destructive")}
-                  >
-                    <SelectValue placeholder="Select loan purpose" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(loanPurposeLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.loanPurpose ? (
-                  <p className="text-sm text-destructive">
-                    {errors.loanPurpose.message}
-                  </p>
-                ) : null}
-              </Field>
+              {!isEditMode ? (
+                <>
+                  <Field label="Borrower type">
+                    <Select
+                      onValueChange={(value) =>
+                        updateField("borrowerType", value as BorrowerType)
+                      }
+                      value={form.borrowerType}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select borrower type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(borrowerTypeLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Loan purpose" required>
+                    <Select
+                      onValueChange={(value) =>
+                        updateField("loanPurpose", value as LoanPurpose)
+                      }
+                      value={form.loanPurpose}
+                    >
+                      <SelectTrigger
+                        aria-invalid={Boolean(errors.loanPurpose)}
+                        className={cn(errors.loanPurpose && "border-destructive")}
+                      >
+                        <SelectValue placeholder="Select loan purpose" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(loanPurposeLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.loanPurpose ? (
+                      <p className="text-sm text-destructive">
+                        {errors.loanPurpose.message}
+                      </p>
+                    ) : null}
+                  </Field>
+                </>
+              ) : null}
             </div>
             )}
-            {dense && isEditMode && isContactEditing ? (
-              <div className="flex justify-end gap-2">
-                <Button onClick={cancelContactEdit} type="button" variant="outline">
-                  Cancel
-                </Button>
-                <Button
-                  disabled={isPending}
-                  onClick={saveContactBasicsInline}
-                  type="button"
-                >
-                  Save
-                </Button>
-              </div>
-            ) : null}
             {dense && !isEditMode ? (
               <RepeatableSection
                 addLabel="Add co-borrower"
@@ -1285,14 +1714,6 @@ export function ProspectIntakeForm({
                 ))}
               </RepeatableSection>
             ) : null}
-            {canShowScriptPanel ? (
-              <div className="border-t border-mafi-border pt-3">
-                <WorkflowScriptCard
-                  context={stepGuidanceContext}
-                  showEyebrow={false}
-                />
-              </div>
-            ) : null}
           </CardContent>
         </Card> : null}
 
@@ -1302,7 +1723,7 @@ export function ProspectIntakeForm({
               Section B - Financial Snapshot
             </CardTitle>
             <CardDescription>
-              Co-borrowers, assets, and FICO information.
+              Assets, title, and FICO information.
             </CardDescription>
           </CardHeader>
           <CardContent className={cn("pt-6", dense ? "space-y-3 px-0 py-0" : "space-y-6")}>
@@ -1312,22 +1733,14 @@ export function ProspectIntakeForm({
                   Financial Snapshot
                 </h3>
                 <p className="text-xs text-mafi-text-mid">
-                  Co-borrowers, assets, and FICO information.
+                  Assets, title, and FICO information.
                 </p>
               </div>
             ) : null}
 
             {dense && isEditMode && !isFinancialEditing ? (
-              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-mafi-text-dark">
-                      Financial Snapshot
-                    </p>
-                    <p className="mt-1 text-xs text-mafi-text-mid">
-                      Co-borrowers, assets, title, and credit score details.
-                    </p>
-                  </div>
+              <div className="relative rounded-md bg-mafi-bg-lighter p-3">
+                <div className="absolute right-2 top-2">
                   <Button
                     aria-label="Edit financial snapshot"
                     className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
@@ -1338,13 +1751,15 @@ export function ProspectIntakeForm({
                     <Pencil className="size-4" />
                   </Button>
                 </div>
-                <div className="space-y-3 rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
-                  <SummaryIconRow icon={UsersRound} label="Co-borrowers">
-                    {form.coBorrowers.length
-                      ? form.coBorrowers
-                          .map((coBorrower) => coBorrower.name)
-                          .filter(Boolean)
-                          .join(", ") || `${form.coBorrowers.length} added`
+                <div className="space-y-3 pr-10 text-sm leading-6 text-mafi-text-mid">
+                  <SummaryIconRow icon={UserRound} label="Borrower type">
+                    {form.borrowerType
+                      ? borrowerTypeLabels[form.borrowerType]
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={BadgeDollarSign} label="Loan purpose">
+                    {form.loanPurpose
+                      ? loanPurposeLabels[form.loanPurpose]
                       : "Not provided"}
                   </SummaryIconRow>
                   <SummaryIconRow icon={BadgeDollarSign} label="Assets">
@@ -1377,121 +1792,122 @@ export function ProspectIntakeForm({
               </div>
             ) : (
             <>
-            <RepeatableSection
-              addLabel="Add co-borrower"
-              count={form.coBorrowers.length}
-              emptyMessage="No co-borrowers added yet."
-              isExpanded={isCoBorrowersExpanded}
-              onAdd={addCoBorrower}
-              onToggle={() =>
-                setIsCoBorrowersExpanded((isExpanded) => !isExpanded)
-              }
-              title="Co-borrowers"
-            >
-              {form.coBorrowers.map((coBorrower, index) => (
-                <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" key={index}>
-                  <Input
-                    autoComplete="name"
-                    name={`co-borrower-${index}-name`}
-                    onChange={(event) =>
-                      updateCoBorrower(index, "name", event.target.value)
-                    }
-                    placeholder="Name"
-                    value={coBorrower.name}
-                  />
-                  <div className="space-y-1">
-                    <Input
-                      aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
-                      autoComplete="tel"
-                      className={cn(
-                        coBorrowerPhoneErrors[index] && "border-destructive",
-                      )}
-                      name={`co-borrower-${index}-phone`}
-                      onChange={(event) =>
-                        updateCoBorrower(index, "phone", event.target.value)
-                      }
-                      placeholder="Phone"
-                      type="tel"
-                      value={coBorrower.phone}
-                    />
-                    {coBorrowerPhoneErrors[index] ? (
-                      <p className="text-sm text-destructive">
-                        {coBorrowerPhoneErrors[index]}
-                      </p>
-                    ) : null}
-                  </div>
-                  <Input
-                    autoComplete="email"
-                    name={`co-borrower-${index}-email`}
-                    onChange={(event) =>
-                      updateCoBorrower(index, "email", event.target.value)
-                    }
-                    placeholder="Email"
-                    type="email"
-                    value={coBorrower.email}
-                  />
-                  <Button
-                    onClick={() => removeCoBorrower(index)}
-                    type="button"
-                    variant="outline"
+            <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
+              <Field label="Borrower type">
+                <Select
+                  onValueChange={(value) =>
+                    updateField("borrowerType", value as BorrowerType)
+                  }
+                  value={form.borrowerType}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select borrower type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(borrowerTypeLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Loan purpose" required>
+                <Select
+                  onValueChange={(value) =>
+                    updateField("loanPurpose", value as LoanPurpose)
+                  }
+                  value={form.loanPurpose}
+                >
+                  <SelectTrigger
+                    aria-invalid={Boolean(errors.loanPurpose)}
+                    className={cn(errors.loanPurpose && "border-destructive")}
                   >
-                    Remove
-                  </Button>
+                    <SelectValue placeholder="Select loan purpose" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(loanPurposeLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.loanPurpose ? (
+                  <p className="text-sm text-destructive">
+                    {errors.loanPurpose.message}
+                  </p>
+                ) : null}
+              </Field>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-mafi-text-dark">
+                Assets available
+              </Label>
+              {form.assets.length ? (
+                <div className="divide-y divide-mafi-border">
+                  {form.assets.map((asset, index) => (
+                    <div
+                      className="grid gap-3 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] md:items-center"
+                      key={index}
+                    >
+                      <Select
+                        onValueChange={(value) =>
+                          updateAsset(index, "type", value as AssetType)
+                        }
+                        value={asset.type}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(assetLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          updateAsset(
+                            index,
+                            "amount",
+                            formatCurrencyInput(event.target.value),
+                          )
+                        }
+                        placeholder="Amount"
+                        type="text"
+                        value={asset.amount}
+                      />
+                      <Button
+                        aria-label="Remove asset"
+                        className="size-8 p-0 text-mafi-text-light hover:text-destructive"
+                        onClick={() => removeAsset(index)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </RepeatableSection>
-
-            <RepeatableSection
-              addLabel="Add asset"
-              count={form.assets.length}
-              emptyMessage="No assets added yet."
-              isExpanded={isAssetsExpanded}
-              onAdd={addAsset}
-              onToggle={() => setIsAssetsExpanded((isExpanded) => !isExpanded)}
-              title="Assets available"
-            >
-              {form.assets.map((asset, index) => (
-                <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" key={index}>
-                  <Select
-                    onValueChange={(value) =>
-                      updateAsset(index, "type", value as AssetType)
-                    }
-                    value={asset.type}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(assetLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    inputMode="decimal"
-                    onChange={(event) =>
-                      updateAsset(
-                        index,
-                        "amount",
-                        formatCurrencyInput(event.target.value),
-                      )
-                    }
-                    placeholder="Amount"
-                    type="text"
-                    value={asset.amount}
-                  />
-                  <Button
-                    onClick={() => removeAsset(index)}
-                    type="button"
-                    variant="outline"
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </RepeatableSection>
+              ) : (
+                <p className="text-sm text-mafi-text-light">
+                  No assets added yet.
+                </p>
+              )}
+              <Button
+                className="h-auto px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                onClick={addAsset}
+                type="button"
+                variant="link"
+              >
+                <Plus className="mr-1 size-4" />
+                Add another asset
+              </Button>
+            </div>
 
             <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
               <Field label="How would you like to hold title on the property?">
@@ -1545,13 +1961,30 @@ export function ProspectIntakeForm({
                   />
                 </Field>
               ) : null}
+              {dense && isEditMode && isFinancialEditing ? (
+              <div className="flex items-end justify-end gap-2">
+                <Button
+                  onClick={cancelFinancialSnapshotEdit}
+                  type="button"
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveFinancialSnapshotInline}
+                  type="button"
+                >
+                  Save
+                </Button>
+              </div>
+            ) : null}
             </div>
             </>
             )}
           </CardContent>
         </Card> : null}
 
-        {(!dense || step === 3) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "lg:col-start-1")}>
+        {(!dense || step === 3 || shouldUseRecordLayout) ? <Card className={cn("border-mafi-border bg-mafi-bg-white", dense && "border-0 bg-transparent shadow-none", shouldUseRecordLayout && "lg:col-start-1")}>
           <CardHeader className={cn("border-b border-mafi-border bg-mafi-bg-light", dense && "hidden")}>
             <CardTitle className="text-mafi-blue-primary">
               Section C - Property Details
@@ -1572,16 +2005,8 @@ export function ProspectIntakeForm({
               </div>
             ) : null}
             {dense && isEditMode && !isPropertyEditing ? (
-              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-mafi-text-dark">
-                      Property Details
-                    </p>
-                    <p className="mt-1 text-xs text-mafi-text-mid">
-                      Address, property type, taxes, insurance, and HOA.
-                    </p>
-                  </div>
+              <div className="relative rounded-md bg-mafi-bg-lighter p-3">
+                <div className="absolute right-2 top-2">
                   <Button
                     aria-label="Edit property details"
                     className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
@@ -1592,66 +2017,76 @@ export function ProspectIntakeForm({
                     <Pencil className="size-4" />
                   </Button>
                 </div>
-                <div className="space-y-2 rounded-md bg-mafi-bg-lighter p-3 text-sm leading-6 text-mafi-text-mid">
-                  <p>
-                    Address:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.propertyAddress || "Not provided"}
-                    </span>
-                  </p>
-                  <p>
-                    Property type:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {propertyTypeLabels[form.propertyType] ?? "Not provided"}
-                    </span>
-                  </p>
-                  <p>
-                    Taxes:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.propertyTaxesLastYear || form.propertyTaxesPresentYear
-                        ? `${form.propertyTaxesLastYear || "Not provided"} last year / ${form.propertyTaxesPresentYear || "Not provided"} present year`
-                        : "Not provided"}
-                    </span>
-                  </p>
-                  <p>
-                    Insurance:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.insuranceType
-                        ? insuranceLabels[form.insuranceType]
-                        : "Not provided"}
-                    </span>
-                  </p>
-                  <p>
-                    HOA:{" "}
-                    <span className="font-medium text-mafi-text-dark">
-                      {form.hoaName ||
-                      form.hoaManagementInfo ||
-                      form.additionalHoaFees
-                        ? [
-                            form.hoaName,
-                            form.hoaManagementInfo,
-                            form.additionalHoaFees,
-                          ]
-                            .filter(Boolean)
-                            .join(" / ")
-                        : "Not provided"}
-                    </span>
-                  </p>
+                <div className="space-y-2 pr-10 text-sm leading-6 text-mafi-text-mid">
+                  <SummaryIconRow icon={MapPin} label="Address">
+                    {form.propertyAddress || "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={Home} label="Property type">
+                    {propertyTypeLabels[form.propertyType] ?? "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={Receipt} label="Taxes">
+                    {form.propertyTaxesLastYear || form.propertyTaxesPresentYear
+                      ? `${form.propertyTaxesLastYear || "Not provided"} last year / ${form.propertyTaxesPresentYear || "Not provided"} present year`
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={Umbrella} label="Insurance">
+                    {form.insuranceType
+                      ? insuranceLabels[form.insuranceType]
+                      : "Not provided"}
+                  </SummaryIconRow>
+                  <SummaryIconRow icon={Building2} label="HOA">
+                    {form.hoaName ||
+                    form.hoaManagementInfo ||
+                    form.additionalHoaFees
+                      ? [
+                          form.hoaName,
+                          form.hoaManagementInfo,
+                          form.additionalHoaFees,
+                        ]
+                          .filter(Boolean)
+                          .join(" / ")
+                      : "Not provided"}
+                  </SummaryIconRow>
                 </div>
               </div>
             ) : (
               <>
             <Field label="Property address" required>
-              <Input
-                aria-invalid={Boolean(errors.propertyAddress)}
-                autoComplete="street-address"
-                className={cn(errors.propertyAddress && "border-destructive")}
-                name="property-address"
-                onChange={(event) =>
-                  updateField("propertyAddress", event.target.value)
-                }
-                value={form.propertyAddress}
-              />
+              <div className="relative">
+                <Input
+                  aria-invalid={Boolean(errors.propertyAddress)}
+                  autoComplete="street-address"
+                  className={cn(
+                    "pr-11",
+                    errors.propertyAddress && "border-destructive",
+                  )}
+                  name="property-address"
+                  onChange={(event) =>
+                    updateField("propertyAddress", event.target.value)
+                  }
+                  value={form.propertyAddress}
+                />
+                <button
+                  aria-label="Search Zillow for this property"
+                  className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-mafi-primary transition hover:bg-mafi-primary/10 focus:outline-none focus:ring-2 focus:ring-mafi-primary"
+                  onClick={() => {
+                    if (!form.propertyAddress.trim()) {
+                      toast.error("Enter a property address first.");
+                      return;
+                    }
+
+                    window.open(
+                      buildZillowLookupUrl(form.propertyAddress),
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                  title="Search Zillow"
+                  type="button"
+                >
+                  <Search className="size-4" aria-hidden="true" />
+                </button>
+              </div>
               {errors.propertyAddress ? (
                 <p className="text-sm text-destructive">
                   {errors.propertyAddress.message}
@@ -1661,20 +2096,6 @@ export function ProspectIntakeForm({
             <PropertyDuplicateNotice
               matches={initialData?.duplicatePropertyContacts ?? []}
             />
-            <div className="flex flex-wrap gap-2">
-              {["Zillow", "Redfin", "Realtor"].map((lookup) => (
-                <Button
-                  key={lookup}
-                  onClick={() =>
-                    console.log(`${lookup} lookup stub`, form.propertyAddress)
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  {lookup}
-                </Button>
-              ))}
-            </div>
 
             <div className={cn("grid md:grid-cols-3", dense ? "gap-3 md:grid-cols-2" : "gap-4")}>
               <Field label="Property type">
@@ -1768,6 +2189,23 @@ export function ProspectIntakeForm({
                   value={form.additionalHoaFees}
                 />
               </Field>
+              {dense && isEditMode && isPropertyEditing ? (
+              <div className="flex items-end justify-end gap-2">
+                <Button
+                  onClick={cancelPropertyDetailsEdit}
+                  type="button"
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={savePropertyDetailsInline}
+                  type="button"
+                >
+                  Save
+                </Button>
+              </div>
+            ) : null}
             </div>
               </>
             )}
@@ -1775,8 +2213,10 @@ export function ProspectIntakeForm({
           </CardContent>
         </Card> : null}
 
+            </div>
+
         {dense && isEditMode ? (
-          <div className={cn("space-y-3", shouldUseRecordLayout && "lg:col-start-1")}>
+          <div className={cn("space-y-3", shouldUseRecordLayout && "lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:self-start lg:sticky lg:top-0 lg:border-l lg:border-mafi-border lg:pl-4")}>
             <h3 className={inlineSectionToggleClass}>
               Opportunity Value (optional)
             </h3>
@@ -1935,6 +2375,14 @@ export function ProspectIntakeForm({
                 </div>
                 </CardContent>
               </Card>
+              {canShowScriptPanel ? (
+                <div className="border-t border-mafi-border pt-3">
+                  <WorkflowScriptCard
+                    context={stepGuidanceContext}
+                    showEyebrow={false}
+                  />
+                </div>
+              ) : null}
           </div>
         ) : null}
 
@@ -1962,6 +2410,20 @@ export function ProspectIntakeForm({
             <span />
           )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            {dense && isEditMode && step === 2 ? (
+              <Button onClick={onCancel} type="button" variant="outline">
+                Cancel
+              </Button>
+            ) : null}
+            {dense && isEditMode && step === 2 ? (
+              <Button
+                disabled={isGlobalSaving}
+                onClick={saveAllAndClose}
+                type="button"
+              >
+                Save
+              </Button>
+            ) : null}
             {dense && step > 1 && (!isEditMode || step > 2) ? (
               <Button
                 onClick={() =>
@@ -1973,26 +2435,6 @@ export function ProspectIntakeForm({
                 Back
               </Button>
             ) : null}
-            {dense && isEditMode && step === 2 && isFinancialEditing ? (
-              <Button
-                disabled={isPending}
-                onClick={saveFinancialSnapshotOnly}
-                type="button"
-                variant="outline"
-              >
-                Save & Close
-              </Button>
-            ) : null}
-            {dense && isEditMode && step === 3 && isPropertyEditing ? (
-              <Button
-                disabled={isPending}
-                onClick={savePropertyDetailsOnly}
-                type="button"
-                variant="outline"
-              >
-                Save & Close
-              </Button>
-            ) : null}
             {dense && step === 1 && !isEditMode ? (
               <Button
                 disabled={isPending}
@@ -2002,6 +2444,7 @@ export function ProspectIntakeForm({
                 Create Prospect
               </Button>
             ) : dense && step === 1 && isEditMode ? null : dense && step === 2 ? (
+              isEditMode ? null : (
               <Button
                 onClick={
                   isFinancialEditing
@@ -2012,6 +2455,7 @@ export function ProspectIntakeForm({
               >
                 Next
               </Button>
+              )
             ) : dense && step === 3 ? (
               !isEditMode ? (
                 <Button
@@ -2069,6 +2513,32 @@ function SummaryIconRow({
         {label}:{" "}
         <span className="font-medium text-mafi-text-dark">{children}</span>
       </p>
+    </div>
+  );
+}
+
+function ContactSummaryEntry({
+  className,
+  email,
+  name,
+  phone,
+}: {
+  className?: string;
+  email: React.ReactNode;
+  name: React.ReactNode;
+  phone: React.ReactNode;
+}) {
+  return (
+    <div className={cn("space-y-1 text-sm text-mafi-text-mid", className)}>
+      <div className="min-w-0 font-medium text-mafi-text-dark">{name}</div>
+      <div className="flex min-w-0 items-center gap-2">
+        <Phone className="size-4 shrink-0" />
+        <div className="min-w-0 flex-1 truncate">{phone}</div>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <Mail className="size-4 shrink-0" />
+        <div className="min-w-0 flex-1 truncate">{email}</div>
+      </div>
     </div>
   );
 }

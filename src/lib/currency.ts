@@ -1,5 +1,21 @@
-export function normalizeCurrencyInput(value?: string) {
+function normalizeCurrencyText(value?: string) {
   const cleaned = value?.replace(/[$,\s]/g, "").trim();
+
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const [wholePart, fractionPart = ""] = cleaned.split(".");
+
+  if (fractionPart.length > 2 && fractionPart.startsWith("00")) {
+    return `${wholePart}${fractionPart.slice(2)}`;
+  }
+
+  return cleaned;
+}
+
+export function normalizeCurrencyInput(value?: string) {
+  const cleaned = normalizeCurrencyText(value);
 
   if (!cleaned) {
     return undefined;
@@ -40,13 +56,31 @@ export function formatCurrencyDisplay(
 }
 
 export function formatCurrencyInput(value: string) {
-  const normalizedValue = normalizeCurrencyInput(value);
+  const cleaned = normalizeCurrencyText(value);
 
-  if (!normalizedValue) {
+  if (!cleaned) {
     return "";
   }
 
-  return formatCurrencyDisplay(normalizedValue, "");
+  const isNegative = cleaned.startsWith("-");
+  const unsignedValue = isNegative ? cleaned.slice(1) : cleaned;
+  const [wholePart = "", fractionPart] = unsignedValue.split(".");
+  const wholeNumber = Number(wholePart || 0);
+
+  if (!Number.isFinite(wholeNumber)) {
+    return "";
+  }
+
+  const formattedWhole = wholeNumber.toLocaleString("en-US", {
+    maximumFractionDigits: 0,
+  });
+  const sign = isNegative ? "-" : "";
+
+  if (fractionPart !== undefined) {
+    return `${sign}$${formattedWhole}.${fractionPart.slice(0, 2)}`;
+  }
+
+  return `${sign}$${formattedWhole}`;
 }
 
 export function currencyInputToNumber(value: string) {

@@ -21,43 +21,48 @@ export async function getNavBadgeCounts(
     return {};
   }
 
-  // Read the lastViewed timestamps fresh rather than from the cached RBAC
-  // profile lookup. This keeps the app-wide profile cache intact while still
-  // letting badge counts reflect the latest "viewed" state after a page visit.
-  const viewed = await prisma.profile.findUnique({
-    where: { id: profile.id },
-    select: {
-      lastViewedOpportunities: true,
-      lastViewedScenarioDesk: true,
-    },
-  });
+  try {
+    // Read the lastViewed timestamps fresh rather than from the cached RBAC
+    // profile lookup. This keeps the app-wide profile cache intact while still
+    // letting badge counts reflect the latest "viewed" state after a page visit.
+    const viewed = await prisma.profile.findUnique({
+      where: { id: profile.id },
+      select: {
+        lastViewedOpportunities: true,
+        lastViewedScenarioDesk: true,
+      },
+    });
 
-  const opportunitiesWhere = {
-    status: ContactStatus.ACTIVE,
-    createdAt: {
-      gt: viewed?.lastViewedOpportunities ?? beginningOfTime,
-    },
-    ...(canViewAllOpportunities(profile.role) ? {} : { bdrId: profile.id }),
-  };
-  const scenarioDeskWhere = {
-    status: ContactStatus.IN_SCENARIO_REVIEW,
-    updatedAt: {
-      gt: viewed?.lastViewedScenarioDesk ?? beginningOfTime,
-    },
-  };
-  const [opportunitiesCount, scenarioDeskCount] = await Promise.all([
-    prisma.contact.count({
-      where: opportunitiesWhere,
-    }),
-    profile.role === RoleType.LICENSED_LO || profile.role === RoleType.OWNER
-      ? prisma.contact.count({
-          where: scenarioDeskWhere,
-        })
-      : Promise.resolve(0),
-  ]);
+    const opportunitiesWhere = {
+      status: ContactStatus.ACTIVE,
+      createdAt: {
+        gt: viewed?.lastViewedOpportunities ?? beginningOfTime,
+      },
+      ...(canViewAllOpportunities(profile.role) ? {} : { bdrId: profile.id }),
+    };
+    const scenarioDeskWhere = {
+      status: ContactStatus.IN_SCENARIO_REVIEW,
+      updatedAt: {
+        gt: viewed?.lastViewedScenarioDesk ?? beginningOfTime,
+      },
+    };
+    const [opportunitiesCount, scenarioDeskCount] = await Promise.all([
+      prisma.contact.count({
+        where: opportunitiesWhere,
+      }),
+      profile.role === RoleType.LICENSED_LO || profile.role === RoleType.OWNER
+        ? prisma.contact.count({
+            where: scenarioDeskWhere,
+          })
+        : Promise.resolve(0),
+    ]);
 
-  return {
-    "/opportunities": opportunitiesCount,
-    "/scenario-desk": scenarioDeskCount,
-  };
+    return {
+      "/opportunities": opportunitiesCount,
+      "/scenario-desk": scenarioDeskCount,
+    };
+  } catch (error) {
+    console.error("Failed to load nav badge counts.", error);
+    return {};
+  }
 }

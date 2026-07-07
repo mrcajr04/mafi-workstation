@@ -81,6 +81,8 @@ export type UpdateProspectContactBasicsInput = ProspectContactBasicsInput & {
 
 export type ProspectFinancialSnapshotInput = {
   contactId: string;
+  borrowerType?: BorrowerType;
+  loanPurpose?: LoanPurpose;
   coBorrowers: CoBorrowerInput[];
   assets: AssetInput[];
   ficoSource: FicoSource;
@@ -724,12 +726,22 @@ export async function updateProspectFinancialSnapshot(
     };
   }
 
+  const assets = input.assets
+    .filter((asset) => optionalDecimal(asset.amount))
+    .map((asset) => ({
+      contactId: contact.id,
+      type: asset.type,
+      amount: optionalDecimal(asset.amount),
+    }));
+
   await prisma.$transaction(async (tx) => {
     await tx.contact.update({
       where: {
         id: contact.id,
       },
       data: {
+        borrowerType: input.borrowerType ?? undefined,
+        loanPurpose: input.loanPurpose ?? undefined,
         updatedAt: new Date(),
       },
     });
@@ -751,14 +763,6 @@ export async function updateProspectFinancialSnapshot(
         contactId: contact.id,
       },
     });
-
-    const assets = input.assets
-      .filter((asset) => optionalDecimal(asset.amount))
-      .map((asset) => ({
-        contactId: contact.id,
-        type: asset.type,
-        amount: optionalDecimal(asset.amount),
-      }));
 
     if (assets.length) {
       await tx.asset.createMany({
@@ -786,6 +790,8 @@ export async function updateProspectFinancialSnapshot(
             : optionalInt(input.ficoScore),
       },
     });
+  }, {
+    timeout: 15000,
   });
 
   await logAuditEvent(
@@ -807,7 +813,13 @@ export async function updateProspectFinancialSnapshot(
           : optionalInt(input.ficoScore) ?? null,
       ficoSource: input.ficoSource,
       summary: "Financial Snapshot saved as a single intake step.",
-      updatedFields: ["coBorrowers", "assets", "ficoInfo"],
+      updatedFields: [
+        "borrowerType",
+        "loanPurpose",
+        "coBorrowers",
+        "assets",
+        "ficoInfo",
+      ],
     },
   );
   refreshOpportunitiesList();

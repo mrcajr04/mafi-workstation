@@ -110,7 +110,7 @@ export function NewProspectModal({
           <section
             className={cn(
               "relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-lg border border-mafi-border bg-mafi-bg-off shadow-2xl",
-              isEditMode ? "max-w-6xl" : "max-w-3xl",
+              isEditMode ? "max-w-5xl" : "max-w-3xl",
             )}
           >
             <header className="flex shrink-0 items-center justify-between border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
