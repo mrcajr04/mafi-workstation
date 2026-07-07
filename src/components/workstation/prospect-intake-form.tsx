@@ -14,7 +14,6 @@ import {
 import {
   BadgeDollarSign,
   Building2,
-  ChevronDown,
   CreditCard,
   Home,
   Mail,
@@ -28,7 +27,6 @@ import {
   Trash2,
   Umbrella,
   UserRound,
-  UsersRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
@@ -38,7 +36,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -61,10 +58,7 @@ import {
   updateProspectPropertyDetails,
 } from "@/lib/actions/contact-actions";
 import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
-import {
-  WorkflowScriptCard,
-  type WorkflowGuidanceContext,
-} from "@/components/workstation/workflow-guidance-panel";
+import { useSectionEditState } from "@/components/workstation/section-edit-state";
 import {
   currencyInputToRaw,
   formatCurrencyInput,
@@ -174,12 +168,93 @@ const initialForm: ProspectIntakeFormState = {
   notMovingForwardOtherReason: "",
 };
 
+type ContactBasicsSnapshot = Pick<
+  ProspectIntakeFormState,
+  "prospectEmail" | "prospectName" | "prospectPhone"
+>;
+
+type CoBorrowersSnapshot = Pick<ProspectIntakeFormState, "coBorrowers">;
+
+type FinancialSnapshot = Pick<
+  ProspectIntakeFormState,
+  | "assets"
+  | "borrowerType"
+  | "ficoScore"
+  | "ficoSource"
+  | "loanPurpose"
+  | "vesting"
+>;
+
+type PropertyDetailsSnapshot = Pick<
+  ProspectIntakeFormState,
+  | "additionalHoaFees"
+  | "hoaManagementInfo"
+  | "hoaName"
+  | "insuranceType"
+  | "propertyAddress"
+  | "propertyTaxesLastYear"
+  | "propertyTaxesPresentYear"
+  | "propertyType"
+>;
+
+function contactBasicsSnapshot(
+  form: ProspectIntakeFormState,
+): ContactBasicsSnapshot {
+  return {
+    prospectEmail: form.prospectEmail,
+    prospectName: form.prospectName,
+    prospectPhone: form.prospectPhone,
+  };
+}
+
+function coBorrowersSnapshot(
+  form: ProspectIntakeFormState,
+): CoBorrowersSnapshot {
+  return {
+    coBorrowers: form.coBorrowers.map((coBorrower) => ({ ...coBorrower })),
+  };
+}
+
+function financialSnapshot(
+  form: ProspectIntakeFormState,
+): FinancialSnapshot {
+  return {
+    assets: form.assets.map((asset) => ({ ...asset })),
+    borrowerType: form.borrowerType,
+    ficoScore: form.ficoScore,
+    ficoSource: form.ficoSource,
+    loanPurpose: form.loanPurpose,
+    vesting: form.vesting,
+  };
+}
+
+function propertyDetailsSnapshot(
+  form: ProspectIntakeFormState,
+): PropertyDetailsSnapshot {
+  return {
+    additionalHoaFees: form.additionalHoaFees,
+    hoaManagementInfo: form.hoaManagementInfo,
+    hoaName: form.hoaName,
+    insuranceType: form.insuranceType,
+    propertyAddress: form.propertyAddress,
+    propertyTaxesLastYear: form.propertyTaxesLastYear,
+    propertyTaxesPresentYear: form.propertyTaxesPresentYear,
+    propertyType: form.propertyType,
+  };
+}
+
 const loanPurposeLabels = {
   [LoanPurpose.PURCHASE]: "Purchase",
   [LoanPurpose.RATE_TERM_REFI]: "Rate/Term Refi",
   [LoanPurpose.CASH_OUT_REFI]: "Cash-Out Refi",
   [LoanPurpose.LIMITED_CASH_OUT]: "Limited Cash-Out",
 };
+
+function propertyValueQuestion(loanPurpose: LoanPurpose | "") {
+  return loanPurpose === LoanPurpose.PURCHASE
+    ? "What price range do you have in mind for the property?"
+    : "What's the home worth?";
+}
 
 const borrowerTypeLabels = {
   [BorrowerType.PRIMARY]: "Primary",
@@ -259,6 +334,8 @@ function buildZillowLookupUrl(address: string) {
 const requiredLabel = <span className="text-destructive">*</span>;
 const inlineSectionToggleClass =
   "text-left text-base font-semibold text-mafi-blue-primary hover:underline";
+const activeEditSectionClass = "rounded-md border border-mafi-blue-primary p-3";
+const sectionActionRowClass = "flex justify-end gap-2";
 
 const prospectIntakeRequiredSchema = z.object({
   prospectName: z.string().trim().min(1, "Prospect name is required."),
@@ -337,9 +414,6 @@ export function ProspectIntakeForm({
   const [contactId, setContactId] = useState<string | null>(
     initialData?.contactId ?? null,
   );
-  const [isCoBorrowersExpanded, setIsCoBorrowersExpanded] = useState(
-    Boolean(initialData?.coBorrowers.length),
-  );
   const [isOpportunityValueExpanded] = useState(
     isEditMode ||
       Boolean(
@@ -349,14 +423,6 @@ export function ProspectIntakeForm({
       ),
   );
   const [isProspectPhoneEdited, setIsProspectPhoneEdited] = useState(false);
-  const [isContactEditing, setIsContactEditing] = useState(!isEditMode);
-  const [isCoBorrowersEditing, setIsCoBorrowersEditing] = useState(false);
-  const [isFinancialEditing, setIsFinancialEditing] = useState(
-    !isEditMode || !initialData?.hasFinancialSnapshot,
-  );
-  const [isPropertyEditing, setIsPropertyEditing] = useState(
-    !isEditMode || !initialData?.hasPropertyDetails,
-  );
   const [isGlobalSaving, setIsGlobalSaving] = useState(false);
   const [isPending, startTransition] = useTransition();
   const contactCreatePromiseRef = useRef<Promise<string | null> | null>(null);
@@ -377,6 +443,65 @@ export function ProspectIntakeForm({
     mode: "onSubmit",
     reValidateMode: "onSubmit",
   });
+  const contactSection = useSectionEditState<ContactBasicsSnapshot>({
+    defaultEditing: !isEditMode,
+    initialSnapshot: contactBasicsSnapshot(savedInitialForm),
+    restoreSnapshot: (snapshot) => {
+      setForm((currentForm) => ({
+        ...currentForm,
+        ...snapshot,
+      }));
+      setValue("prospectName", snapshot.prospectName);
+      setValue("prospectPhone", snapshot.prospectPhone);
+    },
+  });
+  const coBorrowersSection = useSectionEditState<CoBorrowersSnapshot>({
+    initialSnapshot: coBorrowersSnapshot(savedInitialForm),
+    restoreSnapshot: (snapshot) => {
+      setForm((currentForm) => ({
+        ...currentForm,
+        coBorrowers: snapshot.coBorrowers.map((coBorrower) => ({
+          ...coBorrower,
+        })),
+      }));
+    },
+  });
+  const financialSection = useSectionEditState<FinancialSnapshot>({
+    defaultEditing: !isEditMode || !initialData?.hasFinancialSnapshot,
+    initialSnapshot: financialSnapshot(savedInitialForm),
+    restoreSnapshot: (snapshot) => {
+      setForm((currentForm) => ({
+        ...currentForm,
+        ...snapshot,
+        assets: snapshot.assets.map((asset) => ({ ...asset })),
+      }));
+      setValue("loanPurpose", snapshot.loanPurpose);
+    },
+  });
+  const propertySection = useSectionEditState<PropertyDetailsSnapshot>({
+    defaultEditing: !isEditMode || !initialData?.hasPropertyDetails,
+    initialSnapshot: propertyDetailsSnapshot(savedInitialForm),
+    restoreSnapshot: (snapshot) => {
+      setForm((currentForm) => ({
+        ...currentForm,
+        ...snapshot,
+      }));
+      setValue("propertyAddress", snapshot.propertyAddress);
+    },
+  });
+  const isContactEditing = contactSection.isEditing;
+  const isContactSaving = contactSection.isSaving;
+  const isCoBorrowersEditing = coBorrowersSection.isEditing;
+  const isCoBorrowersSaving = coBorrowersSection.isSaving;
+  const isFinancialEditing = financialSection.isEditing;
+  const isFinancialSaving = financialSection.isSaving;
+  const isPropertyEditing = propertySection.isEditing;
+  const isPropertySaving = propertySection.isSaving;
+  const isSectionSaving =
+    isContactSaving ||
+    isCoBorrowersSaving ||
+    isFinancialSaving ||
+    isPropertySaving;
 
   function updateField<T extends keyof typeof form>(
     field: T,
@@ -442,7 +567,6 @@ export function ProspectIntakeForm({
       ...currentForm,
       coBorrowers: [...currentForm.coBorrowers, { ...initialCoBorrower }],
     }));
-    setIsCoBorrowersExpanded(true);
   }
 
   function removeCoBorrower(index: number) {
@@ -494,6 +618,54 @@ export function ProspectIntakeForm({
     return true;
   }
 
+  function focusField(field: string) {
+    window.setTimeout(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-focus-field="${field}"]`,
+      );
+
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      window.setTimeout(() => element.focus({ preventScroll: true }), 250);
+    }, 50);
+  }
+
+  function prepareFieldForFocus(field: string) {
+    if (field === "prospectName" || field === "prospectPhone") {
+      contactSection.enterEdit();
+      if (!isEditMode) {
+        setStep(1);
+      }
+    }
+
+    if (field === "loanPurpose") {
+      if (isEditMode) {
+        financialSection.enterEdit();
+      } else {
+        setStep(1);
+      }
+    }
+
+    if (field.startsWith("coBorrowerPhone")) {
+      coBorrowersSection.enterEdit();
+    }
+
+    if (field === "propertyAddress") {
+      propertySection.enterEdit();
+      if (!isEditMode) {
+        setStep(3);
+      }
+    }
+
+    focusField(field);
+  }
+
   function validateContactBasics() {
     clearErrors(["prospectName", "prospectPhone", "loanPurpose"]);
     const allowUntouchedLegacyPhone =
@@ -503,25 +675,37 @@ export function ProspectIntakeForm({
       Boolean(form.prospectPhone.trim()) &&
       !isValidUSPhone(form.prospectPhone);
 
-    return !applyValidationErrors(
-      contactBasicsSchema.safeParse({
-        prospectName: form.prospectName,
-        prospectPhone: allowUntouchedLegacyPhone
-          ? "(555) 555-5555"
-          : form.prospectPhone,
-        loanPurpose: form.loanPurpose,
-      }),
-    );
+    const result = contactBasicsSchema.safeParse({
+      prospectName: form.prospectName,
+      prospectPhone: allowUntouchedLegacyPhone
+        ? "(555) 555-5555"
+        : form.prospectPhone,
+      loanPurpose: form.loanPurpose,
+    });
+
+    if (result.success) {
+      return true;
+    }
+
+    applyValidationErrors(result);
+    prepareFieldForFocus(String(result.error.issues[0]?.path[0] ?? ""));
+    return false;
   }
 
   function validatePropertyDetails() {
     clearErrors("propertyAddress");
 
-    return !applyValidationErrors(
-      propertyDetailsSchema.safeParse({
-        propertyAddress: form.propertyAddress,
-      }),
-    );
+    const result = propertyDetailsSchema.safeParse({
+      propertyAddress: form.propertyAddress,
+    });
+
+    if (result.success) {
+      return true;
+    }
+
+    applyValidationErrors(result);
+    prepareFieldForFocus("propertyAddress");
+    return false;
   }
 
   function validateFinancialSnapshotPhones() {
@@ -535,7 +719,14 @@ export function ProspectIntakeForm({
 
     setCoBorrowerPhoneErrors(nextErrors);
 
-    return Object.keys(nextErrors).length === 0;
+    const firstInvalidIndex = Object.keys(nextErrors)[0];
+
+    if (firstInvalidIndex !== undefined) {
+      prepareFieldForFocus(`coBorrowerPhone-${firstInvalidIndex}`);
+      return false;
+    }
+
+    return true;
   }
 
   function createContactBasicsInBackground() {
@@ -556,6 +747,7 @@ export function ProspectIntakeForm({
           return null;
         }
 
+        contactSection.updateSnapshot(contactBasicsSnapshot(form));
         return contactId;
       });
 
@@ -581,6 +773,10 @@ export function ProspectIntakeForm({
       }
 
       setContactId(result.contactId);
+      contactSection.updateSnapshot(contactBasicsSnapshot(form));
+      coBorrowersSection.updateSnapshot(coBorrowersSnapshot(form));
+      financialSection.updateSnapshot(financialSnapshot(form));
+      financialSection.exitEdit();
       return result.contactId;
     });
 
@@ -659,6 +855,8 @@ export function ProspectIntakeForm({
         return false;
       }
 
+      coBorrowersSection.updateSnapshot(coBorrowersSnapshot(form));
+      financialSection.updateSnapshot(financialSnapshot(form));
       return true;
   }
 
@@ -676,15 +874,9 @@ export function ProspectIntakeForm({
   }
 
   function cancelCoBorrowersEdit() {
-    setForm((currentForm) => ({
-      ...currentForm,
-      coBorrowers: savedInitialForm.coBorrowers.map((coBorrower) => ({
-        ...coBorrower,
-      })),
-    }));
+    coBorrowersSection.cancel();
     setCoBorrowerPhoneErrors({});
     setError("");
-    setIsCoBorrowersEditing(false);
   }
 
   function saveCoBorrowersSection() {
@@ -694,17 +886,16 @@ export function ProspectIntakeForm({
       return;
     }
 
-    setIsCoBorrowersEditing(false);
+    void coBorrowersSection.save(async () => {
+        const saved = await saveFinancialSnapshot();
 
-    startTransition(async () => {
-      const saved = await saveFinancialSnapshot();
+        if (!saved) {
+          return null;
+        }
 
-      if (saved) {
         toast.success("Co-borrowers saved.");
         router.refresh();
-      } else {
-        setIsCoBorrowersEditing(true);
-      }
+        return coBorrowersSnapshot(form);
     });
   }
 
@@ -715,22 +906,25 @@ export function ProspectIntakeForm({
       return;
     }
 
-    setIsFinancialEditing(false);
+    void financialSection.save(async () => {
+        const saved = await saveFinancialSnapshot();
 
-    startTransition(async () => {
-      const saved = await saveFinancialSnapshot();
+        if (!saved) {
+          return null;
+        }
 
-      if (saved) {
         toast.success("Financial Snapshot saved.");
         router.refresh();
-      } else {
-        setIsFinancialEditing(true);
-      }
+        return financialSnapshot(form);
     });
   }
 
   function saveFinancialSnapshotAndContinue() {
     setError("");
+
+    if (isFinancialSaving) {
+      return;
+    }
 
     setStep(3);
 
@@ -742,7 +936,8 @@ export function ProspectIntakeForm({
         return;
       }
 
-      setIsFinancialEditing(false);
+      financialSection.updateSnapshot(financialSnapshot(form));
+      financialSection.exitEdit();
     })();
   }
 
@@ -815,6 +1010,7 @@ export function ProspectIntakeForm({
         }
 
         toast.success("Property Details saved.");
+        propertySection.updateSnapshot(propertyDetailsSnapshot(form));
         if (onSaved) {
           onSaved();
         } else {
@@ -828,7 +1024,6 @@ export function ProspectIntakeForm({
       setContactId(initialData?.contactId ?? null);
       contactCreatePromiseRef.current = null;
       setIsProspectPhoneEdited(false);
-      setIsCoBorrowersExpanded(false);
       resetValidation();
       toast.success(
         isEditMode
@@ -860,43 +1055,43 @@ export function ProspectIntakeForm({
       return;
     }
 
-    setIsPropertyEditing(false);
+    void propertySection.save(async () => {
+        const resolvedContactId =
+          typeof savedContactId === "string"
+            ? savedContactId
+            : await savedContactId;
 
-    startTransition(async () => {
-      const resolvedContactId =
-        typeof savedContactId === "string" ? savedContactId : await savedContactId;
+        if (!resolvedContactId) {
+          const message =
+            "Couldn't save Property Details - check your connection and try again.";
+          setError(message);
+          toast.error(message);
+          return null;
+        }
 
-      if (!resolvedContactId) {
-        const message = "Couldn't save Property Details - check your connection and try again.";
-        setError(message);
-        toast.error(message);
-        setIsPropertyEditing(true);
-        return;
-      }
+        const result = await updateProspectPropertyDetails({
+          contactId: resolvedContactId,
+          propertyAddress: form.propertyAddress,
+          propertyType: form.propertyType,
+          propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
+          propertyTaxesPresentYear: currencyInputToRaw(
+            form.propertyTaxesPresentYear,
+          ),
+          insuranceType: form.insuranceType || undefined,
+          hoaName: form.hoaName,
+          hoaManagementInfo: form.hoaManagementInfo,
+          additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
+        });
 
-      const result = await updateProspectPropertyDetails({
-        contactId: resolvedContactId,
-        propertyAddress: form.propertyAddress,
-        propertyType: form.propertyType,
-        propertyTaxesLastYear: currencyInputToRaw(form.propertyTaxesLastYear),
-        propertyTaxesPresentYear: currencyInputToRaw(
-          form.propertyTaxesPresentYear,
-        ),
-        insuranceType: form.insuranceType || undefined,
-        hoaName: form.hoaName,
-        hoaManagementInfo: form.hoaManagementInfo,
-        additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
-      });
+        if (!result.success) {
+          setError(result.error);
+          toast.error(result.error);
+          return null;
+        }
 
-      if (!result.success) {
-        setError(result.error);
-        toast.error(result.error);
-        setIsPropertyEditing(true);
-        return;
-      }
-
-      toast.success("Property Details saved.");
-      router.refresh();
+        toast.success("Property Details saved.");
+        router.refresh();
+        return propertyDetailsSnapshot(form);
     });
   }
 
@@ -1017,6 +1212,10 @@ export function ProspectIntakeForm({
       form.opportunityStatus === OpportunityStatus.READY_FOR_REVIEW &&
       (!form.opportunityPropertyValue.trim() || !form.opportunityLoanAmount.trim())
     ) {
+      const firstMissingField = !form.opportunityPropertyValue.trim()
+        ? "opportunityPropertyValue"
+        : "opportunityLoanAmount";
+
       setOpportunityErrors({
         opportunityPropertyValue: !form.opportunityPropertyValue.trim()
           ? "Property value is required when ready for scenario review."
@@ -1031,6 +1230,7 @@ export function ProspectIntakeForm({
       toast.error(
         "Property value and loan amount are required when ready for scenario review.",
       );
+      prepareFieldForFocus(firstMissingField);
       return false;
     }
 
@@ -1046,6 +1246,11 @@ export function ProspectIntakeForm({
     ) {
       setError("A not moving forward reason is required.");
       toast.error("A not moving forward reason is required.");
+      prepareFieldForFocus(
+        form.notMovingForwardReason === "Other"
+          ? "notMovingForwardOtherReason"
+          : "notMovingForwardReason",
+      );
       return false;
     }
 
@@ -1129,7 +1334,6 @@ export function ProspectIntakeForm({
       setForm(initialForm);
       setStep(1);
       setContactId(null);
-      setIsCoBorrowersExpanded(false);
       resetValidation();
       toast.success("Prospect intake saved successfully.");
       if (onSaved) {
@@ -1140,72 +1344,23 @@ export function ProspectIntakeForm({
       }
     });
   }
-  const stepGuidanceContext: WorkflowGuidanceContext =
-    isEditMode && isOpportunityValueExpanded
-      ? "phase2"
-      : step === 1
-        ? "phase1-step1"
-        : step === 2
-          ? "phase1-step2"
-          : "phase1-step3";
   const shouldUseRecordLayout = dense && isEditMode;
-  const canShowScriptPanel =
-    dense &&
-    isEditMode &&
-    (!initialData?.contactStatus ||
-      initialData.contactStatus === ContactStatus.ACTIVE) &&
-    form.opportunityStatus !== OpportunityStatus.READY_FOR_REVIEW;
   function cancelContactEdit() {
-    if (initialData) {
-      setForm((currentForm) => ({
-        ...currentForm,
-        borrowerType: initialData.borrowerType,
-        loanPurpose: initialData.loanPurpose,
-        prospectEmail: initialData.prospectEmail,
-        prospectName: initialData.prospectName,
-        prospectPhone: initialProspectPhoneDisplay,
-      }));
-      setValue("loanPurpose", initialData.loanPurpose);
-      setValue("prospectName", initialData.prospectName);
-      setValue("prospectPhone", initialProspectPhoneDisplay);
-    }
-
+    contactSection.cancel();
     clearErrors();
     setError("");
-    setIsContactEditing(false);
   }
 
   function cancelFinancialSnapshotEdit() {
-    setForm((currentForm) => ({
-      ...currentForm,
-      assets: savedInitialForm.assets.map((asset) => ({ ...asset })),
-      borrowerType: savedInitialForm.borrowerType,
-      ficoScore: savedInitialForm.ficoScore,
-      ficoSource: savedInitialForm.ficoSource,
-      loanPurpose: savedInitialForm.loanPurpose,
-      vesting: savedInitialForm.vesting,
-    }));
+    financialSection.cancel();
     setCoBorrowerPhoneErrors({});
     setError("");
-    setIsFinancialEditing(false);
   }
 
   function cancelPropertyDetailsEdit() {
-    setForm((currentForm) => ({
-      ...currentForm,
-      additionalHoaFees: savedInitialForm.additionalHoaFees,
-      hoaManagementInfo: savedInitialForm.hoaManagementInfo,
-      hoaName: savedInitialForm.hoaName,
-      insuranceType: savedInitialForm.insuranceType,
-      propertyAddress: savedInitialForm.propertyAddress,
-      propertyTaxesLastYear: savedInitialForm.propertyTaxesLastYear,
-      propertyTaxesPresentYear: savedInitialForm.propertyTaxesPresentYear,
-      propertyType: savedInitialForm.propertyType,
-    }));
-    setValue("propertyAddress", savedInitialForm.propertyAddress);
+    propertySection.cancel();
     clearErrors("propertyAddress");
     setError("");
-    setIsPropertyEditing(false);
   }
 
   function saveContactBasicsInline() {
@@ -1219,27 +1374,23 @@ export function ProspectIntakeForm({
       return;
     }
 
-    startTransition(async () => {
-      const savedContactId = await createContactBasicsInBackground();
+    void contactSection.save(async () => {
+        const savedContactId = await createContactBasicsInBackground();
 
-      if (!savedContactId) {
-        return;
-      }
+        if (!savedContactId) {
+          return null;
+        }
 
-      const snapshotSaved = await saveFinancialSnapshot();
+        const snapshotSaved = await saveFinancialSnapshot();
 
-      if (!snapshotSaved) {
-        return;
-      }
+        if (!snapshotSaved) {
+          return null;
+        }
 
-      onOptimisticSaved?.(form);
-      setIsContactEditing(false);
-      toast.success("Contact details saved.");
-      if (onSaved) {
+        onOptimisticSaved?.(form);
+        toast.success("Contact details saved.");
         router.refresh();
-      } else {
-        router.refresh();
-      }
+        return contactBasicsSnapshot(form);
     });
   }
 
@@ -1286,117 +1437,123 @@ export function ProspectIntakeForm({
             <CardTitle className="text-mafi-blue-primary">
               Section A — Contact Information
             </CardTitle>
-            <CardDescription>
-              Basic borrower details for the intake record.
-            </CardDescription>
           </CardHeader>
           <CardContent className={cn("pt-6", dense ? "space-y-3 px-0 py-0" : "space-y-6")}>
             {dense ? (
-              <div className="space-y-1 text-left">
+              <div className="text-left">
                 <h3 className="text-base font-semibold text-mafi-text-dark">
-                  Contact Information
+                  Prospect Details
                 </h3>
-                <p className="text-xs text-mafi-text-mid">
-                  Basic borrower details for the intake record.
-                </p>
               </div>
             ) : null}
             {dense && isEditMode ? (
-              <div className="space-y-3 rounded-md bg-mafi-bg-light p-3">
-                <div className="relative space-y-2 pr-10">
-                  <div className="flex items-start gap-2">
-                    <div className="flex min-w-0 items-start gap-2">
-                      <UserRound className="mt-0.5 size-4 shrink-0 text-mafi-text-mid" />
-                      <p className="text-sm font-semibold text-mafi-text-dark">
-                        Prospect
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    aria-label="Edit contact information"
-                    className="absolute right-0 top-0 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
-                    onClick={() => setIsContactEditing(true)}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
+              <div className="space-y-3">
+                <div
+                  className={cn(
+                    "relative space-y-2",
+                    isContactEditing
+                      ? activeEditSectionClass
+                      : "rounded-md border border-transparent bg-mafi-bg-light p-3 pr-10",
+                  )}
+                >
+                  {isContactEditing ? null : (
+                    <Button
+                      aria-label="Edit contact information"
+                      className="absolute right-0 top-0 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                      disabled={isSectionSaving}
+                      onClick={contactSection.enterEdit}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  )}
                   {isContactEditing ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field label="Prospect name" required>
-                        <Input
-                          aria-invalid={Boolean(errors.prospectName)}
-                          autoComplete="name"
-                          className={cn(
-                            errors.prospectName && "border-destructive",
-                          )}
-                          name="prospect-name"
-                          onChange={(event) =>
-                            updateField("prospectName", event.target.value)
-                          }
-                          value={form.prospectName}
-                        />
-                        {errors.prospectName ? (
-                          <p className="text-sm text-destructive">
-                            {errors.prospectName.message}
-                          </p>
-                        ) : null}
-                      </Field>
-                      <Field label="Phone" required>
-                        <Input
-                          aria-invalid={Boolean(errors.prospectPhone)}
-                          autoComplete="tel"
-                          className={cn(
-                            errors.prospectPhone && "border-destructive",
-                          )}
-                          name="prospect-phone"
-                          onChange={(event) =>
-                            updateField("prospectPhone", event.target.value)
-                          }
-                          type="tel"
-                          value={form.prospectPhone}
-                        />
-                        {errors.prospectPhone ? (
-                          <p className="text-sm text-destructive">
-                            {errors.prospectPhone.message}
-                          </p>
-                        ) : null}
-                        {isEditMode &&
-                        !isProspectPhoneEdited &&
-                        form.prospectPhone.trim() ===
-                          initialProspectPhoneDisplay.trim() &&
-                        Boolean(form.prospectPhone.trim()) &&
-                        !isValidUSPhone(form.prospectPhone) ? (
-                          <p className="text-sm text-mafi-gold-dark">
-                            This phone number doesn&apos;t match the expected
-                            format. Update it or continue.
-                          </p>
-                        ) : null}
-                      </Field>
-                      <Field label="Email">
-                        <Input
-                          autoComplete="email"
-                          name="prospect-email"
-                          onChange={(event) =>
-                            updateField("prospectEmail", event.target.value)
-                          }
-                          type="email"
-                          value={form.prospectEmail}
-                        />
-                      </Field>
-                      <div className="flex items-end justify-end gap-2">
-                        <Button
-                          onClick={cancelContactEdit}
-                          type="button"
-                          variant="outline"
-                        >
-                          Cancel
-                        </Button>
-                        <Button onClick={saveContactBasicsInline} type="button">
-                          Save
-                        </Button>
-                      </div>
-                    </div>
+                    <fieldset
+                      className="grid gap-3 md:grid-cols-2"
+                      disabled={isContactSaving}
+                    >
+                        <Field label="Prospect name" required>
+                          <Input
+                            aria-invalid={Boolean(errors.prospectName)}
+                            autoComplete="name"
+                            className={cn(
+                              errors.prospectName && "border-destructive",
+                            )}
+                            data-focus-field="prospectName"
+                            name="prospect-name"
+                            onChange={(event) =>
+                              updateField("prospectName", event.target.value)
+                            }
+                            value={form.prospectName}
+                          />
+                          {errors.prospectName ? (
+                            <p className="text-sm text-destructive">
+                              {errors.prospectName.message}
+                            </p>
+                          ) : null}
+                        </Field>
+                        <Field label="Phone" required>
+                          <Input
+                            aria-invalid={Boolean(errors.prospectPhone)}
+                            autoComplete="tel"
+                            className={cn(
+                              errors.prospectPhone && "border-destructive",
+                            )}
+                            data-focus-field="prospectPhone"
+                            name="prospect-phone"
+                            onChange={(event) =>
+                              updateField("prospectPhone", event.target.value)
+                            }
+                            type="tel"
+                            value={form.prospectPhone}
+                          />
+                          {errors.prospectPhone ? (
+                            <p className="text-sm text-destructive">
+                              {errors.prospectPhone.message}
+                            </p>
+                          ) : null}
+                          {isEditMode &&
+                          !isProspectPhoneEdited &&
+                          form.prospectPhone.trim() ===
+                            initialProspectPhoneDisplay.trim() &&
+                          Boolean(form.prospectPhone.trim()) &&
+                          !isValidUSPhone(form.prospectPhone) ? (
+                            <p className="text-sm text-mafi-gold-dark">
+                              This phone number doesn&apos;t match the expected
+                              format. Update it or continue.
+                            </p>
+                          ) : null}
+                        </Field>
+                        <Field label="Email">
+                          <Input
+                            autoComplete="email"
+                            name="prospect-email"
+                            onChange={(event) =>
+                              updateField("prospectEmail", event.target.value)
+                            }
+                            type="email"
+                            value={form.prospectEmail}
+                          />
+                        </Field>
+                        <div className={cn(sectionActionRowClass, "self-end")}>
+                          <Button
+                            disabled={isContactSaving}
+                            onClick={cancelContactEdit}
+                            type="button"
+                            variant="outline"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            disabled={isContactSaving}
+                            onClick={saveContactBasicsInline}
+                            type="button"
+                          >
+                            {isContactSaving ? "Saving..." : "Save"}
+                          </Button>
+                        </div>
+                      </fieldset>
                   ) : (
                     <ContactSummaryEntry
                       email={form.prospectEmail || "Not provided"}
@@ -1405,25 +1562,50 @@ export function ProspectIntakeForm({
                     />
                   )}
                 </div>
-                <div className="relative space-y-2 border-t border-mafi-border pt-3 pr-10">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-mafi-text-dark">
-                    <UsersRound className="size-4 shrink-0 text-mafi-text-mid" />
-                    <span>
-                      Co-borrowers
-                      {form.coBorrowers.length ? ` (${form.coBorrowers.length})` : ""}
-                    </span>
-                  </div>
-                  <Button
-                    aria-label="Edit co-borrowers"
-                    className="absolute right-0 top-2 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
-                    onClick={() => setIsCoBorrowersEditing(true)}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  {isCoBorrowersEditing ? (
-                    <div className="space-y-3">
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold text-mafi-text-dark">
+                    Coborrower Details
+                  </h3>
+                  {!isCoBorrowersEditing && !form.coBorrowers.length ? (
+                    <Button
+                      className="h-auto justify-start px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                      disabled={isSectionSaving}
+                      onClick={() => {
+                        addCoBorrower();
+                        coBorrowersSection.enterEdit();
+                      }}
+                      type="button"
+                      variant="link"
+                    >
+                      <Plus className="mr-1 size-4" />
+                      Add co-borrower
+                    </Button>
+                  ) : (
+                    <div
+                      className={cn(
+                        "relative space-y-2",
+                        isCoBorrowersEditing
+                          ? activeEditSectionClass
+                          : "rounded-md border border-transparent bg-mafi-bg-light p-3 pr-10",
+                      )}
+                    >
+                      {isCoBorrowersEditing ? null : (
+                        <Button
+                          aria-label="Edit co-borrowers"
+                          className="absolute right-0 top-2 size-8 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
+                          disabled={isSectionSaving}
+                          onClick={coBorrowersSection.enterEdit}
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      )}
+                      {isCoBorrowersEditing ? (
+                      <fieldset
+                        className="space-y-3"
+                        disabled={isCoBorrowersSaving}
+                      >
                       {form.coBorrowers.length ? (
                         <div className="space-y-2">
                           {form.coBorrowers.map((coBorrower, index) => (
@@ -1446,6 +1628,7 @@ export function ProspectIntakeForm({
                                   className={cn(
                                     coBorrowerPhoneErrors[index] && "border-destructive",
                                   )}
+                                  data-focus-field={`coBorrowerPhone-${index}`}
                                   onChange={(event) =>
                                     updateCoBorrower(index, "phone", event.target.value)
                                   }
@@ -1469,6 +1652,7 @@ export function ProspectIntakeForm({
                                 value={coBorrower.email}
                               />
                               <Button
+                                disabled={isCoBorrowersSaving}
                                 onClick={() => removeCoBorrower(index)}
                                 type="button"
                                 variant="outline"
@@ -1483,30 +1667,38 @@ export function ProspectIntakeForm({
                           No co-borrowers added yet.
                         </p>
                       )}
-                      <Button
-                        className="h-auto px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
-                        onClick={addCoBorrower}
-                        type="button"
-                        variant="link"
-                      >
-                        <Plus className="mr-1 size-4" />
-                        Add co-borrower
-                      </Button>
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <Button
-                          onClick={cancelCoBorrowersEdit}
+                          className="h-auto justify-start px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                          disabled={isCoBorrowersSaving}
+                          onClick={addCoBorrower}
                           type="button"
-                          variant="outline"
+                          variant="link"
                         >
-                          Cancel
+                          <Plus className="mr-1 size-4" />
+                          Add co-borrower
                         </Button>
-                        <Button onClick={saveCoBorrowersSection} type="button">
-                          Save
-                        </Button>
+                        <div className={sectionActionRowClass}>
+                          <Button
+                            disabled={isCoBorrowersSaving}
+                            onClick={cancelCoBorrowersEdit}
+                            type="button"
+                            variant="outline"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            disabled={isCoBorrowersSaving}
+                            onClick={saveCoBorrowersSection}
+                            type="button"
+                          >
+                            {isCoBorrowersSaving ? "Saving..." : "Save"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ) : form.coBorrowers.length ? (
-                    <div className="space-y-2">
+                      </fieldset>
+                      ) : (
+                        <div className="space-y-2">
                       {form.coBorrowers.map((coBorrower, index) => (
                         <ContactSummaryEntry
                           email={renderCoBorrowerInlineValue(
@@ -1528,12 +1720,10 @@ export function ProspectIntakeForm({
                           )}
                         />
                       ))}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-mafi-text-light">
-                      No co-borrowers added yet.
-                    </p>
-                  )}
+                    )}
                 </div>
               </div>
             ) : (
@@ -1548,6 +1738,7 @@ export function ProspectIntakeForm({
                   aria-invalid={Boolean(errors.prospectName)}
                   autoComplete="name"
                   className={cn(errors.prospectName && "border-destructive")}
+                  data-focus-field="prospectName"
                   name="prospect-name"
                   onChange={(event) =>
                     updateField("prospectName", event.target.value)
@@ -1565,6 +1756,7 @@ export function ProspectIntakeForm({
                   aria-invalid={Boolean(errors.prospectPhone)}
                   autoComplete="tel"
                   className={cn(errors.prospectPhone && "border-destructive")}
+                  data-focus-field="prospectPhone"
                   name="prospect-phone"
                   onChange={(event) =>
                     updateField("prospectPhone", event.target.value)
@@ -1630,6 +1822,7 @@ export function ProspectIntakeForm({
                       <SelectTrigger
                         aria-invalid={Boolean(errors.loanPurpose)}
                         className={cn(errors.loanPurpose && "border-destructive")}
+                        data-focus-field="loanPurpose"
                       >
                         <SelectValue placeholder="Select loan purpose" />
                       </SelectTrigger>
@@ -1652,72 +1845,81 @@ export function ProspectIntakeForm({
             </div>
             )}
             {dense && !isEditMode ? (
-              <RepeatableSection
-                addLabel="Add co-borrower"
-                count={form.coBorrowers.length}
-                emptyMessage="No co-borrowers added yet."
-                isExpanded={isCoBorrowersExpanded}
-                onAdd={addCoBorrower}
-                onToggle={() =>
-                  setIsCoBorrowersExpanded((isExpanded) => !isExpanded)
-                }
-                title="Co-borrowers"
-              >
-                {form.coBorrowers.map((coBorrower, index) => (
-                  <div
-                    className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"
-                    key={index}
-                  >
-                    <Input
-                      autoComplete="name"
-                      name={`new-co-borrower-${index}-name`}
-                      onChange={(event) =>
-                        updateCoBorrower(index, "name", event.target.value)
-                      }
-                      placeholder="Name"
-                      value={coBorrower.name}
-                    />
-                    <div className="space-y-1">
-                      <Input
-                        aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
-                        autoComplete="tel"
-                        className={cn(
-                          coBorrowerPhoneErrors[index] && "border-destructive",
-                        )}
-                        name={`new-co-borrower-${index}-phone`}
-                        onChange={(event) =>
-                          updateCoBorrower(index, "phone", event.target.value)
-                        }
-                        placeholder="Phone"
-                        type="tel"
-                        value={coBorrower.phone}
-                      />
-                      {coBorrowerPhoneErrors[index] ? (
-                        <p className="text-sm text-destructive">
-                          {coBorrowerPhoneErrors[index]}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Input
-                      autoComplete="email"
-                      name={`new-co-borrower-${index}-email`}
-                      onChange={(event) =>
-                        updateCoBorrower(index, "email", event.target.value)
-                      }
-                      placeholder="Email"
-                      type="email"
-                      value={coBorrower.email}
-                    />
-                    <Button
-                      onClick={() => removeCoBorrower(index)}
-                      type="button"
-                      variant="outline"
-                    >
-                      Remove
-                    </Button>
+              <div className="space-y-3">
+                {form.coBorrowers.length ? (
+                  <div className="space-y-2">
+                    {form.coBorrowers.map((coBorrower, index) => (
+                      <div
+                        className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+                        key={index}
+                      >
+                        <Input
+                          autoComplete="name"
+                          name={`new-co-borrower-${index}-name`}
+                          onChange={(event) =>
+                            updateCoBorrower(index, "name", event.target.value)
+                          }
+                          placeholder="Name"
+                          value={coBorrower.name}
+                        />
+                        <div className="space-y-1">
+                          <Input
+                            aria-invalid={Boolean(coBorrowerPhoneErrors[index])}
+                            autoComplete="tel"
+                            className={cn(
+                              coBorrowerPhoneErrors[index] &&
+                                "border-destructive",
+                            )}
+                            data-focus-field={`coBorrowerPhone-${index}`}
+                            name={`new-co-borrower-${index}-phone`}
+                            onChange={(event) =>
+                              updateCoBorrower(
+                                index,
+                                "phone",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Phone"
+                            type="tel"
+                            value={coBorrower.phone}
+                          />
+                          {coBorrowerPhoneErrors[index] ? (
+                            <p className="text-sm text-destructive">
+                              {coBorrowerPhoneErrors[index]}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Input
+                          autoComplete="email"
+                          name={`new-co-borrower-${index}-email`}
+                          onChange={(event) =>
+                            updateCoBorrower(index, "email", event.target.value)
+                          }
+                          placeholder="Email"
+                          type="email"
+                          value={coBorrower.email}
+                        />
+                        <Button
+                          onClick={() => removeCoBorrower(index)}
+                          type="button"
+                          variant="outline"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </RepeatableSection>
+                ) : null}
+                <Button
+                  className="h-auto px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                  onClick={addCoBorrower}
+                  type="button"
+                  variant="link"
+                >
+                  <Plus className="mr-1 size-4" />
+                  Add co-borrower
+                </Button>
+              </div>
             ) : null}
           </CardContent>
         </Card> : null}
@@ -1727,29 +1929,24 @@ export function ProspectIntakeForm({
             <CardTitle className="text-mafi-blue-primary">
               Section B - Financial Snapshot
             </CardTitle>
-            <CardDescription>
-              Assets, title, and FICO information.
-            </CardDescription>
           </CardHeader>
           <CardContent className={cn("pt-6", dense ? "space-y-3 px-0 py-0" : "space-y-6")}>
             {dense ? (
-              <div className="space-y-1 text-left">
+              <div className="text-left">
                 <h3 className="text-base font-semibold text-mafi-text-dark">
                   Financial Snapshot
                 </h3>
-                <p className="text-xs text-mafi-text-mid">
-                  Assets, title, and FICO information.
-                </p>
               </div>
             ) : null}
 
             {dense && isEditMode && !isFinancialEditing ? (
-              <div className="relative rounded-md bg-mafi-bg-lighter p-3">
+              <div className="relative rounded-md border border-transparent bg-mafi-bg-lighter p-3">
                 <div className="absolute right-2 top-2">
                   <Button
                     aria-label="Edit financial snapshot"
                     className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
-                    onClick={() => setIsFinancialEditing(true)}
+                    disabled={isSectionSaving}
+                    onClick={financialSection.enterEdit}
                     type="button"
                     variant="ghost"
                   >
@@ -1796,10 +1993,21 @@ export function ProspectIntakeForm({
                 </div>
               </div>
             ) : (
-            <>
-            <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
+            <fieldset
+              className={cn(dense && isEditMode && isFinancialEditing && activeEditSectionClass)}
+              disabled={isFinancialSaving}
+            >
+            <div
+              className={cn(
+                "grid md:grid-cols-2",
+                dense
+                  ? "gap-3"
+                  : "gap-4",
+              )}
+            >
               <Field label="Borrower type">
                 <Select
+                  disabled={isFinancialSaving}
                   onValueChange={(value) =>
                     updateField("borrowerType", value as BorrowerType)
                   }
@@ -1819,6 +2027,7 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="Loan purpose" required>
                 <Select
+                  disabled={isFinancialSaving}
                   onValueChange={(value) =>
                     updateField("loanPurpose", value as LoanPurpose)
                   }
@@ -1827,6 +2036,7 @@ export function ProspectIntakeForm({
                   <SelectTrigger
                     aria-invalid={Boolean(errors.loanPurpose)}
                     className={cn(errors.loanPurpose && "border-destructive")}
+                    data-focus-field="loanPurpose"
                   >
                     <SelectValue placeholder="Select loan purpose" />
                   </SelectTrigger>
@@ -1845,78 +2055,10 @@ export function ProspectIntakeForm({
                 ) : null}
               </Field>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold text-mafi-text-dark">
-                Assets available
-              </Label>
-              {form.assets.length ? (
-                <div className="divide-y divide-mafi-border">
-                  {form.assets.map((asset, index) => (
-                    <div
-                      className="grid gap-3 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] md:items-center"
-                      key={index}
-                    >
-                      <Select
-                        onValueChange={(value) =>
-                          updateAsset(index, "type", value as AssetType)
-                        }
-                        value={asset.type}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(assetLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        inputMode="decimal"
-                        onChange={(event) =>
-                          updateAsset(
-                            index,
-                            "amount",
-                            formatCurrencyInput(event.target.value),
-                          )
-                        }
-                        placeholder="Amount"
-                        type="text"
-                        value={asset.amount}
-                      />
-                      <Button
-                        aria-label="Remove asset"
-                        className="size-8 p-0 text-mafi-text-light hover:text-destructive"
-                        onClick={() => removeAsset(index)}
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-mafi-text-light">
-                  No assets added yet.
-                </p>
-              )}
-              <Button
-                className="h-auto px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
-                onClick={addAsset}
-                type="button"
-                variant="link"
-              >
-                <Plus className="mr-1 size-4" />
-                Add another asset
-              </Button>
-            </div>
-
             <div className={cn("grid md:grid-cols-2", dense ? "gap-3" : "gap-4")}>
               <Field label="How would you like to hold title on the property?">
                 <Select
+                  disabled={isFinancialSaving}
                   onValueChange={(value) => updateField("vesting", value)}
                   value={form.vesting}
                 >
@@ -1932,8 +2074,9 @@ export function ProspectIntakeForm({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Do you know your credit score? It's okay if not - we can use an estimate.">
+              <Field label="Do you know your credit score?">
                 <Select
+                  disabled={isFinancialSaving}
                   onValueChange={(value) => updateFicoSource(value as FicoSource)}
                   value={
                     form.ficoSource === FicoSource.KNOWN_CREDIT_KARMA
@@ -1956,6 +2099,7 @@ export function ProspectIntakeForm({
               {form.ficoSource !== FicoSource.UNKNOWN ? (
                 <Field label="FICO score">
                   <Input
+                    disabled={isFinancialSaving}
                     max="850"
                     min="300"
                     onChange={(event) =>
@@ -1966,25 +2110,102 @@ export function ProspectIntakeForm({
                   />
                 </Field>
               ) : null}
-              {dense && isEditMode && isFinancialEditing ? (
-              <div className="flex items-end justify-end gap-2">
-                <Button
-                  onClick={cancelFinancialSnapshotEdit}
-                  type="button"
-                  variant="outline"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={saveFinancialSnapshotInline}
-                  type="button"
-                >
-                  Save
-                </Button>
-              </div>
-            ) : null}
             </div>
-            </>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold text-mafi-text-dark">
+                Assets available
+              </Label>
+              {form.assets.length ? (
+                <div className="divide-y divide-mafi-border">
+                  {form.assets.map((asset, index) => (
+                    <div
+                      className="grid gap-3 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] md:items-center"
+                      key={index}
+                    >
+                      <Select
+                        disabled={isFinancialSaving}
+                        onValueChange={(value) =>
+                          updateAsset(index, "type", value as AssetType)
+                        }
+                        value={asset.type}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(assetLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        disabled={isFinancialSaving}
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          updateAsset(
+                            index,
+                            "amount",
+                            formatCurrencyInput(event.target.value),
+                          )
+                        }
+                        placeholder="Amount"
+                        type="text"
+                        value={asset.amount}
+                      />
+                      <Button
+                        aria-label="Remove asset"
+                        className="size-8 p-0 text-mafi-text-light hover:text-destructive"
+                        disabled={isFinancialSaving}
+                        onClick={() => removeAsset(index)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-mafi-text-light">
+                  No assets added yet.
+                </p>
+              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  className="h-auto justify-start px-0 text-mafi-blue-primary hover:text-mafi-blue-dark"
+                  disabled={isFinancialSaving}
+                  onClick={addAsset}
+                  type="button"
+                  variant="link"
+                >
+                  <Plus className="mr-1 size-4" />
+                  {form.assets.length ? "Add another asset" : "Add asset"}
+                </Button>
+                {dense && isEditMode && isFinancialEditing ? (
+                  <div className={sectionActionRowClass}>
+                    <Button
+                      disabled={isFinancialSaving}
+                      onClick={cancelFinancialSnapshotEdit}
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      disabled={isFinancialSaving}
+                      onClick={saveFinancialSnapshotInline}
+                      type="button"
+                    >
+                      {isFinancialSaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+              </fieldset>
             )}
           </CardContent>
         </Card> : null}
@@ -1994,28 +2215,23 @@ export function ProspectIntakeForm({
             <CardTitle className="text-mafi-blue-primary">
               Section C - Property Details
             </CardTitle>
-            <CardDescription>
-              Address, taxes, insurance, and HOA information.
-            </CardDescription>
           </CardHeader>
           <CardContent className={cn("pt-6", dense ? "space-y-3 px-0 py-0" : "space-y-6")}>
             {dense ? (
-              <div className="space-y-1 text-left">
+              <div className="text-left">
                 <h3 className="text-base font-semibold text-mafi-text-dark">
                   Property Details
                 </h3>
-                <p className="text-xs text-mafi-text-mid">
-                  Address, taxes, insurance, and HOA information.
-                </p>
               </div>
             ) : null}
             {dense && isEditMode && !isPropertyEditing ? (
-              <div className="relative rounded-md bg-mafi-bg-lighter p-3">
+              <div className="relative rounded-md border border-transparent bg-mafi-bg-lighter p-3">
                 <div className="absolute right-2 top-2">
                   <Button
                     aria-label="Edit property details"
                     className="size-8 shrink-0 p-0 text-mafi-text-light hover:text-mafi-blue-primary"
-                    onClick={() => setIsPropertyEditing(true)}
+                    disabled={isSectionSaving}
+                    onClick={propertySection.enterEdit}
                     type="button"
                     variant="ghost"
                   >
@@ -2055,7 +2271,10 @@ export function ProspectIntakeForm({
                 </div>
               </div>
             ) : (
-              <>
+              <fieldset
+                className={cn(dense && isEditMode && isPropertyEditing && "rounded-md border border-mafi-blue-primary p-3")}
+                disabled={isPropertySaving}
+              >
             <Field label="Property address" required>
               <div className="relative">
                 <Input
@@ -2065,6 +2284,8 @@ export function ProspectIntakeForm({
                     "pr-11",
                     errors.propertyAddress && "border-destructive",
                   )}
+                  data-focus-field="propertyAddress"
+                  disabled={isPropertySaving}
                   name="property-address"
                   onChange={(event) =>
                     updateField("propertyAddress", event.target.value)
@@ -2074,6 +2295,7 @@ export function ProspectIntakeForm({
                 <button
                   aria-label="Search Zillow for this property"
                   className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-mafi-primary transition hover:bg-mafi-primary/10 focus:outline-none focus:ring-2 focus:ring-mafi-primary"
+                  disabled={isPropertySaving}
                   onClick={() => {
                     if (!form.propertyAddress.trim()) {
                       toast.error("Enter a property address first.");
@@ -2108,6 +2330,7 @@ export function ProspectIntakeForm({
                   onValueChange={(value) =>
                     updateField("propertyType", value as PropertyType)
                   }
+                  disabled={isPropertySaving}
                   value={form.propertyType}
                 >
                   <SelectTrigger>
@@ -2124,6 +2347,7 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="Property taxes last year">
                 <Input
+                  disabled={isPropertySaving}
                   inputMode="decimal"
                   onChange={(event) =>
                     updateField(
@@ -2137,6 +2361,7 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="Property taxes present year">
                 <Input
+                  disabled={isPropertySaving}
                   inputMode="decimal"
                   onChange={(event) =>
                     updateField(
@@ -2153,6 +2378,7 @@ export function ProspectIntakeForm({
                   onValueChange={(value) =>
                     updateField("insuranceType", value as InsuranceType)
                   }
+                  disabled={isPropertySaving}
                   value={form.insuranceType}
                 >
                   <SelectTrigger>
@@ -2169,12 +2395,14 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="HOA name">
                 <Input
+                  disabled={isPropertySaving}
                   onChange={(event) => updateField("hoaName", event.target.value)}
                   value={form.hoaName}
                 />
               </Field>
               <Field label="HOA management info">
                 <Input
+                  disabled={isPropertySaving}
                   onChange={(event) =>
                     updateField("hoaManagementInfo", event.target.value)
                   }
@@ -2183,6 +2411,7 @@ export function ProspectIntakeForm({
               </Field>
               <Field label="Additional HOA fees">
                 <Input
+                  disabled={isPropertySaving}
                   inputMode="decimal"
                   onChange={(event) =>
                     updateField(
@@ -2197,6 +2426,7 @@ export function ProspectIntakeForm({
               {dense && isEditMode && isPropertyEditing ? (
               <div className="flex items-end justify-end gap-2">
                 <Button
+                  disabled={isPropertySaving}
                   onClick={cancelPropertyDetailsEdit}
                   type="button"
                   variant="outline"
@@ -2204,15 +2434,16 @@ export function ProspectIntakeForm({
                   Cancel
                 </Button>
                 <Button
+                  disabled={isPropertySaving}
                   onClick={savePropertyDetailsInline}
                   type="button"
                 >
-                  Save
+                  {isPropertySaving ? "Saving..." : "Save"}
                 </Button>
               </div>
             ) : null}
             </div>
-              </>
+              </fieldset>
             )}
 
           </CardContent>
@@ -2231,9 +2462,9 @@ export function ProspectIntakeForm({
             </h3>
               <Card className="border-mafi-border bg-mafi-bg-lighter shadow-sm">
                 <CardContent className="space-y-4 pt-4">
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3">
                   <Field
-                    label="Property value"
+                    label={propertyValueQuestion(form.loanPurpose)}
                     required={
                       form.opportunityStatus ===
                       OpportunityStatus.READY_FOR_REVIEW
@@ -2247,6 +2478,7 @@ export function ProspectIntakeForm({
                         opportunityErrors.opportunityPropertyValue &&
                           "border-destructive",
                       )}
+                      data-focus-field="opportunityPropertyValue"
                       inputMode="decimal"
                       onChange={(event) =>
                         updateField(
@@ -2264,7 +2496,7 @@ export function ProspectIntakeForm({
                     ) : null}
                   </Field>
                   <Field
-                    label="Loan amount"
+                    label="How much are you hoping to borrow?"
                     required={
                       form.opportunityStatus ===
                       OpportunityStatus.READY_FOR_REVIEW
@@ -2276,6 +2508,7 @@ export function ProspectIntakeForm({
                         opportunityErrors.opportunityLoanAmount &&
                           "border-destructive",
                       )}
+                      data-focus-field="opportunityLoanAmount"
                       inputMode="decimal"
                       onChange={(event) =>
                         updateField(
@@ -2292,7 +2525,7 @@ export function ProspectIntakeForm({
                       </p>
                     ) : null}
                   </Field>
-                  <Field label="Has a realtor">
+                  <Field label="Are you working with a realtor, or do you need help connecting with one?">
                     <Select
                       onValueChange={(value) =>
                         updateField("hasRealtor", value as RealtorStatus)
@@ -2352,7 +2585,10 @@ export function ProspectIntakeForm({
                         }
                         value={form.notMovingForwardReason}
                       >
-                        <SelectTrigger className="bg-mafi-bg-white">
+                        <SelectTrigger
+                          className="bg-mafi-bg-white"
+                          data-focus-field="notMovingForwardReason"
+                        >
                           <SelectValue placeholder="Select a reason" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2370,6 +2606,7 @@ export function ProspectIntakeForm({
                     OpportunityStatus.NOT_MOVING_FORWARD ? (
                     <Field label="Other reason" required>
                       <Input
+                        data-focus-field="notMovingForwardOtherReason"
                         onChange={(event) =>
                           updateField(
                             "notMovingForwardOtherReason",
@@ -2384,14 +2621,6 @@ export function ProspectIntakeForm({
                 </div>
                 </CardContent>
               </Card>
-              {canShowScriptPanel ? (
-                <div className="border-t border-mafi-border pt-3">
-                  <WorkflowScriptCard
-                    context={stepGuidanceContext}
-                    showEyebrow={false}
-                  />
-                </div>
-              ) : null}
           </div>
         ) : null}
 
@@ -2420,13 +2649,20 @@ export function ProspectIntakeForm({
           )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             {dense && isEditMode && step === 2 ? (
-              <Button onClick={onCancel} type="button" variant="outline">
+              <Button
+                className="h-11 px-5 text-base"
+                disabled={isSectionSaving}
+                onClick={onCancel}
+                type="button"
+                variant="outline"
+              >
                 Cancel
               </Button>
             ) : null}
             {dense && isEditMode && step === 2 ? (
               <Button
-                disabled={isGlobalSaving}
+                className="h-11 px-6 text-base"
+                disabled={isGlobalSaving || isSectionSaving}
                 onClick={saveAllAndClose}
                 type="button"
               >
@@ -2548,67 +2784,6 @@ function ContactSummaryEntry({
         <Mail className="size-4 shrink-0" />
         <div className="min-w-0 flex-1 truncate">{email}</div>
       </div>
-    </div>
-  );
-}
-
-function RepeatableSection({
-  addLabel,
-  children,
-  count,
-  emptyMessage,
-  isExpanded,
-  onAdd,
-  onToggle,
-  title,
-}: {
-  addLabel: string;
-  children: React.ReactNode;
-  count: number;
-  emptyMessage: string;
-  isExpanded: boolean;
-  onAdd: () => void;
-  onToggle: () => void;
-  title: string;
-}) {
-  const titleWithCount = count > 0 ? `${title} (${count})` : title;
-
-  return (
-    <div className="rounded-md border border-mafi-border bg-mafi-bg-white p-3 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          aria-expanded={isExpanded}
-          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm font-semibold text-mafi-text-dark hover:text-mafi-blue-primary"
-          onClick={onToggle}
-          type="button"
-        >
-          <ChevronDown
-            className={cn(
-              "size-4 shrink-0 transition-transform",
-              !isExpanded && "-rotate-90",
-            )}
-          />
-          <span className="truncate">{titleWithCount}</span>
-        </button>
-        <Button
-          className="min-h-10 justify-center gap-2 sm:w-auto"
-          onClick={onAdd}
-          type="button"
-          variant="outline"
-        >
-          <Plus className="size-4" />
-          {addLabel}
-        </Button>
-      </div>
-      {isExpanded ? (
-        <div className="mt-3 space-y-3 border-t border-mafi-border pt-3">
-          {count > 0 ? (
-            children
-          ) : (
-            <p className="text-sm text-mafi-text-light">{emptyMessage}</p>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }
