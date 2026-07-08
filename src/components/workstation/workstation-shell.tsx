@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { RoleType } from "@prisma/client";
-import { InviteUserHeaderButton } from "@/components/workstation/invite-user-header-button";
 import { MobileNav } from "@/components/workstation/mobile-nav";
 import { SidebarNav } from "@/components/workstation/sidebar-nav";
 import { SignOutButton } from "@/components/workstation/sign-out-button";
@@ -44,9 +43,6 @@ export function WorkstationShell({
             </div>
             {showAppChrome ? (
               <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                {currentRole === RoleType.OWNER ? (
-                  <InviteUserHeaderButton />
-                ) : null}
                 <SignOutButton />
               </div>
             ) : null}

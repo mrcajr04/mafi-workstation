@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
+import { InviteUserForm } from "@/components/workstation/invite-user-form";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   AlertDialog,
@@ -95,6 +96,7 @@ type UserProfileValues = z.infer<typeof userProfileSchema>;
 export function ManageUsersList({ users }: ManageUsersListProps) {
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
   const [displayUsers, setDisplayUsers] = useState(users);
+  const [showInviteForm, setShowInviteForm] = useState(false);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   function updateDisplayedUser(userId: string, nextUser: Partial<ManagedUser>) {
@@ -121,7 +123,18 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
   }
 
   return (
-    <>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          onClick={() => setShowInviteForm((current) => !current)}
+          type="button"
+        >
+          Invite User
+        </Button>
+      </div>
+
+      {showInviteForm ? <InviteUserForm /> : null}
+
       <div className="space-y-3 md:hidden">
         {displayUsers.map((user) => (
           <UserCard
@@ -210,7 +223,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
           user={selectedUser}
         />
       ) : null}
-    </>
+    </div>
   );
 }
 
