@@ -1,6 +1,7 @@
 "use client";
 
 import { RoleType } from "@prisma/client";
+import { Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -232,25 +233,29 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
                 <div className="flex flex-wrap items-center gap-2">
                   {user.canResendInvite ? (
                     <Button
-                      className="h-8 px-3 text-xs"
+                      aria-label={`Resend invite to ${user.fullName}`}
+                      className="h-8 w-8 p-0"
                       disabled={resendingUserId === user.id}
                       onClick={() => handleResendInvite(user)}
+                      title="Resend invite"
                       type="button"
                       variant="outline"
                     >
-                      {resendingUserId === user.id
-                        ? "Sending..."
-                        : "Resend Invite"}
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                      <span className="sr-only">Resend invite</span>
                     </Button>
                   ) : null}
                   <Button
-                    className="h-8 px-3 text-xs text-destructive hover:text-destructive"
+                    aria-label={`Delete ${user.fullName}`}
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                     disabled={user.isSelf || deletingUserId === user.id}
                     onClick={() => handleDeleteUser(user)}
+                    title="Delete user"
                     type="button"
                     variant="outline"
                   >
-                    {deletingUserId === user.id ? "Deleting..." : "Delete User"}
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Delete user</span>
                   </Button>
                 </div>
               </div>
@@ -313,23 +318,29 @@ function UserCard({
       <div className="space-y-2 border-t border-mafi-border px-4 py-3">
         {user.canResendInvite ? (
           <Button
-            className="h-9 w-full text-xs"
+            aria-label={`Resend invite to ${user.fullName}`}
+            className="h-9 w-full gap-2 text-xs"
             disabled={isResendingInvite}
             onClick={onResendInvite}
+            title="Resend invite"
             type="button"
             variant="outline"
           >
-            {isResendingInvite ? "Sending..." : "Resend Invite"}
+            <Send className="h-4 w-4" aria-hidden="true" />
+            <span>Resend invite</span>
           </Button>
         ) : null}
         <Button
-          className="h-9 w-full text-xs text-destructive hover:text-destructive"
+          aria-label={`Delete ${user.fullName}`}
+          className="h-9 w-full gap-2 text-xs text-destructive hover:text-destructive"
           disabled={user.isSelf || isDeletingUser}
           onClick={onDeleteUser}
+          title="Delete user"
           type="button"
           variant="outline"
         >
-          {isDeletingUser ? "Deleting..." : "Delete User"}
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          <span>Delete user</span>
         </Button>
       </div>
     </div>

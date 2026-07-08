@@ -300,38 +300,37 @@ export async function resendInvite(userId: string): Promise<AdminActionResult> {
   }
 
   const supabase = createAdminClient();
-  const { data: authUserData, error: authUserError } =
-    await supabase.auth.admin.getUserById(profile.id);
-
-  if (authUserError || !authUserData.user) {
-    console.error(
-      "Supabase user lookup failed",
-      authUserError?.message ?? "No user returned.",
-    );
-    return {
-      success: false,
-      error: authUserError?.message ?? "Unable to find auth user.",
-    };
-  }
-
-  if (authUserData.user.last_sign_in_at && !profile.passwordSetupRequired) {
-    return {
-      success: false,
-      error: "This user has already signed in.",
-    };
-  }
-
   const appUrl = await getAppUrl();
-  const { error } = await supabase.auth.admin.inviteUserByEmail(profile.email, {
-    redirectTo: `${appUrl}/set-password`,
-  });
+  let passwordSetupRequired = profile.passwordSetupRequired;
+  const emailResult = profile.passwordSetupRequired
+    ? await supabase.auth.admin.inviteUserByEmail(profile.email, {
+        redirectTo: `${appUrl}/set-password`,
+      })
+    : await supabase.auth.resetPasswordForEmail(profile.email, {
+        redirectTo: `${appUrl}/reset-password`,
+      });
 
-  if (error) {
-    logInviteError("Supabase resend invite failed", error);
-    return {
-      success: false,
-      error: error.message,
-    };
+  if (emailResult.error) {
+    logInviteError("Supabase resend invite failed", emailResult.error);
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      profile.email,
+      {
+        redirectTo: `${appUrl}/reset-password`,
+      },
+    );
+
+    if (resetError) {
+      logInviteError("Supabase password reset fallback failed", resetError);
+      return {
+        success: false,
+        error: resetError.message,
+      };
+    }
+
+    passwordSetupRequired = false;
+  } else if (!profile.passwordSetupRequired) {
+    passwordSetupRequired = false;
   }
 
   await logAuditEvent(access.data.id, "RESEND_INVITE", "Profile", profile.id, {
@@ -342,7 +341,7 @@ export async function resendInvite(userId: string): Promise<AdminActionResult> {
       id: profile.id,
     },
     data: {
-      passwordSetupRequired: true,
+      passwordSetupRequired,
     },
   });
   revalidatePath("/admin/users");

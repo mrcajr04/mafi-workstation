@@ -3,48 +3,28 @@ import { unstable_cache } from "next/cache";
 import { ManageUsersList } from "@/app/admin/users/manage-users-list";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 const getCachedManageUsers = unstable_cache(
   async () => {
-    const [profiles, authUsersResult] = await Promise.all([
-      prisma.profile.findMany({
-        orderBy: {
-          fullName: "asc",
-        },
-        select: {
-          email: true,
-          fullName: true,
-          id: true,
-          isActive: true,
-          nmlsNumber: true,
-          passwordSetupRequired: true,
-          phone: true,
-          role: true,
-        },
-      }),
-      createAdminClient().auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      }),
-    ]);
-    const authUsersAvailable = !authUsersResult.error;
-    const authUsers = authUsersAvailable ? authUsersResult.data.users : [];
-    const authUsersById = new Map(
-      authUsers.map((user) => [user.id, user]),
-    );
-
-    return profiles.map((profile) => {
-      const authUser = authUsersById.get(profile.id);
-
-      return {
-        ...profile,
-        canResendInvite:
-          authUsersAvailable &&
-          profile.isActive &&
-          (!authUser?.last_sign_in_at || profile.passwordSetupRequired),
-      };
+    const profiles = await prisma.profile.findMany({
+      orderBy: {
+        fullName: "asc",
+      },
+      select: {
+        email: true,
+        fullName: true,
+        id: true,
+        isActive: true,
+        nmlsNumber: true,
+        phone: true,
+        role: true,
+      },
     });
+
+    return profiles.map((profile) => ({
+      ...profile,
+      canResendInvite: profile.isActive,
+    }));
   },
   ["manage-users-list"],
   {
