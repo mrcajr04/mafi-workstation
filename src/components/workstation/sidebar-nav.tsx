@@ -4,53 +4,9 @@ import { RoleType } from "@prisma/client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { navItems } from "@/components/workstation/nav-items";
 import { cn } from "@/lib/utils";
 import type { NavBadgeCounts } from "@/lib/nav-notifications";
-
-type NavItem = {
-  href: string;
-  label: string;
-  roles?: RoleType[];
-};
-
-export const navItems: NavItem[] = [
-  { label: "Opportunities", href: "/opportunities" },
-  { label: "Scenario Desk", href: "/scenario-desk" },
-  { label: "Mortgage Calculators", href: "/calculators" },
-  {
-    label: "Marketing",
-    href: "/marketing",
-    roles: [RoleType.BDR, RoleType.LICENSED_LO, RoleType.OWNER],
-  },
-  { label: "Loan Pre-Approval", href: "/phase4" },
-  { label: "Loan Terms Library", href: "/loan-terms-library" },
-  // Unbuilt modules: re-enable once each route has a working page.
-  // { label: "Loan Estimate", href: "#" },
-  // { label: "Loan Search", href: "#" },
-  // { label: "Step by Step Process", href: "#" },
-  // Social Media/Marketing and Landing Page Setup are unified as /marketing.
-  { label: "Settings", href: "/settings" },
-  {
-    label: "Manage Users",
-    href: "/admin/users",
-    roles: [RoleType.OWNER],
-  },
-  {
-    label: "Automation Settings",
-    href: "/admin/automation-settings",
-    roles: [RoleType.OWNER],
-  },
-  {
-    label: "Email Templates",
-    href: "/admin/email-templates",
-    roles: [RoleType.OWNER],
-  },
-  {
-    label: "Audit Log",
-    href: "/audit-log",
-    roles: [RoleType.COMPLIANCE_OFFICER, RoleType.OWNER],
-  },
-];
 
 type SidebarNavProps = {
   currentRole?: RoleType | null;

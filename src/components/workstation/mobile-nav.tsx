@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { navItems } from "@/components/workstation/sidebar-nav";
+import { navItems } from "@/components/workstation/nav-items";
 import type { NavBadgeCounts } from "@/lib/nav-notifications";
 
 type MobileNavProps = {

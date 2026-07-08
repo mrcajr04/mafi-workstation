@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import {
   currencyInputToNumber,
   formatCurrencyDisplay,
+  formatCurrencyDisplayWithCents,
   formatCurrencyInput,
   formatRatioPercentDisplay,
 } from "@/lib/currency";
@@ -190,8 +191,8 @@ function StandardCalculator({
         </Field>
       </MortgageInputGrid>
       <OutputGrid>
-        <Output label="Monthly Principal & Interest" value={formatCurrencyDisplay(principalAndInterest)} />
-        <Output label="Estimated PITIA-style Payment" value={formatCurrencyDisplay(totalMonthly)} />
+        <Output label="Monthly Principal & Interest" value={formatCurrencyDisplayWithCents(principalAndInterest)} />
+        <Output label="Estimated PITIA-style Payment" value={formatCurrencyDisplayWithCents(totalMonthly)} />
       </OutputGrid>
     </CalculatorShell>
   );
@@ -252,9 +253,9 @@ function AmortizationCalculator({
               visibleSchedule.map((row) => (
                 <tr className="border-t border-mafi-border" key={row.paymentNumber}>
                   <td className="px-3 py-2">{row.paymentNumber}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplay(row.principalPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplay(row.interestPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplay(row.remainingBalance)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.principalPaid)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.interestPaid)}</td>
+                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.remainingBalance)}</td>
                 </tr>
               ))
             ) : (

@@ -300,6 +300,8 @@ model Scenario {
   scenarioNumber       Int
   lenderAndProduct     String
   interestRate         Decimal      @db.Decimal(6, 3)
+  loanTerm             Int          @default(30)
+  monthlyInsurance     Decimal      @default(0) @db.Decimal(12, 2)
   principalAndInterest Decimal      @db.Decimal(12, 2)
   pitia                Decimal      @db.Decimal(12, 2)
   escrowed             Boolean

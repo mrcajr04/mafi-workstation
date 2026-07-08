@@ -1370,20 +1370,10 @@ export function ProspectIntakeForm({
       return;
     }
 
-    if (!validateFinancialSnapshotPhones()) {
-      return;
-    }
-
     void contactSection.save(async () => {
         const savedContactId = await createContactBasicsInBackground();
 
         if (!savedContactId) {
-          return null;
-        }
-
-        const snapshotSaved = await saveFinancialSnapshot();
-
-        if (!snapshotSaved) {
           return null;
         }
 

@@ -10,6 +10,7 @@ type WorkstationShellProps = {
   children: ReactNode;
   currentRole?: RoleType | null;
   hideAppChrome?: boolean;
+  hideSidebar?: boolean;
   isAuthenticated: boolean;
   navBadgeCounts?: NavBadgeCounts;
 };
@@ -18,10 +19,12 @@ export function WorkstationShell({
   children,
   currentRole,
   hideAppChrome = false,
+  hideSidebar = false,
   isAuthenticated,
   navBadgeCounts,
 }: WorkstationShellProps) {
   const showAppChrome = isAuthenticated && !hideAppChrome;
+  const showSidebar = showAppChrome && !hideSidebar;
 
   return (
     <div className="min-h-screen">
@@ -51,7 +54,7 @@ export function WorkstationShell({
         </div>
       )}
 
-      {showAppChrome ? (
+      {showSidebar ? (
         <SidebarNav currentRole={currentRole} navBadgeCounts={navBadgeCounts} />
       ) : null}
 
@@ -59,7 +62,9 @@ export function WorkstationShell({
         className={
           hideAppChrome
             ? "min-h-screen"
-            : "min-h-screen pt-16 md:pl-56"
+            : showSidebar
+            ? "min-h-screen pt-16 md:pl-56"
+            : "min-h-screen pt-16"
         }
       >
         <div className="p-6">{children}</div>

@@ -33,6 +33,7 @@ export function normalizeCurrencyInput(value?: string) {
 export function formatCurrencyDisplay(
   value?: { toString(): string } | string | number | null,
   fallback = "Not provided",
+  options: { maximumFractionDigits?: number; minimumFractionDigits?: number } = {},
 ) {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -49,9 +50,19 @@ export function formatCurrencyDisplay(
 
   return parsed.toLocaleString("en-US", {
     currency: "USD",
+    maximumFractionDigits: options.maximumFractionDigits ?? 0,
+    minimumFractionDigits: options.minimumFractionDigits ?? 0,
+    style: "currency",
+  });
+}
+
+export function formatCurrencyDisplayWithCents(
+  value?: { toString(): string } | string | number | null,
+  fallback = "Not provided",
+) {
+  return formatCurrencyDisplay(value, fallback, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-    style: "currency",
   });
 }
 
@@ -64,7 +75,7 @@ export function formatCurrencyInput(value: string) {
 
   const isNegative = cleaned.startsWith("-");
   const unsignedValue = isNegative ? cleaned.slice(1) : cleaned;
-  const [wholePart = "", fractionPart] = unsignedValue.split(".");
+  const [wholePart = ""] = unsignedValue.split(".");
   const wholeNumber = Number(wholePart || 0);
 
   if (!Number.isFinite(wholeNumber)) {
@@ -75,10 +86,6 @@ export function formatCurrencyInput(value: string) {
     maximumFractionDigits: 0,
   });
   const sign = isNegative ? "-" : "";
-
-  if (fractionPart !== undefined) {
-    return `${sign}$${formattedWhole}.${fractionPart.slice(0, 2)}`;
-  }
 
   return `${sign}$${formattedWhole}`;
 }

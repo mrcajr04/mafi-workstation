@@ -66,8 +66,6 @@ const guidanceContent: Record<
     eyebrow: "Phase 2",
     title: "Opportunity Value Script",
     body: [
-      "\"Are you already working with a realtor, or would you need help connecting with one?\"",
-      "\"Do you have an estimated property value and estimated loan amount we should pass along for review?\"",
       "\"If you're ready, I can mark this for a licensed scenario review so the licensed team can evaluate the next step.\"",
       "\"I can't quote rates or terms, but I can make sure the licensed team has what they need to review your options.\"",
     ],

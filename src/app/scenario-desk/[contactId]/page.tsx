@@ -1,14 +1,17 @@
 import Link from "next/link";
 import {
   ContactStatus,
+  OpportunityStatus,
   RoleType,
   ScenarioDeskStatus,
 } from "@prisma/client";
 import { ScenarioForm } from "@/app/scenario-desk/[contactId]/scenario-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge, type StatusBadgeTone } from "@/components/ui/status-badge";
 import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
 import {
   formatCurrencyDisplay,
+  formatCurrencyDisplayWithCents,
   formatInterestRateDisplay,
   formatRatioPercentDisplay,
 } from "@/lib/currency";
@@ -60,7 +63,17 @@ export default async function ScenarioDeskDetailPage({
   const contact = await prisma.contact.findFirst({
     where: {
       id: contactId,
-      status: ContactStatus.IN_SCENARIO_REVIEW,
+      OR: [
+        {
+          status: ContactStatus.IN_SCENARIO_REVIEW,
+        },
+        {
+          scenarioDesk: {
+            status: ScenarioDeskStatus.FINALIZED,
+          },
+          status: ContactStatus.IN_PROCESSING,
+        },
+      ],
     },
     include: {
       assets: true,
@@ -113,9 +126,11 @@ export default async function ScenarioDeskDetailPage({
       escrowed: scenario.escrowed,
       interestRate: formatInterestRateDisplay(scenario.interestRate, ""),
       lenderAndProduct: scenario.lenderAndProduct,
+      loanTerm: String(scenario.loanTerm),
+      monthlyInsurance: formatCurrencyDisplay(scenario.monthlyInsurance, ""),
       originationPay: formatCurrencyDisplay(scenario.originationPay, ""),
-      pitia: formatCurrencyDisplay(scenario.pitia, ""),
-      principalAndInterest: formatCurrencyDisplay(
+      pitia: formatCurrencyDisplayWithCents(scenario.pitia, ""),
+      principalAndInterest: formatCurrencyDisplayWithCents(
         scenario.principalAndInterest,
         "",
       ),
@@ -128,6 +143,9 @@ export default async function ScenarioDeskDetailPage({
     viewerId: access.data.id,
     viewerRole: access.data.role,
   });
+  const isFinalizedReadOnly =
+    contact.status === ContactStatus.IN_PROCESSING &&
+    contact.scenarioDesk?.status === ScenarioDeskStatus.FINALIZED;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -270,10 +288,15 @@ export default async function ScenarioDeskDetailPage({
           />
           <SummaryItem
             label="Status"
-            value={
-              contact.opportunityValue
-                ? opportunityStatusLabels[contact.opportunityValue.status]
-                : EMPTY_VALUE
+            valueNode={
+              <StatusBadge
+                label={
+                  contact.opportunityValue
+                    ? opportunityStatusLabels[contact.opportunityValue.status]
+                    : EMPTY_VALUE
+                }
+                tone={opportunityStatusTone(contact.opportunityValue?.status)}
+              />
             }
           />
           <SummaryItem
@@ -288,11 +311,17 @@ export default async function ScenarioDeskDetailPage({
       <ScenarioForm
         contactId={contact.id}
         initialScenarios={initialScenarios}
-        selectedScenarioNumber={
-          contact.scenarioDesk?.status === ScenarioDeskStatus.FINALIZED
-            ? contact.scenarioDesk.selectedScenarioNumber
-            : null
-        }
+        loanAmount={formatCurrencyDisplay(contact.opportunityValue?.loanAmount, "")}
+        monthlyHoa={formatCurrencyDisplay(
+          contact.propertyDetails?.additionalHoaFees,
+          "",
+        )}
+        annualPropertyTaxes={formatCurrencyDisplay(
+          contact.propertyDetails?.propertyTaxesPresentYear,
+          "",
+        )}
+        readOnly={isFinalizedReadOnly}
+        selectedScenarioNumber={contact.scenarioDesk?.selectedScenarioNumber ?? null}
       />
     </div>
   );
@@ -317,13 +346,25 @@ function SummaryCard({
   );
 }
 
-function SummaryItem({ label, value }: { label: string; value: string }) {
+function SummaryItem({
+  label,
+  value,
+  valueNode,
+}: {
+  label: string;
+  value?: string;
+  valueNode?: React.ReactNode;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase text-mafi-text-light">
         {label}
       </p>
-      <p className="truncate text-sm text-mafi-text-dark">{value}</p>
+      {valueNode ? (
+        <div className="mt-1">{valueNode}</div>
+      ) : (
+        <p className="truncate text-sm text-mafi-text-dark">{value}</p>
+      )}
     </div>
   );
 }
@@ -351,4 +392,18 @@ function SummaryList({ items, label }: { items: string[]; label: string }) {
       )}
     </div>
   );
+}
+
+function opportunityStatusTone(
+  status?: OpportunityStatus | null,
+): StatusBadgeTone {
+  if (!status) {
+    return "muted";
+  }
+
+  if (status === OpportunityStatus.NOT_MOVING_FORWARD) {
+    return "warning";
+  }
+
+  return "neutral";
 }

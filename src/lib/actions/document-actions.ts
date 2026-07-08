@@ -8,6 +8,7 @@ import { LoanDocumentData } from "@/lib/documents/document-types";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import {
   formatCurrencyDisplay,
+  formatCurrencyDisplayWithCents,
   formatInterestRateDisplay,
 } from "@/lib/currency";
 import { formatDateForDisplay } from "@/lib/dates";
@@ -146,8 +147,8 @@ export async function generateLoanDocument(
     loanOfficerNmls:
       contact.assignedLO?.nmlsNumber ?? access.data.nmlsNumber ?? "Not provided",
     originationPay: formatCurrencyDisplay(finalizedScenario.originationPay),
-    pitia: formatCurrencyDisplay(finalizedScenario.pitia),
-    principalAndInterest: formatCurrencyDisplay(
+    pitia: formatCurrencyDisplayWithCents(finalizedScenario.pitia),
+    principalAndInterest: formatCurrencyDisplayWithCents(
       finalizedScenario.principalAndInterest,
     ),
     processingFee: formatCurrencyDisplay(finalizedScenario.processingFee),

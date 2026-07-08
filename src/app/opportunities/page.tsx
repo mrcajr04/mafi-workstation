@@ -9,9 +9,9 @@ import {
 import {
   borrowerTypeOptions,
   loanPurposeOptions,
-  OpportunityClearFiltersButton,
   OpportunityFilterHeader,
   OpportunityMobileFilters,
+  OpportunitySearchBox,
   opportunityStatusOptions,
   OpportunitySortableHeader,
 } from "@/app/opportunities/opportunity-table-controls";
@@ -22,7 +22,6 @@ import {
 import { opportunityDesktopGridClass } from "@/app/opportunities/opportunity-list-grid";
 import { DevDataControls } from "@/app/opportunities/dev-data-controls";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import { formatCurrencyDisplay } from "@/lib/currency";
@@ -113,7 +112,7 @@ export default async function OpportunitiesPage({
   const loanPurpose = enumParam(loanPurposeParam, Object.values(LoanPurpose));
   const opportunityStatus = enumParam(
     opportunityStatusParam,
-    ["INCOMPLETE", "NOT_STARTED", ...Object.values(OpportunityStatus)] as const,
+    Object.values(OpportunityStatus),
   );
   const sort = sortParam(sortParamValue);
   const sortDirection: Prisma.SortOrder =
@@ -175,6 +174,7 @@ export default async function OpportunitiesPage({
   const hasColumnFilters = Boolean(
     borrowerType || loanPurpose || opportunityStatus,
   );
+  const hasSearchOrFilters = Boolean(search || hasColumnFilters);
   const contactItems = contacts.map((contact) => ({
     id: contact.id,
     createdBy: contact.bdr.email,
@@ -216,37 +216,9 @@ export default async function OpportunitiesPage({
           </p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <form action="/opportunities" className="w-full sm:w-72">
-              {borrowerType ? (
-                <input name="borrowerType" type="hidden" value={borrowerType} />
-              ) : null}
-              {loanPurpose ? (
-                <input name="loanPurpose" type="hidden" value={loanPurpose} />
-              ) : null}
-              {opportunityStatus ? (
-                <input
-                  name="opportunityStatus"
-                  type="hidden"
-                  value={opportunityStatus}
-                />
-              ) : null}
-              {sort !== "updatedAt" ? (
-                <input name="sort" type="hidden" value={sort} />
-              ) : null}
-              {sortDirection !== "desc" ? (
-                <input name="direction" type="hidden" value={sortDirection} />
-              ) : null}
-              <Input
-                className="min-h-11 w-full"
-                defaultValue={search}
-                name="search"
-                placeholder="Search prospects..."
-                type="search"
-              />
-              <button className="sr-only" type="submit">
-                Search
-              </button>
-            </form>
+            <div className="w-full sm:w-72">
+              <OpportunitySearchBox key={search} value={search} />
+            </div>
             {canCreateContacts ? <NewProspectModal /> : null}
           </div>
         </div>
@@ -261,7 +233,6 @@ export default async function OpportunitiesPage({
                   borrowerType={borrowerType}
                   loanPurpose={loanPurpose}
                   opportunityStatus={opportunityStatus}
-                  showClearAll={hasColumnFilters}
                 />
                 {contactItems.map((contact) => (
                   <OpportunityMobileCard
@@ -313,7 +284,7 @@ export default async function OpportunitiesPage({
                     <OpportunitySortableHeader sortKey="opportunityValue">
                       Opportunity Value
                     </OpportunitySortableHeader>
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
                       <OpportunityFilterHeader
                         filterLabel="Status"
                         filterParam="opportunityStatus"
@@ -323,7 +294,6 @@ export default async function OpportunitiesPage({
                       >
                         Status
                       </OpportunityFilterHeader>
-                      {hasColumnFilters ? <OpportunityClearFiltersButton /> : null}
                     </div>
                     <OpportunitySortableHeader sortKey="fico">
                       FICO
@@ -342,8 +312,20 @@ export default async function OpportunitiesPage({
             </>
           ) : (
             <>
-              <div className="px-6 py-10 text-center text-sm text-mafi-text-mid">
-                No opportunities yet.
+              <div className="space-y-3 px-6 py-10 text-center text-sm text-mafi-text-mid">
+                <p>
+                  {hasSearchOrFilters
+                    ? "No opportunities match these filters."
+                    : "No opportunities yet."}
+                </p>
+                {hasSearchOrFilters ? (
+                  <Link
+                    className="inline-flex rounded-md bg-mafi-blue-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-mafi-blue-dark"
+                    href="/opportunities"
+                  >
+                    Clear filters
+                  </Link>
+                ) : null}
               </div>
             </>
           )}

@@ -82,7 +82,7 @@ export function Phase4Documents({
       <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
         <CardTitle className="text-mafi-blue-primary">Documents</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-4 pt-5 md:grid-cols-2">
+      <CardContent className="grid gap-4 pt-5 xl:grid-cols-2">
         <DocumentAction
           generatedAt={loanPreApprovalGeneratedAt}
           isPending={isPending && pendingDocType === "PRE_APPROVAL"}
@@ -112,10 +112,12 @@ function DocumentAction({
   onClick: () => void;
 }) {
   return (
-    <div className="rounded-md border border-mafi-border bg-mafi-bg-off p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-md border border-mafi-border bg-mafi-bg-off p-3 xl:p-4">
+      <div className="flex flex-col items-start gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
         <div>
-          <p className="font-semibold text-mafi-text-dark">{label}</p>
+          <p className="text-sm font-semibold text-mafi-text-dark xl:text-base">
+            {label}
+          </p>
           {generatedAt ? (
             <p className="mt-1 text-xs text-mafi-text-light">
               Last generated: {generatedAt}
@@ -126,7 +128,12 @@ function DocumentAction({
             </p>
           )}
         </div>
-        <Button disabled={isPending} onClick={onClick} type="button">
+        <Button
+          className="min-h-9 px-3 text-sm xl:min-h-10 xl:px-4"
+          disabled={isPending}
+          onClick={onClick}
+          type="button"
+        >
           {isPending
             ? "Generating..."
             : generatedAt

@@ -162,6 +162,7 @@ export const auditActionLabels: Record<string, string> = {
   UPDATE_OPPORTUNITY_VALUE: "Updated Opportunity Value",
   UPDATE_PHASE4_PIPELINE: "Updated Phase 4 Pipeline",
   UPDATE_PROPERTY_DETAILS: "Updated Property Details",
+  UPDATE_SCENARIO_DESK: "Updated Scenario Desk",
   UPDATE_USER_PROFILE: "Updated User Profile",
   VIEW_CONTACT: "Viewed Contact",
 };

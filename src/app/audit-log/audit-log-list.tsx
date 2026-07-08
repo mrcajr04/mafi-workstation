@@ -13,7 +13,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -270,9 +269,19 @@ function AuditFilterMenu({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [expandedActionGroups, setExpandedActionGroups] = useState<
+    Record<string, boolean>
+  >({});
   const selectedLabel = options.find((option) => option.value === selectedValue)?.label;
   const groupedActionOptions =
     paramName === "action" ? groupActionOptions(options) : [];
+
+  function toggleActionGroup(groupLabel: string) {
+    setExpandedActionGroups((currentGroups) => ({
+      ...currentGroups,
+      [groupLabel]: !currentGroups[groupLabel],
+    }));
+  }
 
   function applyFilter(value?: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -315,22 +324,38 @@ function AuditFilterMenu({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {paramName === "action"
-            ? groupedActionOptions.map((group) => (
-                <div key={group.label}>
-                  <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-mafi-text-light">
-                    {group.label}
-                  </DropdownMenuLabel>
-                  {group.options.map((option) => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => applyFilter(option.value)}
+            ? groupedActionOptions.map((group) => {
+                const isExpanded = Boolean(expandedActionGroups[group.label]);
+                const GroupIcon = isExpanded ? ChevronDown : ChevronRight;
+
+                return (
+                  <div key={group.label}>
+                    <button
+                      className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-mafi-text-light hover:bg-mafi-bg-light hover:text-mafi-text-mid"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        toggleActionGroup(group.label);
+                      }}
+                      type="button"
                     >
-                      {option.label}
-                    </DropdownMenuItem>
-                  ))}
+                      <GroupIcon className="size-3.5" />
+                      <span>{group.label}</span>
+                    </button>
+                    {isExpanded
+                      ? group.options.map((option) => (
+                          <DropdownMenuItem
+                            className="pl-7"
+                            key={option.value}
+                            onClick={() => applyFilter(option.value)}
+                          >
+                            {option.label}
+                          </DropdownMenuItem>
+                        ))
+                      : null}
                   <DropdownMenuSeparator />
-                </div>
-              ))
+                  </div>
+                );
+              })
             : options.map((option) => (
                 <DropdownMenuItem
                   key={option.value}

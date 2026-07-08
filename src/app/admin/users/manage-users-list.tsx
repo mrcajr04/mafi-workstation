@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -170,7 +171,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
                 {user.role}
               </div>
               <div className="px-4 py-3">
-                <StatusBadge isActive={user.isActive} />
+                <UserStatusBadge isActive={user.isActive} />
               </div>
               <div
                 className="px-4 py-2"
@@ -239,7 +240,7 @@ function UserCard({
               Phone: {formatUSPhone(user.phone)}
             </p>
           </div>
-          <StatusBadge isActive={user.isActive} />
+          <UserStatusBadge isActive={user.isActive} />
         </div>
         <p className="mt-3 text-xs text-mafi-text-mid">{user.role}</p>
       </button>
@@ -260,18 +261,15 @@ function UserCard({
   );
 }
 
-function StatusBadge({ isActive }: { isActive: boolean }) {
+function UserStatusBadge({ isActive }: { isActive: boolean }) {
   return (
-    <span
-      className={cn(
-        "inline-flex rounded-full border px-2 py-1 text-xs font-semibold",
-        isActive
-          ? "border-mafi-status-green bg-mafi-status-green/15 text-mafi-text-dark"
-          : "border-destructive/40 bg-destructive/10 text-destructive",
-      )}
+    <StatusBadge
+      className="text-xs"
+      label={isActive ? "Active" : "Inactive"}
+      tone={isActive ? "success" : "danger"}
     >
       {isActive ? "Active" : "Inactive"}
-    </span>
+    </StatusBadge>
   );
 }
 

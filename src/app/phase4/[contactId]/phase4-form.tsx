@@ -12,17 +12,6 @@ import {
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,14 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  updatePhase4DecisionBranch,
   updatePhase4Pipeline,
   Phase4PipelineInput,
 } from "@/lib/actions/phase4-actions";
 import {
   appraisalStatusLabels,
   creditAuthorizationStatusLabels,
-  decisionBranchLabels,
   disclosuresStatusLabels,
   loanApplicationStatusLabels,
   loanApprovalStatusLabels,
@@ -78,9 +65,6 @@ const defaultState = (contactId: string): Phase4FormState => ({
 export function Phase4Form({ canEdit, contactId, initialData }: Phase4FormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [reengagementReason, setReengagementReason] = useState("");
-  const [reengagementOtherReason, setReengagementOtherReason] = useState("");
-  const [reengagementTouchDate, setReengagementTouchDate] = useState("");
   const [form, setForm] = useState<Phase4FormState>({
     ...defaultState(contactId),
     ...initialData,
@@ -111,57 +95,6 @@ export function Phase4Form({ canEdit, contactId, initialData }: Phase4FormProps)
     });
   }
 
-  function proceedToProcessing() {
-    startTransition(async () => {
-      const result = await updatePhase4DecisionBranch({
-        contactId,
-        decisionBranch: DecisionBranch.PROCEED_TO_PROCESSING,
-      });
-
-      if (!result.success) {
-        toast.error(result.error);
-        return;
-      }
-
-      updateField("decisionBranch", DecisionBranch.PROCEED_TO_PROCESSING);
-      toast.success("Contact routed to processing.");
-      router.refresh();
-    });
-  }
-
-  function routeToReengagement() {
-    const reasonCode =
-      reengagementReason === "Other"
-        ? reengagementOtherReason.trim()
-        : reengagementReason;
-
-    startTransition(async () => {
-      const result = await updatePhase4DecisionBranch({
-        contactId,
-        decisionBranch: DecisionBranch.RE_ENGAGEMENT,
-        nextTouchDate: reengagementTouchDate,
-        reasonCode,
-      });
-
-      if (!result.success) {
-        toast.error(result.error);
-        return;
-      }
-
-      updateField("decisionBranch", DecisionBranch.RE_ENGAGEMENT);
-      toast.success("Contact routed to re-engagement.");
-      router.refresh();
-    });
-  }
-
-  const canConfirmReengagement =
-    Boolean(reengagementTouchDate) &&
-    Boolean(
-      reengagementReason === "Other"
-        ? reengagementOtherReason.trim()
-        : reengagementReason,
-    );
-
   return (
     <Card className="border-mafi-border bg-mafi-bg-white">
       <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
@@ -170,129 +103,6 @@ export function Phase4Form({ canEdit, contactId, initialData }: Phase4FormProps)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5 pt-5">
-        <div className="rounded-lg border border-mafi-border bg-mafi-bg-light p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-mafi-blue-primary">
-                Decision Branch
-              </p>
-              <h3 className="mt-1 text-lg font-semibold text-mafi-text-dark">
-                {decisionBranchLabels[form.decisionBranch]}
-              </h3>
-              <p className="mt-1 text-sm text-mafi-text-mid">
-                Choose whether this file keeps moving forward or goes back to
-                nurture.
-              </p>
-            </div>
-
-            {canEdit ? (
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button disabled={isPending} type="button">
-                      Proceed to Processing
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Proceed to Processing?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will keep the contact in Phase 4 processing.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={proceedToProcessing}>
-                        Confirm
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button disabled={isPending} type="button" variant="outline">
-                      Route to Re-engagement
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Route to Re-engagement?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will move the contact to the Command Center for BDR
-                        follow-up.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs font-semibold">Reason</Label>
-                        <Select
-                          onValueChange={setReengagementReason}
-                          value={reengagementReason}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a reason" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[
-                              "Chose another lender",
-                              "Rates changed",
-                              "Not ready now",
-                              "Lost contact",
-                              "Other",
-                            ].map((reason) => (
-                              <SelectItem key={reason} value={reason}>
-                                {reason}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {reengagementReason === "Other" ? (
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold">
-                            Other reason
-                          </Label>
-                          <Input
-                            onChange={(event) =>
-                              setReengagementOtherReason(event.target.value)
-                            }
-                            placeholder="Enter reason"
-                            value={reengagementOtherReason}
-                          />
-                        </div>
-                      ) : null}
-
-                      <div className="space-y-1">
-                        <Label className="text-xs font-semibold">
-                          Next touch date
-                        </Label>
-                        <Input
-                          onChange={(event) =>
-                            setReengagementTouchDate(event.target.value)
-                          }
-                          type="date"
-                          value={reengagementTouchDate}
-                        />
-                      </div>
-                    </div>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        disabled={!canConfirmReengagement}
-                        onClick={routeToReengagement}
-                      >
-                        Confirm
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <EnumSelect
             disabled={!canEdit}
