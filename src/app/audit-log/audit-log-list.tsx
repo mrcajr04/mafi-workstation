@@ -46,6 +46,7 @@ const actionFilterGroups = [
     label: "User Management",
     values: new Set([
       "DEACTIVATE_USER",
+      "DELETE_USER",
       "INVITE_USER",
       "REACTIVATE_USER",
       "RESEND_INVITE",

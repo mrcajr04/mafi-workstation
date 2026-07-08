@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  deleteUserForTesting,
   resendInvite,
   setUserActiveStatus,
   updateUserProfile,
@@ -98,6 +99,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
   const [displayUsers, setDisplayUsers] = useState(users);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   function updateDisplayedUser(userId: string, nextUser: Partial<ManagedUser>) {
     setDisplayUsers((currentUsers) =>
@@ -122,6 +124,40 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
     toast.success(`Invite resent to ${user.email}`);
   }
 
+  async function handleDeleteUser(user: ManagedUser) {
+    if (user.isSelf) {
+      toast.error("You cannot delete your own account.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${user.fullName}? This temporary testing action removes their app profile and Supabase auth user.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingUserId(user.id);
+
+    const result = await deleteUserForTesting(user.id);
+
+    setDeletingUserId(null);
+
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+
+    setDisplayUsers((currentUsers) =>
+      currentUsers.filter((currentUser) => currentUser.id !== user.id),
+    );
+    setSelectedUser((currentUser) =>
+      currentUser?.id === user.id ? null : currentUser,
+    );
+    toast.success(`${user.fullName} deleted.`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -141,7 +177,9 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
             key={user.id}
             onSelect={() => setSelectedUser(user)}
             onResendInvite={() => handleResendInvite(user)}
+            onDeleteUser={() => handleDeleteUser(user)}
             isResendingInvite={resendingUserId === user.id}
+            isDeletingUser={deletingUserId === user.id}
             user={user}
           />
         ))}
@@ -149,7 +187,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
 
       <Card className="hidden border-mafi-border bg-mafi-bg-white md:block">
         <CardContent className="p-0">
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.85fr)] border-b border-mafi-border bg-mafi-bg-lighter text-sm font-semibold text-mafi-text-dark">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,1.25fr)] border-b border-mafi-border bg-mafi-bg-lighter text-sm font-semibold text-mafi-text-dark">
             <div className="px-4 py-3">Full name</div>
             <div className="px-4 py-3">Email</div>
             <div className="px-4 py-3">Phone</div>
@@ -159,7 +197,7 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
           </div>
           {displayUsers.map((user) => (
             <div
-              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.85fr)] border-b border-mafi-border text-sm transition last:border-b-0 hover:bg-mafi-bg-light"
+              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,1.25fr)] border-b border-mafi-border text-sm transition last:border-b-0 hover:bg-mafi-bg-light"
               key={user.id}
               onClick={() => setSelectedUser(user)}
               onKeyDown={(event) => {
@@ -191,19 +229,30 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
               >
-                {user.canResendInvite ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {user.canResendInvite ? (
+                    <Button
+                      className="h-8 px-3 text-xs"
+                      disabled={resendingUserId === user.id}
+                      onClick={() => handleResendInvite(user)}
+                      type="button"
+                      variant="outline"
+                    >
+                      {resendingUserId === user.id
+                        ? "Sending..."
+                        : "Resend Invite"}
+                    </Button>
+                  ) : null}
                   <Button
-                    className="h-8 px-3 text-xs"
-                    disabled={resendingUserId === user.id}
-                    onClick={() => handleResendInvite(user)}
+                    className="h-8 px-3 text-xs text-destructive hover:text-destructive"
+                    disabled={user.isSelf || deletingUserId === user.id}
+                    onClick={() => handleDeleteUser(user)}
                     type="button"
                     variant="outline"
                   >
-                    {resendingUserId === user.id ? "Sending..." : "Resend Invite"}
+                    {deletingUserId === user.id ? "Deleting..." : "Delete User"}
                   </Button>
-                ) : (
-                  <span className="text-xs text-mafi-text-light">-</span>
-                )}
+                </div>
               </div>
             </div>
           ))}
@@ -228,12 +277,16 @@ export function ManageUsersList({ users }: ManageUsersListProps) {
 }
 
 function UserCard({
+  isDeletingUser,
   isResendingInvite,
+  onDeleteUser,
   onSelect,
   onResendInvite,
   user,
 }: {
+  isDeletingUser: boolean;
   isResendingInvite: boolean;
+  onDeleteUser: () => void;
   onSelect: () => void;
   onResendInvite: () => void;
   user: ManagedUser;
@@ -257,8 +310,8 @@ function UserCard({
         </div>
         <p className="mt-3 text-xs text-mafi-text-mid">{user.role}</p>
       </button>
-      {user.canResendInvite ? (
-        <div className="border-t border-mafi-border px-4 py-3">
+      <div className="space-y-2 border-t border-mafi-border px-4 py-3">
+        {user.canResendInvite ? (
           <Button
             className="h-9 w-full text-xs"
             disabled={isResendingInvite}
@@ -268,8 +321,17 @@ function UserCard({
           >
             {isResendingInvite ? "Sending..." : "Resend Invite"}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button
+          className="h-9 w-full text-xs text-destructive hover:text-destructive"
+          disabled={user.isSelf || isDeletingUser}
+          onClick={onDeleteUser}
+          type="button"
+          variant="outline"
+        >
+          {isDeletingUser ? "Deleting..." : "Delete User"}
+        </Button>
+      </div>
     </div>
   );
 }

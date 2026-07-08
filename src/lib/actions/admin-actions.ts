@@ -353,6 +353,118 @@ export async function resendInvite(userId: string): Promise<AdminActionResult> {
   };
 }
 
+export async function deleteUserForTesting(
+  userId: string,
+): Promise<AdminActionResult> {
+  const access = await requireRole([RoleType.OWNER]);
+
+  if (!access.success) {
+    await logAccessDenied("DELETE_USER", "Profile", userId);
+    return {
+      success: false,
+      error: "FORBIDDEN",
+    };
+  }
+
+  if (userId === access.data.id) {
+    return {
+      success: false,
+      error: "You cannot delete your own account.",
+    };
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      email: true,
+      fullName: true,
+      id: true,
+      role: true,
+    },
+  });
+
+  if (!profile) {
+    return {
+      success: false,
+      error: "User profile not found.",
+    };
+  }
+
+  if (profile.role === RoleType.OWNER) {
+    const ownerCount = await prisma.profile.count({
+      where: {
+        role: RoleType.OWNER,
+      },
+    });
+
+    if (ownerCount <= 1) {
+      return {
+        success: false,
+        error:
+          "Cannot delete the only remaining Owner. Promote another user to Owner first.",
+      };
+    }
+  }
+
+  const [contactCount, commandCenterCount, auditLogCount] = await Promise.all([
+    prisma.contact.count({
+      where: {
+        OR: [{ bdrId: userId }, { assignedLOId: userId }],
+      },
+    }),
+    prisma.commandCenterEntry.count({
+      where: {
+        OR: [{ assignedBDRId: userId }, { assignedLOId: userId }],
+      },
+    }),
+    prisma.auditLog.count({
+      where: {
+        userId,
+      },
+    }),
+  ]);
+
+  if (contactCount || commandCenterCount || auditLogCount) {
+    return {
+      success: false,
+      error:
+        "This user has related records and cannot be deleted safely. Deactivate them instead.",
+    };
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+
+  if (error) {
+    console.error("Supabase user delete failed", error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+
+  await logAuditEvent(access.data.id, "DELETE_USER", "Profile", profile.id, {
+    email: profile.email,
+    fullName: profile.fullName,
+    source: "Temporary testing action",
+  });
+
+  await prisma.profile.delete({
+    where: {
+      id: profile.id,
+    },
+  });
+
+  revalidatePath("/admin/users");
+  updateTag("manage-users-list");
+
+  return {
+    success: true,
+  };
+}
+
 export async function setUserActiveStatus(
   userId: string,
   isActive: boolean,

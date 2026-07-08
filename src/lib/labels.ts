@@ -145,6 +145,7 @@ export const auditActionLabels: Record<string, string> = {
   CREATE_CONTACT: "Created Contact",
   DELETE_ALL_DEV_CONTACTS: "Deleted Dev Contacts",
   DELETE_CONTACT: "Deleted Contact",
+  DELETE_USER: "Deleted User",
   DEACTIVATE_USER: "Deactivated User",
   FINALIZE_SCENARIO_DESK: "Finalized Scenario Desk",
   GENERATE_DOCUMENT: "Generated Document",
