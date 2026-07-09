@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicRoutes = ["/login", "/forgot-password", "/reset-password", "/set-password"];
+const publicRoutes = [
+  "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/set-password",
+  "/loan-estimate-design",
+];
 const publicRoutesWithAuthenticatedRedirect = ["/login", "/forgot-password"];
 
 export async function proxy(request: NextRequest) {

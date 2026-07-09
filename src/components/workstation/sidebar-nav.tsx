@@ -34,7 +34,7 @@ export function SidebarNav({ currentRole, navBadgeCounts }: SidebarNavProps) {
   }, [router, visibleNavItems]);
 
   return (
-    <aside className="fixed bottom-0 left-0 top-16 z-40 hidden w-56 shrink-0 overflow-y-auto border-r border-mafi-border bg-mafi-bg-light px-3 py-5 text-mafi-text-dark md:block">
+    <aside className="workstation-print-chrome fixed bottom-0 left-0 top-16 z-40 hidden w-56 shrink-0 overflow-y-auto border-r border-mafi-border bg-mafi-bg-light px-3 py-5 text-mafi-text-dark md:block">
       {isSettingsMenu ? (
         <Link
           className="mb-4 inline-flex items-center gap-2 rounded-md px-3 py-2 text-[13px] font-semibold text-mafi-blue-primary hover:bg-mafi-bg-lighter"

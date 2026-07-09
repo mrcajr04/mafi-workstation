@@ -173,3 +173,161 @@
     background: var(--gradient-avatar);
   }
 }
+
+.loan-estimate-design {
+  --font-sans: "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+  --le-page: #edf2f7;
+  --le-paper: #ffffff;
+  --le-panel: #f7f9fc;
+  --le-ink: #172033;
+  --le-muted: #667085;
+  --le-subtle: #8a97a8;
+  --le-line: #d8e0ea;
+  --le-navy: #102a43;
+  --le-navy-soft: #dce8f5;
+  --le-gold: #9a640f;
+  --le-gold-soft: #f8edd9;
+  --le-teal: #0f766e;
+  --le-green: #2f7d4f;
+  --le-orange: #c7771b;
+  --le-blue: #315fbe;
+  --le-danger: #a63a34;
+  --type-xs: 0.6rem;
+  --type-sm: 0.7rem;
+  --type-base: 0.78rem;
+  --type-md: 0.86rem;
+  --type-lg: 0.98rem;
+  --type-xl: 1.16rem;
+  --type-2xl: 1.4rem;
+  --type-3xl: 1.82rem;
+  --shadow-soft: 0 12px 30px rgb(16 42 67 / 0.08);
+  --shadow-lift: 0 18px 44px rgb(16 42 67 / 0.14);
+  color: var(--le-ink);
+  font-family: var(--font-sans);
+}
+
+.loan-estimate-design .numeric {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.loan-estimate-design .print-sheet {
+  background: var(--le-paper);
+}
+
+@media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+
+  body:has(.loan-estimate-design) {
+    background: #ffffff !important;
+    height: auto !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html:has(.loan-estimate-design) {
+    height: auto !important;
+  }
+
+  body:has(.loan-estimate-design) .workstation-print-chrome {
+    display: none !important;
+  }
+
+  body:has(.loan-estimate-design) .workstation-print-shell {
+    min-height: auto !important;
+  }
+
+  body:has(.loan-estimate-design) .workstation-print-main {
+    min-height: auto !important;
+    padding-left: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  body:has(.loan-estimate-design) .workstation-print-content {
+    padding: 0 !important;
+  }
+
+  .loan-estimate-design {
+    break-after: avoid;
+    max-width: none !important;
+    padding: 0.45in 0.45in 0 !important;
+    page-break-after: avoid;
+  }
+
+  .loan-estimate-design .no-print {
+    display: none !important;
+  }
+
+  .loan-estimate-design .loan-estimate-badge {
+    background: #ffffff !important;
+    border-color: currentColor !important;
+    margin-right: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .loan-estimate-design .print-panel {
+    border-color: #aeb8c5 !important;
+    box-shadow: none !important;
+  }
+
+  .loan-estimate-design .print-sheet {
+    break-after: avoid;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    max-width: none !important;
+    page-break-after: avoid;
+  }
+
+  .loan-estimate-design [data-tab-panel="inactive"] {
+    display: none !important;
+  }
+
+  .loan-estimate-design .legal-page {
+    min-height: auto;
+  }
+
+  .loan-estimate-design .print-client-section,
+  .loan-estimate-design .print-keep-together,
+  .loan-estimate-design .print-signature-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .loan-estimate-design .print-full-breakdown {
+    break-inside: avoid;
+    border-top-width: 2px !important;
+    display: block !important;
+    margin-top: 0.28in !important;
+    page-break-inside: avoid;
+    padding-top: 0.2in !important;
+  }
+
+  .loan-estimate-design .screen-full-breakdown {
+    display: none !important;
+  }
+
+  .loan-estimate-design .print-full-breakdown > .print-breakdown-content {
+    display: grid !important;
+    margin-top: 0 !important;
+  }
+
+  .loan-estimate-design .print-cash-summary {
+    border-top: 1px solid #aeb8c5;
+    margin-top: 0.18in !important;
+    padding-top: 0.12in;
+  }
+
+  .loan-estimate-design .print-signature-block {
+    break-before: avoid;
+    break-after: avoid;
+    margin-top: 0.32in;
+    page-break-after: avoid;
+    page-break-before: avoid;
+  }
+}

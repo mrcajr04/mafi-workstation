@@ -29,6 +29,16 @@ function logInviteError(label: string, error: unknown) {
 }
 
 async function getAppUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+
+  if (
+    configuredUrl &&
+    !configuredUrl.includes("localhost") &&
+    !configuredUrl.includes("127.0.0.1")
+  ) {
+    return configuredUrl;
+  }
+
   const headerStore = await headers();
   const origin = headerStore.get("origin");
 
@@ -36,8 +46,8 @@ async function getAppUrl() {
     return origin;
   }
 
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  if (configuredUrl) {
+    return configuredUrl;
   }
 
   if (process.env.VERCEL_URL) {

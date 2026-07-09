@@ -45,7 +45,7 @@ export function MobileNav({ currentRole, navBadgeCounts }: MobileNavProps) {
         <Menu className="size-6" />
       </button>
       {isOpen ? (
-        <div className="fixed inset-0 top-16 z-50 md:hidden">
+        <div className="workstation-print-chrome fixed inset-0 top-16 z-50 md:hidden">
           <button
             aria-label="Close navigation"
             className="absolute inset-0 bg-mafi-text-dark/45"
