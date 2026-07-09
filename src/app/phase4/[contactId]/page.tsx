@@ -10,7 +10,10 @@ import {
   type LoanEstimateState,
 } from "@/lib/loan-estimate-calc";
 import { getLatestLoanEstimateGeneration } from "@/lib/loan-estimate-storage";
+import type { LoanEstimateHeaderExtras } from "@/lib/loan-estimate-bridge";
 import { formatTimestampForDisplay } from "@/lib/dates";
+import { loanPurposeLabels } from "@/lib/labels";
+import { scenarioProgramLabels } from "@/lib/scenario-program";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 import { LoanEstimateBuilder } from "./loan-estimate-builder";
@@ -59,20 +62,6 @@ function mapOccupancy(value: BorrowerType) {
   }
 
   return "OTHER";
-}
-
-function mapProgram(loanTerm?: number | null, lenderAndProduct?: string | null) {
-  const product = lenderAndProduct?.toUpperCase() ?? "";
-
-  if (product.includes("IO")) {
-    return "IO";
-  }
-
-  if (loanTerm === 15 || product.includes("15")) {
-    return "15 YR FIXED";
-  }
-
-  return "30 YR FIXED";
 }
 
 export default async function Phase4DetailPage({
@@ -181,10 +170,9 @@ export default async function Phase4DetailPage({
     originationPct: "0",
     presentedBy: access.data.fullName,
     processingFee: moneyString(selectedScenario?.processingFee),
-    program: mapProgram(
-      selectedScenario?.loanTerm,
-      selectedScenario?.lenderAndProduct,
-    ),
+    program: selectedScenario
+      ? scenarioProgramLabels[selectedScenario.program]
+      : loanEstimateDefaults.program,
     propertyTaxRatePct: percentString(taxRatePct),
     propertyType: mapPropertyType(property?.propertyType),
     purchasePrice: moneyString(realPurchasePrice),
@@ -194,10 +182,22 @@ export default async function Phase4DetailPage({
   const latestLoanEstimateGeneration =
     await getLatestLoanEstimateGeneration(contactId);
 
+  // Screen-only header fields for the redesigned UI. Additive display data only:
+  // this does NOT touch initialState or the PDF-generation path. See
+  // loan-estimate-bridge.ts and questions.md. mloId has no Profile source yet.
+  const headerExtras: LoanEstimateHeaderExtras = {
+    nmlsId: access.data.nmlsNumber ?? "",
+    mloId: "",
+    loanPurpose: loanPurposeLabels[contact.loanPurpose],
+    lenderAndProduct: selectedScenario?.lenderAndProduct ?? "",
+    propertyAddress: property?.address ?? "",
+  };
+
   return (
     <div className="mx-auto max-w-[1500px]">
       <LoanEstimateBuilder
         contactId={contactId}
+        headerExtras={headerExtras}
         initialGeneratedAt={
           latestLoanEstimateGeneration
             ? formatTimestampForDisplay(latestLoanEstimateGeneration.generatedAt)

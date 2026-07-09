@@ -135,6 +135,7 @@ export default async function ScenarioDeskDetailPage({
         "",
       ),
       processingFee: formatCurrencyDisplay(scenario.processingFee, ""),
+      program: scenario.program,
       scenarioNumber: scenario.scenarioNumber,
     })) ?? [];
   const duplicatePropertyContacts = await getVisibleDuplicatePropertyContacts({

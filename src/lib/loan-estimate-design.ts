@@ -1,7 +1,7 @@
 export type FeeMode = "percent" | "flat";
 export type PropertyClass = "condo" | "sfr";
 export type PropertyType = "CONDO" | "CONDO-HOTEL" | "SINGLE FAMILY" | "COMMERCIAL";
-export type Occupancy = "PRIMARY" | "SECONDARY" | "INVESTMENT";
+export type Occupancy = "PRIMARY" | "SECONDARY" | "INVESTMENT" | "OTHER";
 export type LoanCategory = "F" | "D";
 export type NewOrUsed = "New" | "Used";
 export type YesNo = "Yes" | "No";

@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScenarioProgram } from "@prisma/client";
 import {
   finalizeScenarioDesk,
   saveScenarioDesk,
@@ -25,6 +26,7 @@ import {
   formatCurrencyDisplayWithCents,
   formatCurrencyInput,
 } from "@/lib/currency";
+import { scenarioProgramOptions } from "@/lib/scenario-program";
 
 type ScenarioDraft = ScenarioInput;
 
@@ -48,6 +50,7 @@ const emptyScenario = (number: number): ScenarioDraft => ({
   pitia: "",
   principalAndInterest: "",
   processingFee: "",
+  program: ScenarioProgram.FIXED_30,
   scenarioNumber: number,
 });
 
@@ -167,6 +170,7 @@ export function ScenarioForm({
       pitia: currencyInputToRaw(scenario.pitia),
       principalAndInterest: currencyInputToRaw(scenario.principalAndInterest),
       processingFee: currencyInputToRaw(scenario.processingFee),
+      program: scenario.program,
       scenarioNumber: scenario.scenarioNumber,
     }));
   }
@@ -317,6 +321,30 @@ export function ScenarioForm({
                       readOnly={readOnly}
                       value={scenario.loanTerm}
                     />
+                  </Field>
+                  <Field label="Program">
+                    <Select
+                      disabled={readOnly}
+                      onValueChange={(value) =>
+                        updateScenario(
+                          scenario.scenarioNumber,
+                          "program",
+                          value as ScenarioProgram,
+                        )
+                      }
+                      value={scenario.program}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scenarioProgramOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </Field>
                 </ScenarioGroup>
 

@@ -26,7 +26,7 @@ export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: BarChart3 },
   { label: "Opportunities", href: "/opportunities", icon: Target },
   { label: "Scenario Desk", href: "/scenario-desk", icon: Workflow },
-  { label: "Loan Estimate", href: "/loan-estimate-design", icon: FileCheck2 },
+  { label: "Loan Estimate", href: "/phase4", icon: FileCheck2 },
   { label: "Mortgage Calculators", href: "/calculators", icon: Calculator },
   {
     label: "Marketing",

@@ -43,7 +43,6 @@ import {
   SelectValue,
 } from "@/components/loan-estimate-design/ui/select";
 import {
-  DEFAULT_STATE,
   LoanProgram,
   LoanState,
   calculateLoanEstimate,
@@ -203,8 +202,22 @@ function selectInputText(event: React.FocusEvent<HTMLInputElement>) {
   event.currentTarget.select();
 }
 
-export default function LoanEstimatePage() {
-  const [state, setState] = useState<LoanState>(DEFAULT_STATE);
+export type LoanEstimateRedesignProps = {
+  initialState: LoanState;
+  onGenerate: (state: LoanState) => void;
+  isGenerating: boolean;
+  generatedAt?: string;
+  downloadUrl?: string;
+};
+
+export function LoanEstimateRedesign({
+  initialState,
+  onGenerate,
+  isGenerating,
+  generatedAt,
+  downloadUrl,
+}: LoanEstimateRedesignProps) {
+  const [state, setState] = useState<LoanState>(initialState);
   const [activeTab, setActiveTab] = useState<TabId>("main");
   const [liveMessage, setLiveMessage] = useState("");
   const results = useMemo(() => calculateLoanEstimate(state), [state]);
@@ -244,7 +257,7 @@ export default function LoanEstimatePage() {
   }
 
   function resetToPulledForwardValues() {
-    setState(DEFAULT_STATE);
+    setState(initialState);
   }
 
   function matchComputedDownPayment() {
@@ -358,10 +371,37 @@ export default function LoanEstimatePage() {
               );
             })}
           </Tabs.List>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="secondary" size="sm" onClick={() => window.print()}>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden text-[length:var(--type-xs)] text-[var(--le-muted)] lg:inline">
+              {generatedAt ? (
+                <>
+                  Last generated {generatedAt}
+                  {downloadUrl ? (
+                    <>
+                      {" · "}
+                      <a
+                        className="font-bold text-[var(--le-blue)] underline underline-offset-2"
+                        href={downloadUrl}
+                        rel="noopener"
+                        target="_blank"
+                      >
+                        View stored PDF
+                      </a>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                "No stored PDF yet"
+              )}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isGenerating}
+              onClick={() => onGenerate(state)}
+            >
               <Printer className="h-3.5 w-3.5" aria-hidden="true" />
-              Print / PDF
+              {isGenerating ? "Saving PDF..." : "Print / Save as PDF"}
             </Button>
             <Button
               aria-label="Reset to pulled-forward values"

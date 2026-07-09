@@ -3,6 +3,7 @@
 import {
   ContactStatus,
   ScenarioDeskStatus,
+  ScenarioProgram,
   RoleType,
 } from "@prisma/client";
 import { revalidatePath, updateTag } from "next/cache";
@@ -10,6 +11,7 @@ import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { normalizeCurrencyInput } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { scenarioProgramLabels } from "@/lib/scenario-program";
 
 export type ScenarioInput = {
   escrowed: boolean;
@@ -21,8 +23,16 @@ export type ScenarioInput = {
   pitia: string;
   principalAndInterest: string;
   processingFee: string;
+  program: ScenarioProgram;
   scenarioNumber: number;
 };
+
+// Defensive coercion — this runs on untrusted client payloads.
+function asScenarioProgram(value: string): ScenarioProgram {
+  return value in scenarioProgramLabels
+    ? (value as ScenarioProgram)
+    : ScenarioProgram.FIXED_30;
+}
 
 export type FinalizeScenarioDeskInput = {
   contactId: string;
@@ -132,6 +142,7 @@ export async function saveScenarioDesk(
             scenario.principalAndInterest,
           ),
           processingFee: decimalFromCurrency(scenario.processingFee),
+          program: asScenarioProgram(scenario.program),
           scenarioDeskId: scenarioDesk.id,
           scenarioNumber: scenario.scenarioNumber,
         })),
@@ -250,6 +261,7 @@ export async function finalizeScenarioDesk(
           scenario.principalAndInterest,
         ),
         processingFee: decimalFromCurrency(scenario.processingFee),
+        program: asScenarioProgram(scenario.program),
         scenarioDeskId: scenarioDesk.id,
         scenarioNumber: scenario.scenarioNumber,
       })),
