@@ -7,7 +7,6 @@ import {
   BriefcaseBusiness,
   Calculator,
   ChartNoAxesCombined,
-  CheckCircle2,
   FileText,
   Home,
   Landmark,
@@ -17,9 +16,10 @@ import {
   RefreshCcw,
   ShieldCheck,
   Signature,
-  Users,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Bar,
   BarChart,
@@ -61,6 +61,12 @@ type NumericField = {
 type StringField = {
   [K in keyof LoanState]: LoanState[K] extends string ? K : never;
 }[keyof LoanState];
+type LoanResults = ReturnType<typeof calculateLoanEstimate>;
+type FieldInsight = {
+  title: string;
+  body: string;
+  kind: "Formula" | "Source";
+};
 
 const tabs: Array<{ id: TabId; label: string; icon: typeof Calculator; audience: "internal" | "client" }> = [
   { id: "main", label: "Main To Complete", icon: Calculator, audience: "internal" },
@@ -82,6 +88,8 @@ const chartColors = {
   hoa: "#be6a16",
 };
 
+const numericInputClassName = "numeric text-right tabular-nums";
+
 const loanPrograms: Array<{ value: LoanProgram; label: string }> = [
   { value: "30 YR FIXED", label: "30 Yr Fixed" },
   { value: "15 YR FIXED", label: "15 Yr Fixed" },
@@ -93,20 +101,123 @@ const loanPrograms: Array<{ value: LoanProgram; label: string }> = [
   { value: "IO", label: "Interest Only (IO)" },
 ];
 
+function formulaInsights(state: LoanState, results: LoanResults): FieldInsight[] {
+  const basisLabel = valueBasisLabel(state);
+  const borrowerEquityLabel = equityLabel(state);
+  const equityApplied = equityAppliedLabel(state);
+  const fixedLoanCostParts = [
+    term("Loan Origination", formatCurrency(results.loanOrigination)),
+    term("Broker Fee", formatCurrency(results.brokerFee)),
+    term("Appraisal Fee", formatCurrency(results.appraisalFee)),
+    term("Application Fee", formatCurrency(results.applicationFee)),
+    term("Underwriting Fee", formatCurrency(results.underwritingFee)),
+    term("Processing Fee", formatCurrency(results.processingFee)),
+    term("Admin Fee", formatCurrency(results.adminFee)),
+  ];
+  const fixedTitleCostParts = [
+    term("Settlement Fee", formatCurrency(results.settlementFee)),
+    term("Title Search", formatCurrency(results.titleSearchFee)),
+    term("Miscellaneous Title Company", formatCurrency(results.miscTitleFee)),
+    term("Title Insurance Fee", formatCurrency(results.titleInsuranceFee)),
+    term("Endorsements", formatCurrency(results.endorsements)),
+    term("Recording Fees", formatCurrency(results.recordingFees)),
+    term("City/County Tax Stamps", formatCurrency(results.cityTaxStamps)),
+    term("State Tax Stamps", formatCurrency(results.stateTaxStamps)),
+    term("Stamps on Deed", formatCurrency(results.stampsOnDeed)),
+    term("Survey", formatCurrency(results.surveyFee)),
+    term("Transamerica Tax Fee", formatCurrency(results.transamericaFee)),
+    term("Flood Zone Certification", formatCurrency(results.floodZoneCertFee)),
+    term("Miscellaneous Filing/Couriers", formatCurrency(results.miscFilingFee)),
+  ];
+  const prepaidParts = [
+    term("Taxes Escrowed", formatCurrency(results.taxesEscrow)),
+    term("Hazard Insurance Escrow", formatCurrency(results.hazardInsEscrow)),
+    term("Developer Fee", formatCurrency(results.developFeeContract)),
+    term("Capital Contribution", formatCurrency(results.capitalContribution)),
+    term("Flood/HO6 Insurance", formatCurrency(results.floodHO6Escrow)),
+    term("Per-Diem Interest", formatCurrency(results.interestPerDiem)),
+  ];
+
+  return [
+    { title: borrowerEquityLabel, body: `${term(basisLabel, formatCurrency(results.purchasePrice))} x ${term(borrowerEquityLabel, formatPercent(results.downPaymentPct))} = ${term(borrowerEquityLabel, formatCurrency(results.downPayment))}`, kind: "Formula" },
+    { title: "Loan Amount", body: `${term(basisLabel, formatCurrency(results.purchasePrice))} - ${term(borrowerEquityLabel, formatCurrency(results.downPayment))} = ${term("Loan Amount", formatCurrency(results.loanAmount))}`, kind: "Formula" },
+    { title: "LTV", body: `${term("Loan Amount", formatCurrency(results.loanAmount))} / ${term(basisLabel, formatCurrency(results.purchasePrice))} = ${term("LTV", formatPercent(results.ltv))}`, kind: "Formula" },
+    { title: "Loan Origination", body: state.originationMode === "flat" ? `${term("Flat Fee", formatCurrency(state.originationFlatFee))} = ${term("Loan Origination", formatCurrency(results.loanOrigination))}` : `${term("Loan Amount", formatCurrency(results.loanAmount))} x ${term("Origination Fee", formatPercent(state.originationPct))} = ${term("Loan Origination", formatCurrency(results.loanOrigination))}`, kind: "Formula" },
+    { title: "Broker Fee", body: state.brokerFeeMode === "flat" ? `${term("Flat Fee", formatCurrency(state.brokerFeeFlatFee))} = ${term("Broker Fee", formatCurrency(results.brokerFee))}` : `${term("Loan Amount", formatCurrency(results.loanAmount))} x ${term("Broker Fee", formatPercent(state.brokerFeePct))} = ${term("Broker Fee", formatCurrency(results.brokerFee))}`, kind: "Formula" },
+    { title: "Per-Diem Interest", body: `(${term("Loan Amount", formatCurrency(results.loanAmount))} x ${term("Interest Rate", formatPercent(state.rate))} / ${term("Days in Year", "365")}) x ${term("Interest Days", `${formatNumber(state.interestDays)} days`)} = ${term("Per-Diem Interest", formatCurrency(results.interestPerDiem))}`, kind: "Formula" },
+    { title: "Fixed Loan Costs", body: `${fixedLoanCostParts.join(" + ")} = ${term("Fixed Loan Costs", formatCurrency(results.fixedLoanCosts))}`, kind: "Formula" },
+    { title: "Fixed Title Costs", body: `${fixedTitleCostParts.join(" + ")} = ${term("Fixed Title Costs", formatCurrency(results.fixedTitleCosts))}`, kind: "Formula" },
+    { title: "Total Closing Costs", body: `${term("Fixed Loan Costs", formatCurrency(results.fixedLoanCosts))} + ${term("Fixed Title Costs", formatCurrency(results.fixedTitleCosts))} = ${term("Total Closing Costs", formatCurrency(results.totalClosingCosts))}`, kind: "Formula" },
+    { title: "Taxes Escrowed", body: `${term("Property Taxes / Month", formatCurrency(results.monthlyPropertyTax))} x ${term("Property Tax Escrow", `${formatNumber(state.taxMonths)} months`)} = ${term("Taxes Escrowed", formatCurrency(results.taxesEscrow))}`, kind: "Formula" },
+    { title: "Developer Fee (Per Contract)", body: state.developFee === "Yes" ? `${term(basisLabel, formatCurrency(results.purchasePrice))} x ${term("Developer Fee", formatPercent(state.developFeeContractPct))} = ${term("Developer Fee (Per Contract)", formatCurrency(results.developFeeContract))}` : `${term("Developer Fee Applies", "No")} = ${term("Developer Fee (Per Contract)", formatCurrency(results.developFeeContract))}`, kind: "Formula" },
+    { title: "Capital Contribution", body: state.newOrUsed === "New" ? `${term("HOA/Condo Fee", formatCurrency(state.hoaMonthly))} x ${term("New Property Multiplier", "2")} = ${term("Capital Contribution", formatCurrency(results.capitalContribution))}` : `${term("New / Used", state.newOrUsed)} = ${term("Capital Contribution", formatCurrency(results.capitalContribution))}`, kind: "Formula" },
+    { title: "Total Pre-Paid Items", body: `${prepaidParts.join(" + ")} = ${term("Total Pre-Paid Items", formatCurrency(results.totalPrepaid))}`, kind: "Formula" },
+    { title: "Closing + Pre-Paid", body: `${term("Total Closing Costs", formatCurrency(results.totalClosingCosts))} + ${term("Total Pre-Paid Items", formatCurrency(results.totalPrepaid))} = ${term("Closing + Pre-Paid", formatCurrency(results.totalClosingAndPrepaid))}`, kind: "Formula" },
+    { title: "Total Cash to Close", body: `${term(borrowerEquityLabel, formatCurrency(results.downPayment))} + ${term("Closing + Pre-Paid", formatCurrency(results.totalClosingAndPrepaid))} - ${term(equityApplied, formatCurrency(results.downPaymentGivenToSeller))} - ${term("Seller Credit", formatCurrency(results.sellerCredit))} - ${term("Other Credits", formatCurrency(results.otherCredits))} = ${term("Total Cash to Close", formatCurrency(results.totalCashToClose))}`, kind: "Formula" },
+    { title: "Principal & Interest", body: `${term("Loan Program", state.program)} on ${term("Loan Amount", formatCurrency(results.loanAmount))} at ${term("Interest Rate", formatPercent(state.rate))} = ${term("Principal & Interest", formatCurrency(results.principalInterest))}`, kind: "Formula" },
+    { title: "Total Monthly Payment", body: `${term("Principal & Interest", formatCurrency(results.principalInterest))} + ${term("Property Taxes / Month", formatCurrency(results.monthlyPropertyTax))} + ${term("Hazard Insurance / Month", formatCurrency(results.monthlyHazard))} + ${term("Flood/HO6 / Month", formatCurrency(results.monthlyFlood))} + ${term("HOA/Condo Fee", formatCurrency(results.monthlyHOA))} = ${term("Total Monthly Payment", formatCurrency(results.totalMonthlyPayment))}`, kind: "Formula" },
+    { title: "Property Taxes / Month", body: `${term(basisLabel, formatCurrency(results.purchasePrice))} x ${term("Annual Property Tax Rate", formatPercent(state.propertyTaxRatePct))} / ${term("Months", "12")} = ${term("Property Taxes / Month", formatCurrency(results.monthlyPropertyTax))}`, kind: "Formula" },
+    { title: "Reserves", body: `${term("Total Monthly Payment", formatCurrency(results.totalMonthlyPayment))} x ${term("Reserve Months", `${formatNumber(results.reserveMonths)} months`)} = ${term("Reserves", formatCurrency(results.reserves))}`, kind: "Formula" },
+    { title: "Total Assets Required", body: `${term("Total Cash to Close", formatCurrency(results.totalCashToClose))} + ${term("Reserves", formatCurrency(results.reserves))} = ${term("Total Assets Required", formatCurrency(results.totalAssetsRequired))}`, kind: "Formula" },
+  ];
+}
+
+function term(label: string, value: string) {
+  return `${label} (${value})`;
+}
+
+function formulaInsightMap(state: LoanState, results: LoanResults) {
+  return Object.fromEntries(formulaInsights(state, results).map((insight) => [insight.title, insight]));
+}
+
+function sourceInsight(title: string, source: string): FieldInsight {
+  return {
+    title,
+    body: `Sourced from ${source}.`,
+    kind: "Source",
+  };
+}
+
+function isRefinanceLoan(loanPurpose: string) {
+  const normalized = loanPurpose.toLowerCase();
+  return normalized.includes("refi") || normalized.includes("cash-out");
+}
+
+function valueBasisLabel(state: Pick<LoanState, "loanPurpose">) {
+  return isRefinanceLoan(state.loanPurpose) ? "Property Value" : "Purchase Price";
+}
+
+function equityLabel(state: Pick<LoanState, "loanPurpose">) {
+  return isRefinanceLoan(state.loanPurpose) ? "Equity Position" : "Down Payment";
+}
+
+function equityAppliedLabel(state: Pick<LoanState, "loanPurpose">) {
+  return isRefinanceLoan(state.loanPurpose) ? "Equity Already in Property" : "Down Payment Given to Seller";
+}
+
+function numberInputValue(value: number) {
+  return Number.isInteger(value) ? value : Number(value.toFixed(4));
+}
+
+function selectInputText(event: React.FocusEvent<HTMLInputElement>) {
+  event.currentTarget.select();
+}
+
 export default function LoanEstimatePage() {
   const [state, setState] = useState<LoanState>(DEFAULT_STATE);
   const [activeTab, setActiveTab] = useState<TabId>("main");
   const [liveMessage, setLiveMessage] = useState("");
   const results = useMemo(() => calculateLoanEstimate(state), [state]);
+  const insights = useMemo(() => formulaInsightMap(state, results), [state, results]);
 
   const assetSegments = useMemo(
     () => [
-      { name: "Down Payment", value: results.downPayment, color: chartColors.downPayment },
+      { name: equityLabel(state), value: results.downPayment, color: chartColors.downPayment },
       { name: "Closing Costs", value: results.totalClosingCosts, color: chartColors.closingCosts },
       { name: "Pre-Paid Items", value: results.totalPrepaid, color: chartColors.prepaid },
       { name: "Reserves", value: results.reserves, color: chartColors.reserves },
     ],
-    [results],
+    [results, state],
   );
 
   useEffect(() => {
@@ -148,9 +259,10 @@ export default function LoanEstimatePage() {
       </span>
 
       <header className="mb-5 overflow-hidden rounded-md bg-[var(--le-paper)] shadow-[var(--shadow-soft)] print-panel">
-        <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid gap-0 print:grid-cols-[1.1fr_0.9fr]">
           <div className="bg-[var(--le-navy)] p-6 text-white">
-            <div className="flex items-start gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-md bg-white/10">
                 <Home className="h-7 w-7 text-[var(--le-gold-soft)]" aria-hidden="true" />
               </div>
@@ -161,10 +273,17 @@ export default function LoanEstimatePage() {
                   Prepared by {state.presentedBy} · NMLS ID {state.nmlsId} · MLO ID {state.mloId}
                 </p>
               </div>
+              </div>
+              <div className="grid min-w-[min(100%,520px)] max-w-[720px] flex-1 grid-cols-1 gap-x-5 gap-y-2 text-left print:hidden sm:grid-cols-2 xl:grid-cols-4">
+                <BannerMeta label="Loan Purpose" value={state.loanPurpose} />
+                <BannerMeta label="Lender / Product" value={state.lenderAndProduct} />
+                <BannerMeta label="Property Address" value={state.propertyAddress} />
+                <BannerMeta label="Program & Rate" value={`${state.program} \u00b7 ${formatPercent(state.rate)}`} />
+              </div>
             </div>
           </div>
 
-          <div className="bg-[var(--le-gold-soft)] p-6">
+          <div className="hidden bg-[var(--le-gold-soft)] p-6 print:block">
             <div className="flex items-start justify-between gap-5">
               <div>
                 <p className="text-[length:var(--type-xs)] font-bold uppercase text-[var(--le-gold)]">
@@ -189,6 +308,9 @@ export default function LoanEstimatePage() {
               <div className="text-right text-[length:var(--type-sm)] text-[var(--le-muted)]">
                 <p className="font-bold text-[var(--le-navy)]">{state.applicantName}</p>
                 <p>Loan #{state.loanNumber}</p>
+                <p>{state.loanPurpose}</p>
+                <p>{state.lenderAndProduct}</p>
+                <p>{state.propertyAddress}</p>
                 <p>{state.program} · {formatPercent(state.rate)}</p>
               </div>
             </div>
@@ -196,8 +318,17 @@ export default function LoanEstimatePage() {
         </div>
       </header>
 
+      <div
+        data-loan-summary="top"
+        className="no-print sticky top-16 z-30 mb-2.5 grid gap-2 rounded-md border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)] backdrop-blur md:grid-cols-3"
+      >
+        <CompactSummaryValue label="Total Assets Required" value={results.totalAssetsRequired} emphasis />
+        <CompactSummaryValue label="Total Monthly Payment" value={results.totalMonthlyPayment} />
+        <CompactSummaryValue label="Total Cash to Close" value={results.totalCashToClose} />
+      </div>
+
       <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
-        <div className="no-print sticky top-0 z-20 mb-5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--le-line)] bg-white/92 p-2 shadow-[var(--shadow-soft)] backdrop-blur">
+        <div className="no-print sticky top-[132px] z-20 mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--le-line)] bg-white/92 p-2 shadow-[var(--shadow-soft)] backdrop-blur">
           <Tabs.List className="flex min-w-0 flex-wrap items-center gap-2">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -244,35 +375,39 @@ export default function LoanEstimatePage() {
           </div>
         </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            data-tab-panel="active"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-          >
-            {activeTab === "main" ? (
-              <MainTab
-                state={state}
-                results={results}
-                assetSegments={assetSegments}
-                updateNumber={updateNumber}
-                updateChoice={updateChoice}
-                matchComputedDownPayment={matchComputedDownPayment}
-              />
-            ) : null}
-            {activeTab === "costs" ? <SummaryCostsTab state={state} results={results} /> : null}
-            {activeTab === "marketing" ? (
-              <SummaryMarketingTab state={state} results={results} assetSegments={assetSegments} />
-            ) : null}
-            {activeTab === "legal" ? <LegalSizeTab state={state} results={results} /> : null}
-            {activeTab === "formulas" ? (
-              <FormulaTab state={state} results={results} updateNumber={updateNumber} />
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_282px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              data-tab-panel="active"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              {activeTab === "main" ? (
+                <MainTab
+                  state={state}
+                  results={results}
+                  insights={insights}
+                  assetSegments={assetSegments}
+                  updateNumber={updateNumber}
+                  updateChoice={updateChoice}
+                  matchComputedDownPayment={matchComputedDownPayment}
+                />
+              ) : null}
+              {activeTab === "costs" ? <SummaryCostsTab state={state} results={results} /> : null}
+              {activeTab === "marketing" ? (
+                <SummaryMarketingTab state={state} results={results} assetSegments={assetSegments} />
+              ) : null}
+              {activeTab === "legal" ? <LegalSizeTab state={state} results={results} /> : null}
+              {activeTab === "formulas" ? (
+                <FormulaTab state={state} results={results} updateNumber={updateNumber} />
+              ) : null}
+            </motion.div>
+          </AnimatePresence>
+          <LoanSummarySidebar state={state} results={results} insights={insights} />
+        </div>
       </Tabs.Root>
 
       <footer className="mt-8 text-center text-[length:var(--type-xs)] text-[var(--le-muted)] print:hidden">
@@ -287,13 +422,15 @@ export default function LoanEstimatePage() {
 function MainTab({
   state,
   results,
+  insights,
   assetSegments,
   updateNumber,
   updateChoice,
   matchComputedDownPayment,
 }: {
   state: LoanState;
-  results: ReturnType<typeof calculateLoanEstimate>;
+  results: LoanResults;
+  insights: Record<string, FieldInsight>;
   assetSegments: Array<{ name: string; value: number; color: string }>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
@@ -306,93 +443,88 @@ function MainTab({
     { name: "Flood / HO6", value: results.monthlyFlood, fill: chartColors.flood },
     { name: "HOA / Condo Fee", value: results.monthlyHOA, fill: chartColors.hoa },
   ];
+  const basisLabel = valueBasisLabel(state);
+  const borrowerEquityLabel = equityLabel(state);
+  const equityApplied = equityAppliedLabel(state);
 
   return (
-    <div className="space-y-3">
-      <Panel title="Loan Officer & Applicant" icon={Users}>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <ReadOnlyField label="Presented By" value={state.presentedBy} />
-          <ReadOnlyField label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
-          <ReadOnlyField label="Office Phone" value={formatUSPhone(state.officePhone)} />
-          <ReadOnlyField label="Email" value={state.email} />
-          <ReadOnlyField label="NMLS ID" value={state.nmlsId} />
-          <ReadOnlyField label="MLO ID" value={state.mloId} />
-          <ReadOnlyField label="Applicant's Name" value={state.applicantName} />
-          <ReadOnlyField label="Loan Number" value={state.loanNumber} />
-        </div>
-      </Panel>
-
+    <div className="space-y-2.5">
       <Panel title="Purchase & Loan Details" icon={Home}>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-          <Readout label="Purchase Price" value={state.purchasePrice} />
-          <NumberField label="Down Payment (%)" field="downPaymentPct" value={state.downPaymentPct} step="0.5" onChange={updateNumber} />
-          <Readout label="Down Payment ($)" value={results.downPayment} />
-          <Readout label="Loan Amount ($)" value={results.loanAmount} emphasis />
-          <Readout label="Loan-to-Value (LTV)" value={results.ltv} format="percent" />
-          <ChoiceField
-            label="Property Class"
-            value={state.sfrOrCondo}
-            options={[
-              { value: "condo", label: "Condo" },
-              { value: "sfr", label: "SFR (Single Family)" },
-            ]}
-            onValueChange={(value) => updateChoice("sfrOrCondo", value)}
-          />
-          <ChoiceField
-            label="Property Type"
-            value={state.propertyType}
-            options={[
-              { value: "CONDO", label: "Condo" },
-              { value: "CONDO-HOTEL", label: "Condo-Hotel" },
-              { value: "SINGLE FAMILY", label: "Single Family" },
-              { value: "COMMERCIAL", label: "Commercial" },
-            ]}
-            onValueChange={(value) => updateChoice("propertyType", value)}
-          />
-          <ChoiceField
-            label="Occupancy"
-            value={state.occupancy}
-            options={[
-              { value: "PRIMARY", label: "Primary" },
-              { value: "SECONDARY", label: "Secondary" },
-              { value: "INVESTMENT", label: "Investment" },
-            ]}
-            onValueChange={(value) => updateChoice("occupancy", value)}
-          />
-          <ChoiceField
-            label="Loan Category"
-            value={state.foreignOrDomestic}
-            options={[
-              { value: "F", label: "Foreign National Loan" },
-              { value: "D", label: "Domestic Loan" },
-            ]}
-            onValueChange={(value) => updateChoice("foreignOrDomestic", value)}
-          />
-          <ChoiceField
-            label="New / Used"
-            value={state.newOrUsed}
-            options={[
-              { value: "New", label: "New" },
-              { value: "Used", label: "Used" },
-            ]}
-            onValueChange={(value) => updateChoice("newOrUsed", value)}
-          />
-          <ChoiceField
-            label="Developer Fee Applies"
-            value={state.developFee}
-            options={[
-              { value: "Yes", label: "Yes" },
-              { value: "No", label: "No" },
-            ]}
-            onValueChange={(value) => updateChoice("developFee", value)}
-          />
-          <ChoiceField
-            label="Loan Program"
-            value={state.program}
-            options={loanPrograms}
-            onValueChange={(value) => updateChoice("program", value)}
-          />
-          <Readout label="Interest Rate (%)" value={state.rate} format="percent" />
+        <div className="space-y-2.5">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+            <NumberField label={borrowerEquityLabel} field="downPaymentPct" value={state.downPaymentPct} step="0.5" onChange={updateNumber} />
+            <ChoiceField
+              label="Property Class"
+              value={state.sfrOrCondo}
+              options={[
+                { value: "condo", label: "Condo" },
+                { value: "sfr", label: "SFR (Single Family)" },
+              ]}
+              onValueChange={(value) => updateChoice("sfrOrCondo", value)}
+            />
+            <ChoiceField
+              label="Property Type"
+              value={state.propertyType}
+              options={[
+                { value: "CONDO", label: "Condo" },
+                { value: "CONDO-HOTEL", label: "Condo-Hotel" },
+                { value: "SINGLE FAMILY", label: "Single Family" },
+                { value: "COMMERCIAL", label: "Commercial" },
+              ]}
+              onValueChange={(value) => updateChoice("propertyType", value)}
+            />
+            <ChoiceField
+              label="Occupancy"
+              value={state.occupancy}
+              options={[
+                { value: "PRIMARY", label: "Primary" },
+                { value: "SECONDARY", label: "Secondary" },
+                { value: "INVESTMENT", label: "Investment" },
+              ]}
+              onValueChange={(value) => updateChoice("occupancy", value)}
+            />
+            <ChoiceField
+              label="Loan Category"
+              value={state.foreignOrDomestic}
+              options={[
+                { value: "F", label: "Foreign National Loan" },
+                { value: "D", label: "Domestic Loan" },
+              ]}
+              onValueChange={(value) => updateChoice("foreignOrDomestic", value)}
+            />
+            <ChoiceField
+              label="New / Used"
+              value={state.newOrUsed}
+              options={[
+                { value: "New", label: "New" },
+                { value: "Used", label: "Used" },
+              ]}
+              onValueChange={(value) => updateChoice("newOrUsed", value)}
+            />
+            <ChoiceField
+              label="Developer Fee Applies"
+              value={state.developFee}
+              options={[
+                { value: "Yes", label: "Yes" },
+                { value: "No", label: "No" },
+              ]}
+              onValueChange={(value) => updateChoice("developFee", value)}
+            />
+            <ChoiceField
+              label="Loan Program"
+              value={state.program}
+              options={loanPrograms}
+              onValueChange={(value) => updateChoice("program", value)}
+            />
+          </div>
+
+          <div className="grid gap-2.5 rounded-md border border-slate-100 bg-[var(--le-gold-soft)] px-3 py-2 md:grid-cols-2 xl:grid-cols-5">
+            <Readout label={basisLabel} value={state.purchasePrice} align="left" insight={sourceInsight(basisLabel, "Scenario Desk")} />
+            <Readout label={borrowerEquityLabel} value={results.downPayment} align="left" insight={insights[borrowerEquityLabel]} />
+            <Readout label="Loan Amount" value={results.loanAmount} align="left" insight={insights["Loan Amount"]} />
+            <Readout label="Loan-to-Value (LTV)" value={results.ltv} format="percent" align="left" insight={insights.LTV} />
+            <Readout label="Interest Rate" value={state.rate} format="percent" align="left" insight={sourceInsight("Interest Rate", "Scenario Desk")} />
+          </div>
         </div>
       </Panel>
 
@@ -401,6 +533,7 @@ function MainTab({
           columns={["Line", "Input", "Amount"]}
           rows={[
             {
+              kind: "dual",
               label: "801. Loan Origination",
               input: (
                 <DualFeeInput
@@ -418,6 +551,8 @@ function MainTab({
               value: results.loanOrigination,
             },
             {
+              kind: "dual",
+              stripe: true,
               label: "802. Broker Fee",
               input: (
                 <DualFeeInput
@@ -440,6 +575,7 @@ function MainTab({
             feeInputRow("812. Processing Fee", "processingFee", state.processingFee, results.processingFee, updateNumber, "10"),
             feeInputRow("813. Admin Fee (Broker)", "adminFee", state.adminFee, results.adminFee, updateNumber, "10"),
             {
+              kind: "standard",
               label: "901. Per-Diem Interest",
               note: "days shown; prepaid item",
               input: (
@@ -469,32 +605,36 @@ function MainTab({
           ]}
           footerLabel="Total Closing Costs"
           footerValue={results.totalClosingCosts}
+          footerInsight={insights["Total Closing Costs"]}
         />
       </Panel>
 
       <Panel title="Pre-Paid Items" icon={PiggyBank}>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Property Tax Escrow (months)" field="taxMonths" value={state.taxMonths} step="1" onChange={updateNumber} />
-          <NumberField label="Annual Property Tax Rate (%)" field="propertyTaxRatePct" value={state.propertyTaxRatePct} step="0.1" onChange={updateNumber} />
-          <Readout label="Taxes Escrowed" value={results.taxesEscrow} />
-          <NumberField label="Hazard Insurance Escrow ($)" field="hazardInsEscrow" value={state.hazardInsEscrow} step="10" onChange={updateNumber} />
-          <NumberField label="Developer Fee - % of Price" field="developFeeContractPct" value={state.developFeeContractPct} step="0.05" onChange={updateNumber} />
-          <Readout label="Developer Fee (per contract)" value={results.developFeeContract} />
-          <Readout label="Capital Contribution" value={results.capitalContribution} sublabel="2x HOA if New" />
-          <NumberField label="Flood / HO6 Insurance - Annual ($)" field="floodHO6Annual" value={state.floodHO6Annual} step="10" onChange={updateNumber} />
-        </div>
-        <div className="mt-2.5 grid gap-2.5 md:grid-cols-2">
-          <StatCard label="Total Pre-Paid Items" value={results.totalPrepaid} />
-          <StatCard label="Closing + Pre-Paid" value={results.totalClosingAndPrepaid} />
+        <div className="space-y-2.5">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
+            <NumberField label="Property Tax Escrow (Months)" field="taxMonths" value={state.taxMonths} step="1" onChange={updateNumber} />
+            <NumberField label="Annual Property Tax Rate" field="propertyTaxRatePct" value={state.propertyTaxRatePct} step="0.1" onChange={updateNumber} />
+            <NumberField label="Hazard Insurance Escrow" field="hazardInsEscrow" value={state.hazardInsEscrow} step="10" onChange={updateNumber} />
+            <NumberField label="Developer Fee - % of Price" field="developFeeContractPct" value={state.developFeeContractPct} step="0.05" onChange={updateNumber} />
+            <NumberField label="Flood / HO6 Insurance - Annual" field="floodHO6Annual" value={state.floodHO6Annual} step="10" onChange={updateNumber} />
+          </div>
+
+          <div className="grid gap-2.5 rounded-md border border-slate-100 bg-[var(--le-gold-soft)] px-3 py-2 md:grid-cols-2 xl:grid-cols-5">
+            <Readout label="Taxes Escrowed" value={results.taxesEscrow} align="left" insight={insights["Taxes Escrowed"]} />
+            <Readout label="Developer Fee (Per Contract)" value={results.developFeeContract} align="left" insight={insights["Developer Fee (Per Contract)"]} />
+            <Readout label="Capital Contribution" value={results.capitalContribution} sublabel="2x HOA if New" align="left" insight={insights["Capital Contribution"]} />
+            <Readout label="Total Pre-Paid Items" value={results.totalPrepaid} align="left" insight={insights["Total Pre-Paid Items"]} />
+            <Readout label="Closing + Pre-Paid" value={results.totalClosingAndPrepaid} align="left" insight={insights["Closing + Pre-Paid"]} />
+          </div>
         </div>
       </Panel>
 
       <Panel title="Monthly Payment" icon={BadgeDollarSign}>
         <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Hazard Insurance - Annual ($, SFR)" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />
-          <NumberField label="HOA / Condo Fee - Monthly ($)" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />
-          <Readout label="Principal & Interest" value={results.principalInterest} />
-          <Readout label="Property Taxes / Month" value={results.monthlyPropertyTax} />
+          <NumberField label="Hazard Insurance - Annual (SFR)" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />
+          <NumberField label="HOA / Condo Fee - Monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />
+          <Readout label="Principal & Interest" value={results.principalInterest} insight={insights["Principal & Interest"]} />
+          <Readout label="Property Taxes / Month" value={results.monthlyPropertyTax} insight={sourceInsight("Property Taxes / Month", "Scenario Desk property tax inputs")} />
         </div>
         <div className="mt-3 h-52 rounded-md border border-[var(--le-line)] bg-[var(--le-panel)] p-2.5">
           <ResponsiveContainer width="100%" height="100%">
@@ -511,35 +651,32 @@ function MainTab({
           </ResponsiveContainer>
         </div>
         <div className="mt-2.5">
-          <StatCard label="Total Monthly Payment" value={results.totalMonthlyPayment} emphasis />
+          <StatCard label="Total Monthly Payment" value={results.totalMonthlyPayment} emphasis insight={insights["Total Monthly Payment"]} />
         </div>
       </Panel>
 
       <Panel title="Cash to Close & Reserves" icon={ShieldCheck} showComputedBadge={false}>
         <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Seller Credit ($)" field="sellerCredit" value={state.sellerCredit} step="100" onChange={updateNumber} />
-          <NumberField label="Other Credits ($)" field="otherCredits" value={state.otherCredits} step="100" onChange={updateNumber} />
-          <div className="space-y-2">
-            <NumberField
-              label="Down Payment Given to Seller ($)"
-              field="downPaymentGivenToSeller"
-              value={state.downPaymentGivenToSeller}
-              step="100"
-              onChange={updateNumber}
-            />
-            <Button size="sm" onClick={matchComputedDownPayment}>
-              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              Match computed down payment
-            </Button>
-          </div>
+          <NumberField label="Seller Credit" field="sellerCredit" value={state.sellerCredit} step="100" onChange={updateNumber} />
+          <NumberField label="Other Credits" field="otherCredits" value={state.otherCredits} step="100" onChange={updateNumber} />
+          <CurrencyField
+            label={equityApplied}
+            field="downPaymentGivenToSeller"
+            value={state.downPaymentGivenToSeller}
+            onChange={updateNumber}
+            action={{
+              label: `Match computed ${borrowerEquityLabel.toLowerCase()}`,
+              onClick: matchComputedDownPayment,
+            }}
+          />
           <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" onChange={updateNumber} />
         </div>
-        <div className="cash-assets-row mt-5 grid items-start gap-5 lg:grid-cols-2">
+        <div className="cash-assets-row mt-4 grid items-center gap-4 xl:grid-cols-[minmax(420px,0.95fr)_minmax(420px,1.05fr)]">
           <AssetsPieChart data={assetSegments} />
-          <div className="cash-stat-grid grid items-stretch gap-3 md:grid-cols-3">
-            <StatCard label="Total Cash to Close" value={results.totalCashToClose} tight />
-            <StatCard label={`Reserves (${formatNumber(results.reserveMonths)} mo.)`} value={results.reserves} tight />
-            <StatCard label="Total Assets Required" value={results.totalAssetsRequired} accent tight />
+          <div className="cash-stat-grid grid auto-rows-fr items-stretch gap-3 md:grid-cols-3">
+            <StatCard label="Total Cash to Close" value={results.totalCashToClose} tight insight={insights["Total Cash to Close"]} />
+            <StatCard label={`Reserves (${formatNumber(results.reserveMonths)} mo.)`} value={results.reserves} tight insight={insights.Reserves} />
+            <StatCard label="Total Assets Required" value={results.totalAssetsRequired} tight insight={insights["Total Assets Required"]} />
           </div>
         </div>
         <Disclaimer compact>
@@ -562,10 +699,12 @@ function SummaryCostsTab({
       <Panel title="Loan Snapshot" icon={ChartNoAxesCombined} dense>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Applicant" textValue={state.applicantName} compact />
-          <StatCard label="Purchase Price" value={results.purchasePrice} compact />
-          <StatCard label="Down Payment" value={results.downPayment} compact />
+          <StatCard label="Loan Purpose" textValue={state.loanPurpose} compact />
+          <StatCard label={valueBasisLabel(state)} value={results.purchasePrice} compact />
+          <StatCard label={equityLabel(state)} value={results.downPayment} compact />
           <StatCard label="Loan Amount" value={results.loanAmount} compact />
           <StatCard label="LTV" value={results.ltv} format="percent" compact />
+          <StatCard label="Lender / Product" textValue={state.lenderAndProduct} compact />
           <StatCard label="Program" textValue={state.program} compact />
           <StatCard label="Rate" value={state.rate} format="percent" compact />
           <StatCard label="Loan Type" textValue={state.foreignOrDomestic === "F" ? "Foreign National" : "Domestic"} compact />
@@ -604,9 +743,9 @@ function SummaryCostsTab({
       <Panel title="Credits & Cash Required" icon={ShieldCheck} dense>
         <SimpleTable
           rows={[
-            ["Down Payment", formatCurrency(results.downPayment)],
+            [equityLabel(state), formatCurrency(results.downPayment)],
             ["Total Closing + Pre-Paid", formatCurrency(results.totalClosingAndPrepaid)],
-            ["Down Payment Given to Seller", formatCurrency(results.downPaymentGivenToSeller)],
+            [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
             ["Seller Credit", formatCurrency(results.sellerCredit)],
             ["Other Credits", formatCurrency(results.otherCredits)],
             ["Total Cash to Close", formatCurrency(results.totalCashToClose)],
@@ -636,7 +775,7 @@ function SummaryMarketingTab({
           ["Total Pre-Paid Items", formatCurrency(results.totalPrepaid)],
           ["Seller Credit", formatCurrency(results.sellerCredit)],
           ["Other Credits", formatCurrency(results.otherCredits)],
-          ["Down Payment Given to Seller", formatCurrency(results.downPaymentGivenToSeller)],
+          [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
           ["Total Cash Required at Closing", formatCurrency(results.totalCashToClose)],
           ["Reserves Savings", formatCurrency(results.reserves)],
         ]}
@@ -659,7 +798,7 @@ function SummaryMarketingTab({
     <DocumentFrame>
       <ClientHeader state={state} subtitle="Borrower Fee Sheet Summary" />
       <section className="print-client-section print-keep-together grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-md border border-[var(--le-line)] p-5">
+        <div className="hidden rounded-md border border-[var(--le-line)] p-5 print:block">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-[length:var(--type-xs)] font-bold uppercase text-[var(--le-muted)]">Total Assets Required</p>
@@ -692,8 +831,8 @@ function SummaryMarketingTab({
             rows={[
               ["Applicant", state.applicantName],
               ["Loan Type", state.foreignOrDomestic === "F" ? "Foreign National Loan" : "Domestic Loan"],
-              ["Purchase Price", formatCurrency(results.purchasePrice)],
-              ["Down Payment", formatCurrency(results.downPayment)],
+              [valueBasisLabel(state), formatCurrency(results.purchasePrice)],
+              [equityLabel(state), formatCurrency(results.downPayment)],
               ["Loan Amount", formatCurrency(results.loanAmount)],
               ["LTV", formatPercent(results.ltv)],
               ["Program", state.program],
@@ -756,8 +895,8 @@ function LegalSizeTab({
         <DocumentSection title="Loan Information" icon={Home}>
           <SimpleTable
             rows={[
-              ["Purchased Price", formatCurrency(results.purchasePrice)],
-              ["Down Payment", formatCurrency(results.downPayment)],
+              [valueBasisLabel(state), formatCurrency(results.purchasePrice)],
+              [equityLabel(state), formatCurrency(results.downPayment)],
               ["Loan Amount", formatCurrency(results.loanAmount)],
               ["Equity / LTV", formatPercent(results.ltv)],
               ["Property Type", state.propertyType],
@@ -830,7 +969,7 @@ function LegalSizeTab({
               rows={[
                 ["Seller Credit", formatCurrency(results.sellerCredit)],
                 ["Other Credits", formatCurrency(results.otherCredits)],
-                ["Down Payment Given to Seller", formatCurrency(results.downPaymentGivenToSeller)],
+                [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
                 ["Total Cash to Close", formatCurrency(results.totalCashToClose)],
                 ["Reserves Savings", formatCurrency(results.reserves)],
               ]}
@@ -862,8 +1001,8 @@ function FormulaTab({
     <div className="space-y-5">
       <Panel title="Title Insurance Premium Calculator" icon={Calculator} dense>
         <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Low-Value Threshold ($)" field="lowThreshold" value={state.lowThreshold} step="100" onChange={updateNumber} />
-          <NumberField label="Flat Fee Below Threshold ($)" field="lowFlatFee" value={state.lowFlatFee} step="10" onChange={updateNumber} />
+          <NumberField label="Low-Value Threshold" field="lowThreshold" value={state.lowThreshold} step="100" onChange={updateNumber} />
+          <NumberField label="Flat Fee Below Threshold" field="lowFlatFee" value={state.lowFlatFee} step="10" onChange={updateNumber} />
         </div>
         <table className="w-full border-collapse text-[length:var(--type-sm)]">
           <thead>
@@ -881,21 +1020,23 @@ function FormulaTab({
                 <tr key={tier}>
                   <td className="border-b border-[var(--le-line)] px-3 py-2">
                     <Input
-                      className="numeric text-right"
+                      className={numericInputClassName}
                       type="number"
                       step="1000"
                       value={state[capField]}
                       aria-label={`Tier ${tier} cap`}
+                      onFocus={selectInputText}
                       onChange={(event) => updateNumber(capField, event.target.value)}
                     />
                   </td>
                   <td className="border-b border-[var(--le-line)] px-3 py-2">
                     <Input
-                      className="numeric text-right"
+                      className={numericInputClassName}
                       type="number"
                       step="0.05"
                       value={state[rateField]}
                       aria-label={`Tier ${tier} rate`}
+                      onFocus={selectInputText}
                       onChange={(event) => updateNumber(rateField, event.target.value)}
                     />
                   </td>
@@ -921,23 +1062,7 @@ function FormulaTab({
 
       <Panel title="Formula Glossary - Open, Plain-English Formulas" icon={FileText} dense>
         <SimpleTable
-          rows={[
-            ["Down Payment", `Purchase Price x Down Payment % = ${formatCurrency(results.downPayment)}`],
-            ["Loan Amount", `Purchase Price - Down Payment = ${formatCurrency(results.loanAmount)}`],
-            ["LTV", `Loan Amount / Purchase Price = ${formatPercent(results.ltv)}`],
-            ["Loan Origination", `% of loan amount or flat fee = ${formatCurrency(results.loanOrigination)}`],
-            ["Broker Fee", `% of loan amount or flat fee = ${formatCurrency(results.brokerFee)}`],
-            ["Per-Diem Interest", `(Loan Amount x Rate / 365) x Days = ${formatCurrency(results.interestPerDiem)}`],
-            ["Fixed Loan Costs", `Origination + Broker + Appraisal + Application + Underwriting + Processing + Admin = ${formatCurrency(results.fixedLoanCosts)}`],
-            ["Fixed Title Costs", `Title and recording line items = ${formatCurrency(results.fixedTitleCosts)}`],
-            ["Total Closing Costs", `Fixed Loan Costs + Fixed Title Costs = ${formatCurrency(results.totalClosingCosts)}`],
-            ["Total Pre-Paid Items", `Taxes + escrow + developer fee + capital contribution + insurance + interest = ${formatCurrency(results.totalPrepaid)}`],
-            ["Total Cash to Close", `Down Payment + Closing + Prepaids - Credits = ${formatCurrency(results.totalCashToClose)}`],
-            ["Principal & Interest", `Amortized payment, or interest-only when program = IO = ${formatCurrency(results.principalInterest)}`],
-            ["Total Monthly Payment", `P&I + Taxes + Hazard + Flood/HO6 + HOA = ${formatCurrency(results.totalMonthlyPayment)}`],
-            ["Reserves", `Total Monthly Payment x Reserve Months = ${formatCurrency(results.reserves)}`],
-            ["Total Assets Required", `Total Cash to Close + Reserves = ${formatCurrency(results.totalAssetsRequired)}`],
-          ]}
+          rows={formulaInsights(state, results).map((insight) => [insight.title, insight.body])}
         />
       </Panel>
 
@@ -951,6 +1076,17 @@ function FormulaTab({
           <ChipGroup title="Loan Category" values={["Foreign National Loan", "Domestic Loan"]} />
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function BannerMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-white/45">{label}</p>
+      <p className="mt-0.5 truncate text-[length:var(--type-sm)] font-bold leading-snug text-white" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -974,10 +1110,10 @@ function Panel({
       transition={{ duration: 0.18 }}
       className={cn(
         "print-panel rounded-md border border-slate-100 bg-white shadow-[var(--shadow-soft)]",
-        dense ? "p-2.5" : "p-3",
+        dense ? "p-2" : "p-2.5",
       )}
     >
-      <div className="mb-2.5 flex items-center justify-between gap-2.5 border-b border-slate-100 pb-2">
+      <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
         <h2 className="flex items-center gap-1.5 text-base font-extrabold text-slate-900">
           <Icon className="h-4 w-4 text-[var(--le-gold)]" aria-hidden="true" />
           {title}
@@ -991,6 +1127,130 @@ function Panel({
       </div>
       {children}
     </motion.section>
+  );
+}
+
+function CompactSummaryValue({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: number;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-md border px-3 py-2", emphasis ? "border-[var(--le-blue)] bg-blue-50/60" : "border-slate-100 bg-gray-50")}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <AnimatedValue
+        value={value}
+        format="currency"
+        className={cn(
+          "mt-0.5 block text-right font-black",
+          emphasis ? "text-[length:var(--type-xl)] text-[var(--le-blue)]" : "text-[length:var(--type-md)] text-[var(--le-navy)]",
+        )}
+      />
+    </div>
+  );
+}
+
+function LoanSummarySidebar({
+  state,
+  results,
+  insights,
+}: {
+  state: LoanState;
+  results: LoanResults;
+  insights: Record<string, FieldInsight>;
+}) {
+  return (
+    <aside
+      data-loan-summary="sidebar"
+      className="no-print sticky top-[196px] hidden rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)] xl:block"
+    >
+      <div className="mb-3 border-b border-slate-100 pb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Live Summary</p>
+        <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
+      </div>
+      <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5">
+        <div className="space-y-2">
+          <SidebarTextValue label="Applicant" value={state.applicantName} />
+          <SidebarTextValue label="Loan Number" value={state.loanNumber} />
+          <SidebarTextValue label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
+          <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
+          <SidebarTextValue label="Email" value={state.email} />
+        </div>
+      </section>
+      <div className="mb-3 border-b border-slate-100 pb-2">
+        <p className="text-sm font-extrabold text-slate-900">Payment & Cash to Close</p>
+      </div>
+      <SidebarBreakdown
+        title="Total Monthly Payment"
+        total={results.totalMonthlyPayment}
+        insight={insights["Total Monthly Payment"]}
+        rows={[
+          ["Principal & Interest", results.principalInterest],
+          ["Property Taxes", results.monthlyPropertyTax],
+          ["Hazard Insurance", results.monthlyHazard],
+          ["Flood / HO6", results.monthlyFlood],
+          ["HOA / Condo Fee", results.monthlyHOA],
+        ]}
+      />
+      <SidebarBreakdown
+        title="Total Cash to Close"
+        total={results.totalCashToClose}
+        insight={insights["Total Cash to Close"]}
+        rows={[
+          [equityLabel(state), results.downPayment],
+          ["Closing Costs", results.totalClosingCosts],
+          ["Pre-Paid Items", results.totalPrepaid],
+          ["Seller Credit", -results.sellerCredit],
+          ["Other Credits", -results.otherCredits],
+        ]}
+      />
+    </aside>
+  );
+}
+
+function SidebarTextValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="block min-w-0 rounded-sm text-left">
+      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
+      <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SidebarBreakdown({
+  title,
+  total,
+  insight,
+  rows,
+}: {
+  title: string;
+  total: number;
+  insight?: FieldInsight;
+  rows: Array<[string, number]>;
+}) {
+  return (
+    <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5 last:mb-0">
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{title}</h3>
+        <ReadOnlyInsight insight={insight} className="rounded-sm">
+          <AnimatedValue value={total} format="currency" className="text-right text-[length:var(--type-lg)] font-black text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]" />
+        </ReadOnlyInsight>
+      </div>
+      <dl className="space-y-1">
+        {rows.map(([label, amount]) => (
+          <div key={label} className="flex items-center justify-between gap-2 text-[length:var(--type-sm)]">
+            <dt className="truncate text-slate-500">{label}</dt>
+            <dd className="numeric font-mono font-bold tabular-nums text-slate-800">{formatCurrency(amount)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -1008,17 +1268,64 @@ function NumberField({
   onChange: (field: NumericField, value: string) => void;
 }) {
   return (
-    <div className="space-y-1">
-      <Label htmlFor={field}>{label}</Label>
+    <div className="min-w-0 space-y-1">
+      <Label className="flex min-h-[22px] items-end leading-tight" htmlFor={field}>{label}</Label>
       <Input
         id={field}
-        className="numeric text-right"
+        className={numericInputClassName}
         type="number"
         inputMode="decimal"
         step={step}
-        value={value}
+        value={numberInputValue(value)}
+        onFocus={selectInputText}
         onChange={(event) => onChange(field, event.target.value)}
       />
+    </div>
+  );
+}
+
+function CurrencyField({
+  label,
+  field,
+  value,
+  onChange,
+  action,
+}: {
+  label: string;
+  field: NumericField;
+  value: number;
+  onChange: (field: NumericField, value: string) => void;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <Label htmlFor={field}>{label}</Label>
+      <div className="relative">
+        <Input
+          id={field}
+          inputMode="decimal"
+          value={formatCurrency(value)}
+          className={cn(numericInputClassName, action && "pr-9")}
+          onFocus={selectInputText}
+          onChange={(event) => onChange(field, event.target.value.replace(/[^\d.-]/g, ""))}
+        />
+        {action ? (
+          <button
+            type="button"
+            className="group/action absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm text-slate-400 transition hover:bg-slate-100 hover:text-[var(--le-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]"
+            aria-label={action.label}
+            onClick={action.onClick}
+          >
+            <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="pointer-events-none absolute bottom-full right-0 z-20 mb-1 hidden whitespace-nowrap rounded-sm bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg group-hover/action:block group-focus-visible/action:block">
+              {action.label}
+            </span>
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1035,7 +1342,7 @@ function ChoiceField<T extends string>({
   onValueChange: (value: T) => void;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <Label>{label}</Label>
       <Select value={value} onValueChange={(nextValue) => onValueChange(nextValue as T)}>
         <SelectTrigger>
@@ -1053,16 +1360,102 @@ function ChoiceField<T extends string>({
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyInsight({
+  insight,
+  children,
+  className,
+}: {
+  insight?: FieldInsight;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  if (!insight) return <>{children}</>;
+
+  const titleId = `insight-title-${insight.title.replace(/\W+/g, "-").toLowerCase()}`;
+  const modal = typeof document === "undefined" ? null : createPortal(
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-[1px]"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="pointer-events-none fixed inset-0 z-[81] flex items-center justify-center p-4"
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="pointer-events-auto max-h-[min(80vh,640px)] min-h-[280px] w-full max-w-[720px] overflow-y-auto rounded-md border border-slate-200 bg-white p-6 text-left shadow-[0_24px_80px_rgba(15,23,42,0.28)]"
+            >
+              <InsightContent insight={insight} onClose={() => setOpen(false)} titleId={titleId} />
+            </div>
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
+  );
+
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2">
-        <Label>{label}</Label>
-        <LockKeyhole className="h-3 w-3 text-[var(--le-teal)]" aria-hidden="true" />
+    <div className={cn("relative", className)}>
+      <button
+        type="button"
+        className="group block w-full cursor-pointer rounded-sm text-inherit outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {children}
+      </button>
+      {modal}
+    </div>
+  );
+}
+
+function InsightContent({ insight, onClose, titleId }: { insight: FieldInsight; onClose: () => void; titleId: string }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{insight.kind}</p>
+          <h3 id={titleId} className="text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">{insight.title}</h3>
+        </div>
+        <button
+          type="button"
+          className="rounded-sm p-1 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+          aria-label="Close breakdown"
+          onClick={onClose}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
       </div>
-      <p className="flex h-7 w-full items-center justify-end truncate rounded-md border border-[var(--le-navy-soft)] bg-[var(--le-panel)] px-2 text-right text-[length:var(--type-sm)] font-semibold text-[var(--le-navy)] shadow-sm">
-        {value}
-      </p>
+      <p className="text-[length:var(--type-md)] leading-relaxed text-slate-600">{insight.body}</p>
     </div>
   );
 }
@@ -1073,34 +1466,44 @@ function Readout({
   format = "currency",
   sublabel,
   emphasis = false,
+  align = "right",
+  insight,
 }: {
   label: string;
   value: number;
   format?: "currency" | "percent";
   sublabel?: string;
   emphasis?: boolean;
+  align?: "left" | "right";
+  insight?: FieldInsight;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-md border bg-[var(--le-panel)] p-2",
-        emphasis ? "border-[var(--le-blue)] bg-white shadow-sm" : "border-[var(--le-navy-soft)]",
-      )}
+    <ReadOnlyInsight
+      insight={insight}
+      className="flex min-h-[50px] flex-col justify-start gap-1 rounded-sm py-0.5 text-left"
     >
-      <div className="flex items-center justify-between gap-2">
+      <span className="flex items-center gap-1">
         <Label>{label}</Label>
-        <LockKeyhole className="h-3 w-3 text-[var(--le-teal)]" aria-hidden="true" />
-      </div>
-      <AnimatedValue
-        value={value}
-        format={format}
-        className={cn(
-          "numeric mt-1 block text-right font-black",
-          emphasis ? "text-[length:var(--type-xl)] text-[var(--le-blue)]" : "text-[length:var(--type-md)] text-[var(--le-navy)]",
-        )}
-      />
-      {sublabel ? <p className="mt-1 text-right text-[length:var(--type-xs)] text-[var(--le-muted)]">{sublabel}</p> : null}
-    </div>
+      </span>
+      <span className={cn("relative block", sublabel && "pb-4")}>
+        <AnimatedValue
+          value={value}
+          format={format}
+          className={cn(
+            "numeric block font-black",
+            align === "left" ? "text-left" : "text-right",
+            emphasis
+              ? "text-[length:var(--type-xl)] text-[var(--le-blue)]"
+              : "text-[length:var(--type-md)] text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]",
+          )}
+        />
+        {sublabel ? (
+          <p className={cn("absolute top-full mt-1 whitespace-nowrap text-[length:var(--type-xs)] text-[var(--le-muted)]", align === "left" ? "left-0 text-left" : "right-0 text-right")}>
+            {sublabel}
+          </p>
+        ) : null}
+      </span>
+    </ReadOnlyInsight>
   );
 }
 
@@ -1136,6 +1539,7 @@ function StatCard({
   emphasis = false,
   compact = false,
   tight = false,
+  insight,
 }: {
   label: string;
   value?: number;
@@ -1145,35 +1549,38 @@ function StatCard({
   emphasis?: boolean;
   compact?: boolean;
   tight?: boolean;
+  insight?: FieldInsight;
 }) {
   return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      className={cn(
-        "rounded-md border p-4",
-        accent
-          ? "border-[var(--le-gold)] bg-[var(--le-gold-soft)] shadow-sm"
-          : "border-[var(--le-line)] bg-[var(--le-panel)]",
-        compact && "p-3",
-        tight && "p-3",
-      )}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      {textValue ? (
-        <p className="mt-2 text-right text-[length:var(--type-md)] font-black text-[var(--le-navy)]">{textValue}</p>
-      ) : (
-        <AnimatedValue
-          value={value ?? 0}
-          format={format}
-          className={cn(
-            "mt-2 block text-right font-black",
-            accent ? "text-[var(--le-blue)]" : "text-[var(--le-navy)]",
-            emphasis || accent ? "text-[length:var(--type-2xl)]" : "text-[length:var(--type-xl)]",
-            tight && (accent ? "text-[length:var(--type-xl)]" : "text-[length:var(--type-lg)]"),
-          )}
-        />
-      )}
-    </motion.div>
+    <ReadOnlyInsight insight={insight} className="block rounded-md">
+      <motion.div
+        whileHover={{ y: -2 }}
+        className={cn(
+          "flex min-h-[70px] min-w-0 flex-col items-start justify-start rounded-md border p-3",
+          accent
+            ? "border-[var(--le-gold)] bg-[var(--le-gold-soft)] shadow-sm"
+            : "border-[var(--le-line)] bg-[var(--le-panel)]",
+          compact && "min-h-[64px] p-2.5",
+          tight && "min-h-[64px] p-2.5",
+        )}
+      >
+        <p className="min-w-0 text-left text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
+        {textValue ? (
+          <p className="mt-1 text-left text-[length:var(--type-md)] font-black text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]">{textValue}</p>
+        ) : (
+          <AnimatedValue
+            value={value ?? 0}
+            format={format}
+            className={cn(
+              "mt-1 block text-left font-black",
+              accent ? "text-[var(--le-blue)]" : "text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]",
+              emphasis || accent ? "text-[length:var(--type-2xl)]" : "text-[length:var(--type-xl)]",
+              tight && (accent ? "text-[length:var(--type-lg)]" : "text-[length:var(--type-lg)]"),
+            )}
+          />
+        )}
+      </motion.div>
+    </ReadOnlyInsight>
   );
 }
 
@@ -1292,11 +1699,12 @@ function ModeNumberInput({
     <span className="flex h-7 items-center justify-end gap-1.5">
       <Input
         aria-label={ariaLabel}
-        className={cn("numeric h-7 text-right", widthClassName)}
+        className={cn(numericInputClassName, "h-7", widthClassName)}
         type="number"
         step={step}
         value={value}
         disabled={disabled}
+        onFocus={selectInputText}
         onChange={(event) => onChange(event.target.value)}
       />
       {suffix ? (
@@ -1325,11 +1733,12 @@ function InlineNumberInput({
     <span className="flex items-center justify-end gap-1.5">
       <Input
         aria-label={ariaLabel}
-        className="numeric h-7 text-right"
+        className={cn(numericInputClassName, "h-7")}
         type="number"
         step={step}
         value={value}
         disabled={disabled}
+        onFocus={selectInputText}
         onChange={(event) => onChange(event.target.value)}
       />
       {suffix ? <span className="min-w-8 text-left text-[length:var(--type-xs)] font-bold text-[var(--le-muted)]">{suffix}</span> : null}
@@ -1346,6 +1755,7 @@ function feeInputRow(
   step: string,
 ) {
   return {
+    kind: "standard" as const,
     label,
     input: (
       <InlineNumberInput
@@ -1359,17 +1769,42 @@ function feeInputRow(
   };
 }
 
+type FinancialRow = {
+  kind?: "standard" | "dual";
+  stripe?: boolean;
+  label: string;
+  note?: string;
+  input: React.ReactNode;
+  value: number;
+};
+
+function isInteractiveTableTarget(target: EventTarget) {
+  return target instanceof Element && Boolean(target.closest("input, button, select, textarea, label, [role='button'], [role='combobox']"));
+}
+
 function FinancialTable({
   columns,
   rows,
   footerLabel,
   footerValue,
+  footerInsight,
 }: {
   columns: string[];
-  rows: Array<{ label: string; note?: string; input: React.ReactNode; value: number }>;
+  rows: FinancialRow[];
   footerLabel: string;
   footerValue: number;
+  footerInsight?: FieldInsight;
 }) {
+  const rowsWithPresentation = rows.map((row, index) => {
+    const isStandardRow = row.kind !== "dual";
+    const standardRowIndex = rows.slice(0, index).filter((previousRow) => previousRow.kind !== "dual").length;
+    return {
+      row,
+      isStandardRow,
+      shouldStripe: row.stripe || (isStandardRow && standardRowIndex % 2 === 1),
+    };
+  });
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] border-collapse text-[length:var(--type-sm)]">
@@ -1383,23 +1818,39 @@ function FinancialTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.label} className="align-middle even:bg-slate-50/40">
-              <td className="border-b border-slate-100 px-2 py-1 text-left font-semibold text-[var(--le-ink)]">
-                {row.label}
-                {row.note ? <span className="ml-2 text-[length:var(--type-xs)] font-medium text-[var(--le-muted)]">{row.note}</span> : null}
-              </td>
-              <td className="border-b border-slate-100 px-2 py-1 text-right">{row.input}</td>
-              <td className="numeric border-b border-slate-100 px-2 py-1 text-right font-mono font-black tabular-nums text-[var(--le-navy)]">
-                <AnimatedValue value={row.value} format="currency" />
-              </td>
-            </tr>
-          ))}
+          {rowsWithPresentation.map(({ row, isStandardRow, shouldStripe }) => {
+            return (
+              <tr
+                key={row.label}
+                className={cn(
+                  "cursor-text align-middle hover:bg-blue-100",
+                  isStandardRow ? shouldStripe && "bg-slate-100" : "bg-white",
+                )}
+                onClick={(event) => {
+                  if (isInteractiveTableTarget(event.target)) return;
+                  event.currentTarget.querySelector<HTMLInputElement>("input[type='number']:not(:disabled)")?.focus();
+                }}
+              >
+                <td className="border-b border-slate-100 px-2 py-1 text-left font-semibold text-[var(--le-ink)]">
+                  {row.label}
+                  {row.note ? <span className="ml-2 text-[length:var(--type-xs)] font-medium text-[var(--le-muted)]">{row.note}</span> : null}
+                </td>
+                <td className="border-b border-slate-100 px-2 py-1 text-right">{row.input}</td>
+                <td className="numeric border-b border-slate-100 px-2 py-1 text-right font-mono font-black tabular-nums text-[var(--le-navy)]">
+                  <AnimatedValue value={row.value} format="currency" />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr className="bg-[var(--le-gold-soft)] text-[var(--le-navy)]">
             <td className="px-2 py-1.5 font-black" colSpan={2}>{footerLabel}</td>
-            <td className="numeric px-2 py-1.5 text-right font-mono font-black tabular-nums">{formatCurrency(footerValue)}</td>
+            <td className="numeric px-2 py-1.5 text-right font-mono font-black tabular-nums">
+              <ReadOnlyInsight insight={footerInsight} className="ml-auto inline-block rounded-sm">
+                <span className="transition-colors group-hover:text-[var(--le-blue)]">{formatCurrency(footerValue)}</span>
+              </ReadOnlyInsight>
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -1446,7 +1897,7 @@ function AssetsPieChart({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("grid items-center gap-4", compact ? "grid-cols-1" : "md:grid-cols-[180px_minmax(220px,1fr)]")}>
+    <div className={cn("grid min-w-0 items-center gap-4", compact ? "grid-cols-1" : "md:grid-cols-[180px_minmax(220px,1fr)]")}>
       <div className={cn("mx-auto", compact ? "h-44 w-full" : "h-44 w-44")}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -1459,7 +1910,7 @@ function AssetsPieChart({
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="min-w-[220px] space-y-2">
+      <ul className="min-w-[220px] space-y-2 self-center">
         {data.map((item) => (
           <li key={item.name} className="grid grid-cols-[auto_minmax(112px,1fr)_auto] items-center gap-2 text-[length:var(--type-sm)]">
             <span className="h-3 w-3 rounded-sm" style={{ background: item.color }} />

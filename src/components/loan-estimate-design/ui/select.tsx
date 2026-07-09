@@ -35,14 +35,14 @@ export const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--le-line)] bg-white text-[var(--le-ink)] shadow-[var(--shadow-lift)]",
+        "z-50 w-max min-w-0 overflow-hidden rounded-md border border-[var(--le-line)] bg-white text-[11px] text-[var(--le-ink)] shadow-[var(--shadow-lift)]",
         position === "popper" && "translate-y-1",
         className,
       )}
       position={position}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
+      <SelectPrimitive.Viewport className="p-px">{children}</SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));
@@ -55,14 +55,14 @@ export const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1 pl-6 pr-2 text-[length:var(--type-sm)] outline-none data-[highlighted]:bg-[var(--le-navy-soft)] data-[highlighted]:text-[var(--le-navy)]",
+      "relative flex cursor-default select-none items-center whitespace-nowrap rounded-sm py-px pl-4 pr-1.5 text-[11px] leading-4 outline-none data-[highlighted]:bg-[var(--le-navy-soft)] data-[highlighted]:text-[var(--le-navy)]",
       className,
     )}
     {...props}
   >
-    <span className="absolute left-2 flex h-3 w-3 items-center justify-center">
+    <span className="absolute left-1 flex h-2.5 w-2.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-3.5 w-3.5" />
+        <Check className="h-3 w-3" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
