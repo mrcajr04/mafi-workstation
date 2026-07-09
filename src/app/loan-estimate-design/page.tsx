@@ -196,50 +196,53 @@ export default function LoanEstimatePage() {
         </div>
       </header>
 
-      <div className="no-print mb-4 flex flex-wrap items-center gap-2">
-        <Button variant="primary" onClick={() => window.print()}>
-          <Printer className="h-4 w-4" aria-hidden="true" />
-          Print / Save as PDF
-        </Button>
-        <Button onClick={resetToPulledForwardValues}>
-          <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-          Reset to pulled-forward values
-        </Button>
-        <span className="ml-auto text-[length:var(--type-xs)] font-semibold text-[var(--le-muted)]">
-          Temporary standalone design workspace; components are intended for manual porting into mafi-workstation.
-        </span>
-      </div>
-
       <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
-        <Tabs.List className="no-print sticky top-0 z-20 mb-5 flex flex-wrap gap-2 rounded-md border border-[var(--le-line)] bg-white/92 p-2 shadow-[var(--shadow-soft)] backdrop-blur">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const selected = activeTab === tab.id;
-            return (
-              <Tabs.Trigger
-                key={tab.id}
-                value={tab.id}
-                className={cn(
-                  "relative flex h-10 items-center gap-2 rounded-md px-3 text-[length:var(--type-sm)] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
-                  selected && "text-[var(--le-navy)]",
-                )}
-              >
-                {selected ? (
-                  <motion.span
-                    layoutId="tab-active-bg"
-                    className="absolute inset-0 rounded-md bg-[var(--le-navy-soft)]"
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                  />
-                ) : null}
-                <span className="relative flex items-center gap-2">
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {tab.label}
-                  {tab.audience === "client" ? <Badge tone="teal" className="px-2 py-0.5">Client</Badge> : null}
-                </span>
-              </Tabs.Trigger>
-            );
-          })}
-        </Tabs.List>
+        <div className="no-print sticky top-0 z-20 mb-5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--le-line)] bg-white/92 p-2 shadow-[var(--shadow-soft)] backdrop-blur">
+          <Tabs.List className="flex min-w-0 flex-wrap items-center gap-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const selected = activeTab === tab.id;
+              return (
+                <Tabs.Trigger
+                  key={tab.id}
+                  value={tab.id}
+                  className={cn(
+                    "relative flex h-9 items-center gap-2 rounded-md px-3 text-[length:var(--type-sm)] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
+                    selected && "text-[var(--le-navy)]",
+                  )}
+                >
+                  {selected ? (
+                    <motion.span
+                      layoutId="tab-active-bg"
+                      className="absolute inset-0 rounded-md bg-[var(--le-navy-soft)]"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    />
+                  ) : null}
+                  <span className="relative flex items-center gap-2">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {tab.label}
+                    {tab.audience === "client" ? <Badge tone="teal" className="px-2 py-0.5">Client</Badge> : null}
+                  </span>
+                </Tabs.Trigger>
+              );
+            })}
+          </Tabs.List>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="secondary" size="sm" onClick={() => window.print()}>
+              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+              Print / PDF
+            </Button>
+            <Button
+              aria-label="Reset to pulled-forward values"
+              title="Reset to pulled-forward values"
+              variant="secondary"
+              size="icon"
+              onClick={resetToPulledForwardValues}
+            >
+              <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
 
         <AnimatePresence mode="wait">
           <motion.div
