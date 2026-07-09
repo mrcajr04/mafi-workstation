@@ -175,17 +175,17 @@
 }
 
 .loan-estimate-design {
-  --font-sans: "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  --le-font-sans: var(--font-sans), "Plus Jakarta Sans", "Segoe UI", Roboto, system-ui, sans-serif;
   --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
-  --le-page: #edf2f7;
+  --le-page: #f8fafc;
   --le-paper: #ffffff;
-  --le-panel: #f7f9fc;
+  --le-panel: #f8fafc;
   --le-ink: #172033;
-  --le-muted: #667085;
-  --le-subtle: #8a97a8;
-  --le-line: #d8e0ea;
+  --le-muted: #64748b;
+  --le-subtle: #94a3b8;
+  --le-line: #e2e8f0;
   --le-navy: #102a43;
-  --le-navy-soft: #dce8f5;
+  --le-navy-soft: #e8f0f8;
   --le-gold: #9a640f;
   --le-gold-soft: #f8edd9;
   --le-teal: #0f766e;
@@ -201,10 +201,11 @@
   --type-xl: 1.16rem;
   --type-2xl: 1.4rem;
   --type-3xl: 1.82rem;
-  --shadow-soft: 0 12px 30px rgb(16 42 67 / 0.08);
-  --shadow-lift: 0 18px 44px rgb(16 42 67 / 0.14);
+  --shadow-soft: 0 10px 28px rgb(15 23 42 / 0.06);
+  --shadow-lift: 0 18px 42px rgb(15 23 42 / 0.1);
+  background: var(--le-page);
   color: var(--le-ink);
-  font-family: var(--font-sans);
+  font-family: var(--le-font-sans);
 }
 
 .loan-estimate-design .numeric {

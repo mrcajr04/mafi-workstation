@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Montserrat } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { headers } from "next/headers";
 import { Toaster } from "@/components/ui/sonner";
 import { PasswordSetupGate } from "@/components/workstation/password-setup-gate";
@@ -8,7 +8,7 @@ import { getNavBadgeCounts } from "@/lib/nav-notifications";
 import { getCurrentProfile, getCurrentUser } from "@/lib/rbac";
 import "./globals.css";
 
-const montserrat = Montserrat({
+const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
 });
@@ -35,7 +35,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${montserrat.variable} h-full antialiased`}
+      className={`${plusJakartaSans.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
         <WorkstationShell

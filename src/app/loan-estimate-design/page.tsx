@@ -141,7 +141,8 @@ export default function LoanEstimatePage() {
   }
 
   return (
-    <main className="loan-estimate-design print-root mx-auto max-w-[1380px] px-5 py-5">
+    <main className="loan-estimate-design print-root -m-6 min-h-[calc(100vh-4rem)] bg-[var(--le-page)] px-6 py-5">
+      <div className="mx-auto max-w-[1380px]">
       <span className="sr-only" role="status" aria-live="polite">
         {liveMessage}
       </span>
@@ -275,6 +276,7 @@ export default function LoanEstimatePage() {
         <p className="font-bold text-[var(--le-navy)]">MLG Home Financial</p>
         <p>3570 NW 87th Avenue, Suite 700, Doral, FL 33178 · (786) 689-2939 · Fax (561) 287-8126</p>
       </footer>
+      </div>
     </main>
   );
 }
@@ -322,7 +324,7 @@ function MainTab({
           <Readout label="Purchase Price" value={state.purchasePrice} />
           <NumberField label="Down Payment (%)" field="downPaymentPct" value={state.downPaymentPct} step="0.5" onChange={updateNumber} />
           <Readout label="Down Payment ($)" value={results.downPayment} />
-          <Readout label="Loan Amount ($)" value={results.loanAmount} />
+          <Readout label="Loan Amount ($)" value={results.loanAmount} emphasis />
           <Readout label="Loan-to-Value (LTV)" value={results.ltv} format="percent" />
           <ChoiceField
             label="Property Class"
@@ -968,13 +970,13 @@ function Panel({
       whileHover={{ y: -2, boxShadow: "var(--shadow-lift)" }}
       transition={{ duration: 0.18 }}
       className={cn(
-        "print-panel rounded-md border border-[var(--le-line)] bg-white shadow-[var(--shadow-soft)]",
+        "print-panel rounded-md border border-slate-100 bg-white shadow-[var(--shadow-soft)]",
         dense ? "p-2.5" : "p-3",
       )}
     >
-      <div className="mb-2.5 flex items-center justify-between gap-2.5 border-b border-[var(--le-line)] pb-2">
-        <h2 className="flex items-center gap-1.5 text-[length:var(--type-md)] font-black text-[var(--le-navy)]">
-          <Icon className="h-3.5 w-3.5 text-[var(--le-gold)]" aria-hidden="true" />
+      <div className="mb-2.5 flex items-center justify-between gap-2.5 border-b border-slate-100 pb-2">
+        <h2 className="flex items-center gap-1.5 text-base font-extrabold text-slate-900">
+          <Icon className="h-4 w-4 text-[var(--le-gold)]" aria-hidden="true" />
           {title}
         </h2>
         {showComputedBadge ? (
@@ -1067,14 +1069,21 @@ function Readout({
   value,
   format = "currency",
   sublabel,
+  emphasis = false,
 }: {
   label: string;
   value: number;
   format?: "currency" | "percent";
   sublabel?: string;
+  emphasis?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-[var(--le-navy-soft)] bg-[var(--le-panel)] p-2">
+    <div
+      className={cn(
+        "rounded-md border bg-[var(--le-panel)] p-2",
+        emphasis ? "border-[var(--le-blue)] bg-white shadow-sm" : "border-[var(--le-navy-soft)]",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <Label>{label}</Label>
         <LockKeyhole className="h-3 w-3 text-[var(--le-teal)]" aria-hidden="true" />
@@ -1082,7 +1091,10 @@ function Readout({
       <AnimatedValue
         value={value}
         format={format}
-        className="numeric mt-1 block text-right text-[length:var(--type-md)] font-black text-[var(--le-navy)]"
+        className={cn(
+          "numeric mt-1 block text-right font-black",
+          emphasis ? "text-[length:var(--type-xl)] text-[var(--le-blue)]" : "text-[length:var(--type-md)] text-[var(--le-navy)]",
+        )}
       />
       {sublabel ? <p className="mt-1 text-right text-[length:var(--type-xs)] text-[var(--le-muted)]">{sublabel}</p> : null}
     </div>
@@ -1137,13 +1149,13 @@ function StatCard({
       className={cn(
         "rounded-md border p-4",
         accent
-          ? "border-[var(--le-gold)] bg-[var(--le-gold-soft)]"
+          ? "border-[var(--le-gold)] bg-[var(--le-gold-soft)] shadow-sm"
           : "border-[var(--le-line)] bg-[var(--le-panel)]",
         compact && "p-3",
         tight && "p-3",
       )}
     >
-      <p className="text-[length:var(--type-xs)] font-black uppercase text-[var(--le-muted)]">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
       {textValue ? (
         <p className="mt-2 text-right text-[length:var(--type-md)] font-black text-[var(--le-navy)]">{textValue}</p>
       ) : (
@@ -1151,7 +1163,8 @@ function StatCard({
           value={value ?? 0}
           format={format}
           className={cn(
-            "mt-2 block text-right font-black text-[var(--le-navy)]",
+            "mt-2 block text-right font-black",
+            accent ? "text-[var(--le-blue)]" : "text-[var(--le-navy)]",
             emphasis || accent ? "text-[length:var(--type-2xl)]" : "text-[length:var(--type-xl)]",
             tight && (accent ? "text-[length:var(--type-xl)]" : "text-[length:var(--type-lg)]"),
           )}
@@ -1358,9 +1371,9 @@ function FinancialTable({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] border-collapse text-[length:var(--type-sm)]">
         <thead>
-          <tr className="bg-[var(--le-navy-soft)] text-left text-[length:var(--type-xs)] font-black uppercase text-[var(--le-navy)]">
+          <tr className="bg-slate-50 text-left text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
             {columns.map((column, index) => (
-              <th key={column} className={cn("border-b border-[var(--le-line)] px-2 py-1", index > 0 && "text-right")}>
+              <th key={column} className={cn("border-b border-slate-100 px-2 py-1", index > 0 && "text-right")}>
                 {column}
               </th>
             ))}
@@ -1368,13 +1381,13 @@ function FinancialTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.label} className="align-middle">
-              <td className="border-b border-[var(--le-line)] px-2 py-1 font-semibold text-[var(--le-ink)]">
+            <tr key={row.label} className="align-middle even:bg-slate-50/40">
+              <td className="border-b border-slate-100 px-2 py-1 text-left font-semibold text-[var(--le-ink)]">
                 {row.label}
                 {row.note ? <span className="ml-2 text-[length:var(--type-xs)] font-medium text-[var(--le-muted)]">{row.note}</span> : null}
               </td>
-              <td className="border-b border-[var(--le-line)] px-2 py-1 text-right">{row.input}</td>
-              <td className="numeric border-b border-[var(--le-line)] px-2 py-1 text-right font-black text-[var(--le-navy)]">
+              <td className="border-b border-slate-100 px-2 py-1 text-right">{row.input}</td>
+              <td className="numeric border-b border-slate-100 px-2 py-1 text-right font-mono font-black tabular-nums text-[var(--le-navy)]">
                 <AnimatedValue value={row.value} format="currency" />
               </td>
             </tr>
@@ -1383,7 +1396,7 @@ function FinancialTable({
         <tfoot>
           <tr className="bg-[var(--le-gold-soft)] text-[var(--le-navy)]">
             <td className="px-2 py-1.5 font-black" colSpan={2}>{footerLabel}</td>
-            <td className="numeric px-2 py-1.5 text-right font-black">{formatCurrency(footerValue)}</td>
+            <td className="numeric px-2 py-1.5 text-right font-mono font-black tabular-nums">{formatCurrency(footerValue)}</td>
           </tr>
         </tfoot>
       </table>
