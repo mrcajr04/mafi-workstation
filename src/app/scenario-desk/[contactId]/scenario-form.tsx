@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Beaker,
@@ -67,6 +67,9 @@ import {
 
 type ScenarioDraft = ScenarioInput;
 type CommentDialogMode = "edit" | "read";
+type PendingNavigation =
+  | { kind: "back" }
+  | { destination: string; kind: "route" };
 
 type ScenarioFormProps = {
   annualInsurance?: string;
@@ -330,6 +333,10 @@ export function ScenarioForm({
   const router = useRouter();
   const formId = useId();
   const [isPending, startTransition] = useTransition();
+  const navigationBypassRef = useRef(false);
+  const navigationTriggerRef = useRef<HTMLElement | null>(null);
+  const historyGuardActiveRef = useRef(false);
+  const historyGuardTokenRef = useRef(`scenario-desk-${contactId}`);
   const calculationContext = {
     annualInsurance,
     annualPropertyTaxes,
@@ -343,6 +350,9 @@ export function ScenarioForm({
   const [commentDraft, setCommentDraft] = useState(initialComments);
   const [insuranceEditorOpen, setInsuranceEditorOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [navigationDialogOpen, setNavigationDialogOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] =
+    useState<PendingNavigation | null>(null);
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>(() => {
     const initial = sortedInitialScenarios(initialScenarios);
@@ -403,6 +413,99 @@ export function ScenarioForm({
 
     return result.hasMismatch ? result : null;
   }, [loanAmount, propertyValue, statedLtv]);
+
+  useEffect(() => {
+    if (!isDirty) {
+      return;
+    }
+
+    const guardToken = historyGuardTokenRef.current;
+
+    if (!historyGuardActiveRef.current) {
+      window.history.pushState(
+        {
+          ...window.history.state,
+          scenarioDeskGuard: guardToken,
+        },
+        "",
+        window.location.href,
+      );
+      historyGuardActiveRef.current = true;
+    }
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    function handleDocumentClick(event: MouseEvent) {
+      if (
+        navigationBypassRef.current ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      const anchor =
+        target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null;
+
+      if (
+        !anchor ||
+        anchor.download ||
+        (anchor.target && anchor.target !== "_self")
+      ) {
+        return;
+      }
+
+      const destination = new URL(anchor.href, window.location.href);
+
+      if (
+        destination.origin !== window.location.origin ||
+        destination.href === window.location.href
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      navigationTriggerRef.current = anchor;
+      setPendingNavigation({
+        destination: `${destination.pathname}${destination.search}${destination.hash}`,
+        kind: "route",
+      });
+      setNavigationDialogOpen(true);
+    }
+
+    function handlePopState(event: PopStateEvent) {
+      if (navigationBypassRef.current) {
+        return;
+      }
+
+      if (event.state?.scenarioDeskGuard === guardToken) {
+        historyGuardActiveRef.current = true;
+        return;
+      }
+
+      historyGuardActiveRef.current = false;
+      setPendingNavigation({ kind: "back" });
+      setNavigationDialogOpen(true);
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [isDirty]);
 
   function updateScenario<T extends keyof ScenarioDraft>(
     scenarioNumber: number,
@@ -520,24 +623,119 @@ export function ScenarioForm({
     setCommentDialogOpen(false);
   }
 
+  function removeHistoryGuard(onComplete: () => void) {
+    const guardToken = historyGuardTokenRef.current;
+    const isCurrentGuardEntry =
+      historyGuardActiveRef.current &&
+      window.history.state?.scenarioDeskGuard === guardToken;
+
+    if (!isCurrentGuardEntry) {
+      onComplete();
+      return;
+    }
+
+    navigationBypassRef.current = true;
+    window.addEventListener(
+      "popstate",
+      () => {
+        historyGuardActiveRef.current = false;
+        navigationBypassRef.current = false;
+        onComplete();
+      },
+      { once: true },
+    );
+    window.history.back();
+  }
+
+  async function persistDraft() {
+    const result = await saveScenarioDesk({
+      comments,
+      contactId,
+      scenarios: scenarioPayload(),
+      selectedScenarioNumber: selectedScenario,
+    });
+
+    if (!result.success) {
+      toast.error(result.error);
+      return false;
+    }
+
+    toast.success("Scenario Desk saved.");
+    setIsDirty(false);
+    return true;
+  }
+
   function save() {
     startTransition(async () => {
-      const result = await saveScenarioDesk({
-        comments,
-        contactId,
-        scenarios: scenarioPayload(),
-        selectedScenarioNumber: selectedScenario,
-      });
-
-      if (!result.success) {
-        toast.error(result.error);
-        return;
+      if (await persistDraft()) {
+        removeHistoryGuard(() => router.refresh());
       }
-
-      toast.success("Scenario Desk saved.");
-      setIsDirty(false);
-      router.refresh();
     });
+  }
+
+  function continuePendingNavigation(navigation: PendingNavigation) {
+    navigationBypassRef.current = true;
+    setNavigationDialogOpen(false);
+    setPendingNavigation(null);
+
+    if (navigation.kind === "back") {
+      window.history.back();
+      window.setTimeout(() => {
+        navigationBypassRef.current = false;
+      }, 0);
+      return;
+    }
+
+    removeHistoryGuard(() => {
+      router.push(navigation.destination);
+      window.setTimeout(() => {
+        navigationBypassRef.current = false;
+      }, 0);
+    });
+  }
+
+  function stayOnPage() {
+    const navigation = pendingNavigation;
+
+    setNavigationDialogOpen(false);
+    setPendingNavigation(null);
+
+    if (navigation?.kind === "back" && !historyGuardActiveRef.current) {
+      navigationBypassRef.current = true;
+      window.addEventListener(
+        "popstate",
+        () => {
+          historyGuardActiveRef.current = true;
+          navigationBypassRef.current = false;
+        },
+        { once: true },
+      );
+      window.history.forward();
+    }
+
+    window.requestAnimationFrame(() => navigationTriggerRef.current?.focus());
+  }
+
+  function saveAndLeave() {
+    if (!pendingNavigation) {
+      return;
+    }
+
+    const navigation = pendingNavigation;
+    startTransition(async () => {
+      if (await persistDraft()) {
+        continuePendingNavigation(navigation);
+      }
+    });
+  }
+
+  function leaveWithoutSaving() {
+    if (!pendingNavigation) {
+      return;
+    }
+
+    setIsDirty(false);
+    continuePendingNavigation(pendingNavigation);
   }
 
   function finalize() {
@@ -570,8 +768,12 @@ export function ScenarioForm({
       }
 
       toast.success("Scenario Desk finalized.");
-      router.push("/scenario-desk");
-      router.refresh();
+      setIsDirty(false);
+      navigationBypassRef.current = true;
+      removeHistoryGuard(() => {
+        router.push("/scenario-desk");
+        router.refresh();
+      });
     });
   }
 
@@ -597,7 +799,11 @@ export function ScenarioForm({
                   className={`size-2 rounded-full ${isDirty ? "bg-mafi-gold" : "bg-mafi-status-green"}`}
                   aria-hidden="true"
                 />
-                {isDirty ? "Unsaved changes" : "All changes saved"}
+                {isPending
+                  ? "Saving…"
+                  : isDirty
+                    ? "Unsaved changes"
+                    : "All changes saved"}
                 {selectedRealScenario ? (
                   <span className="hidden text-mafi-text-light sm:inline">
                     / Scenario {selectedScenario} selected as final
@@ -1345,6 +1551,47 @@ export function ScenarioForm({
           <div className="min-w-0">{contextRail}</div>
         </div>
       </section>
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open && !isPending) {
+            stayOnPage();
+          }
+        }}
+        open={navigationDialogOpen}
+      >
+        <AlertDialogContent className="scenario-desk-no-print sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved Scenario Desk changes. Leaving now will discard
+              them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <p className="sr-only" aria-live="polite">
+            {isPending ? "Saving Scenario Desk before leaving." : ""}
+          </p>
+          <AlertDialogFooter className="sm:flex-row sm:flex-wrap">
+            <AlertDialogCancel autoFocus disabled={isPending}>
+              Stay
+            </AlertDialogCancel>
+            <Button
+              disabled={isPending}
+              onClick={saveAndLeave}
+              type="button"
+            >
+              {isPending ? "Saving…" : "Save and Leave"}
+            </Button>
+            <Button
+              disabled={isPending}
+              onClick={leaveWithoutSaving}
+              type="button"
+              variant="destructive"
+            >
+              Leave Without Saving
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {canEditInsurance ? (
         <NewProspectModal
           contactId={contactId}
