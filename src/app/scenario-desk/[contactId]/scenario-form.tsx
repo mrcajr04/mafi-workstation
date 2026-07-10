@@ -247,6 +247,17 @@ function withCalculatedPayments(
   };
 }
 
+function printAsPdf() {
+  toast.info(
+    "For a clean PDF, open More settings and turn off Headers and footers.",
+    {
+      className: "scenario-desk-print-guidance scenario-desk-no-print",
+      duration: 7000,
+    },
+  );
+  window.setTimeout(() => window.print(), 750);
+}
+
 export function ScenarioForm({
   annualInsurance = "",
   annualPropertyTaxes,
@@ -494,7 +505,7 @@ export function ScenarioForm({
                 </Button>
                 <Button
                   disabled={isPending}
-                  onClick={() => window.print()}
+                  onClick={printAsPdf}
                   type="button"
                   variant="outline"
                 >
