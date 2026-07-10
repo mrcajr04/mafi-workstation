@@ -347,7 +347,6 @@ export function LoanEstimateRedesign({
         <CompactSummaryValue
           label="Total Assets Required"
           value={results.totalAssetsRequired}
-          action={<TraceabilityTrigger data={traceability} />}
           emphasis
         />
         <CompactSummaryValue label="Total Monthly Payment" value={results.totalMonthlyPayment} />

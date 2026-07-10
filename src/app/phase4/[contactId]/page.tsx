@@ -215,11 +215,19 @@ export default async function Phase4DetailPage({
     newOrUsed: "Used",
     occupancy: mapOccupancy(contact.borrowerType),
     officePhone: "",
-    originationFlatFee: moneyString(selectedScenario?.originationPay),
-    originationMode: "flat",
-    originationPct: "",
+    originationFlatFee:
+      moneyString(selectedScenario?.originationPay) ||
+      loanEstimateProductionDefaults.originationFlatFee,
+    originationMode: moneyString(selectedScenario?.originationPay)
+      ? "flat"
+      : loanEstimateProductionDefaults.originationMode,
+    originationPct: moneyString(selectedScenario?.originationPay)
+      ? ""
+      : loanEstimateProductionDefaults.originationPct,
     presentedBy: access.data.fullName,
-    processingFee: moneyString(selectedScenario?.processingFee),
+    processingFee:
+      moneyString(selectedScenario?.processingFee) ||
+      loanEstimateProductionDefaults.processingFee,
     program: selectedScenario
       ? scenarioProgramLabels[selectedScenario.program]
       : loanEstimateProductionDefaults.program,

@@ -7,35 +7,39 @@ import {
   parseStoredLoanEstimateState,
 } from "../src/lib/loan-estimate-calc";
 
-const unknownFeeFields = [
-  "adminFee",
-  "appraisalFee",
-  "applicationFee",
-  "brokerFeeFlatFee",
-  "brokerFeePct",
-  "cityTaxStamps",
-  "endorsements",
-  "floodZoneCertFee",
-  "miscFilingFee",
-  "miscTitleFee",
-  "recordingFees",
-  "settlementFee",
-  "stateTaxStamps",
-  "surveyFee",
-  "titleInsuranceFee",
-  "titleSearchFee",
-  "transamericaFee",
-  "underwritingFee",
-] as const;
+const standardFeeDefaults = {
+  adminFee: "750",
+  appraisalFee: "750",
+  applicationFee: "250",
+  brokerFeePct: "1",
+  cityTaxStamps: "1445.50",
+  endorsements: "492.50",
+  floodZoneCertFee: "20",
+  miscFilingFee: "580",
+  miscTitleFee: "550",
+  processingFee: "950",
+  recordingFees: "285",
+  settlementFee: "1250",
+  stateTaxStamps: "826",
+  titleInsuranceFee: "250",
+  titleSearchFee: "250",
+  transamericaFee: "108",
+  underwritingFee: "1500",
+} as const;
 
-for (const field of unknownFeeFields) {
-  assert.equal(loanEstimateProductionDefaults[field], "", `${field} must start blank`);
-  assert.notEqual(
-    loanEstimateSampleDefaults[field],
-    loanEstimateProductionDefaults[field],
-    `${field} sample data must remain separate`,
+for (const [field, expected] of Object.entries(standardFeeDefaults)) {
+  assert.equal(
+    loanEstimateProductionDefaults[field as keyof typeof standardFeeDefaults],
+    expected,
+    `${field} must use the approved standard default`,
   );
 }
+
+assert.notEqual(
+  loanEstimateProductionDefaults.applicantName,
+  loanEstimateSampleDefaults.applicantName,
+  "sample borrower identity must remain separate from production defaults",
+);
 
 const extras = {
   lenderAndProduct: "Test product",
@@ -44,7 +48,8 @@ const extras = {
   nmlsId: "123",
   propertyAddress: "123 Test St",
 };
-const blankDesign = toDesignState(loanEstimateProductionDefaults, extras);
+const blankState = { ...loanEstimateProductionDefaults, appraisalFee: "" };
+const blankDesign = toDesignState(blankState, extras);
 assert.ok(Number.isNaN(blankDesign.appraisalFee));
 assert.equal(toProductionState(blankDesign).appraisalFee, "");
 
@@ -57,7 +62,7 @@ assert.equal(
   "725.5",
 );
 
-const blankTotals = calculateLoanEstimate(loanEstimateProductionDefaults);
+const blankTotals = calculateLoanEstimate(blankState);
 assert.equal(blankTotals.appraisalFee, 0);
 assert.ok(Number.isFinite(blankTotals.totalClosingCosts));
 assert.ok(Number.isFinite(blankTotals.totalAssetsRequired));
