@@ -420,7 +420,13 @@ export function LoanEstimateRedesign({
           </div>
         </div>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_282px]">
+        <div className="space-y-4">
+          <LoanWorkspaceSummary
+            state={state}
+            results={results}
+            insights={insights}
+            traceability={traceability}
+          />
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -451,12 +457,6 @@ export function LoanEstimateRedesign({
               ) : null}
             </motion.div>
           </AnimatePresence>
-          <LoanSummarySidebar
-            state={state}
-            results={results}
-            insights={insights}
-            traceability={traceability}
-          />
         </div>
       </Tabs.Root>
 
@@ -1206,7 +1206,7 @@ function CompactSummaryValue({
   );
 }
 
-function LoanSummarySidebar({
+function LoanWorkspaceSummary({
   state,
   results,
   insights,
@@ -1218,16 +1218,16 @@ function LoanSummarySidebar({
   traceability: LoanEstimateTraceability;
 }) {
   return (
-    <aside
-      data-loan-summary="sidebar"
-      className="no-print sticky top-[196px] hidden rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)] xl:block"
+    <section
+      data-loan-summary="workspace"
+      className="no-print grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1.05fr)]"
     >
-      <div className="mb-3 border-b border-slate-100 pb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Live Summary</p>
-        <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
-      </div>
-      <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5">
-        <div className="space-y-2">
+      <div className="rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)]">
+        <div className="mb-3 border-b border-slate-100 pb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Loan Summary</p>
+          <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
+        </div>
+        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-1 min-[1500px]:grid-cols-2">
           <SidebarTextValue
             label="Applicant"
             value={state.applicantName}
@@ -1238,9 +1238,6 @@ function LoanSummarySidebar({
           <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
           <SidebarTextValue label="Email" value={state.email} />
         </div>
-      </section>
-      <div className="mb-3 border-b border-slate-100 pb-2">
-        <p className="text-sm font-extrabold text-slate-900">Payment & Cash to Close</p>
       </div>
       <SidebarBreakdown
         title="Total Monthly Payment"
@@ -1266,7 +1263,7 @@ function LoanSummarySidebar({
           ["Other Credits", -results.otherCredits],
         ]}
       />
-    </aside>
+    </section>
   );
 }
 
@@ -1304,7 +1301,7 @@ function SidebarBreakdown({
   rows: Array<[string, number]>;
 }) {
   return (
-    <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5 last:mb-0">
+    <section className="h-full rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)]">
       <div className="mb-2 flex items-end justify-between gap-2">
         <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{title}</h3>
         <ReadOnlyInsight insight={insight} className="rounded-sm">
