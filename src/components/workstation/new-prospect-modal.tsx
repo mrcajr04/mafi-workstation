@@ -2,7 +2,7 @@
 
 import { UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   ProspectIntakeForm,
@@ -29,6 +29,7 @@ export function NewProspectModal({
   const [loadedData, setLoadedData] = useState(initialData);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const modalRef = useRef<HTMLElement>(null);
   const isEditMode = Boolean(initialData || contactId);
 
   function openModal() {
@@ -42,18 +43,64 @@ export function NewProspectModal({
       return;
     }
 
-    function closeOnEscape(event: KeyboardEvent) {
+    function getFocusableElements() {
+      if (!modalRef.current) {
+        return [];
+      }
+
+      return Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter(
+        (element) =>
+          !element.hasAttribute("disabled") &&
+          element.getAttribute("aria-hidden") !== "true" &&
+          element.offsetParent !== null,
+      );
+    }
+
+    function handleModalKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusableElements = getFocusableElements();
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (!firstElement || !lastElement) {
+        event.preventDefault();
+        modalRef.current?.focus();
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+        return;
+      }
+
+      if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
       }
     }
 
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleModalKeyDown);
+    window.requestAnimationFrame(() => {
+      getFocusableElements()[0]?.focus();
+    });
 
     return () => {
       document.body.style.overflow = "";
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleModalKeyDown);
     };
   }, [isOpen]);
 
@@ -101,17 +148,13 @@ export function NewProspectModal({
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-mafi-text-dark/45 p-3 backdrop-blur-md sm:p-5">
-          <button
-            aria-label="Close new prospect modal"
-            className="absolute inset-0 cursor-default"
-            onClick={() => setIsOpen(false)}
-            type="button"
-          />
           <section
             className={cn(
               "relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-lg border border-mafi-border bg-mafi-bg-off shadow-2xl",
               isEditMode ? "max-w-5xl" : "max-w-3xl",
             )}
+            ref={modalRef}
+            tabIndex={-1}
           >
             <header className="flex shrink-0 items-center justify-between border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
               <div>
