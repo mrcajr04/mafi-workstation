@@ -107,9 +107,6 @@ const emptyScenario = (number: number): ScenarioDraft => ({
   scenarioNumber: number,
 });
 
-const developmentSeedComments =
-  "QA seed: Compare the long-term fixed option, lower initial ARM payment, and accelerated 15-year payoff. Review payment differences, escrow treatment, and mortgage-insurance status before selecting a final scenario.";
-
 const developmentSeedScenarios = [
   {
     escrowed: true,
@@ -255,21 +252,6 @@ function hasRealScenario(scenario: ScenarioDraft) {
   return scenario.lenderAndProduct.trim() !== "";
 }
 
-function hasEditableScenarioData(scenario: ScenarioDraft) {
-  return (
-    (scenario.comments?.trim() ?? "") !== "" ||
-    scenario.escrowed ||
-    scenario.interestRate.trim() !== "" ||
-    scenario.lenderAndProduct.trim() !== "" ||
-    normalizeLoanTerm(scenario.loanTerm, scenario.program) !==
-      ScenarioLoanTerm.FIXED_30 ||
-    (scenario.mortgageInsurance ?? false) ||
-    (scenario.monthlyInsurance?.trim() ?? "") !== "" ||
-    scenario.originationPay.trim() !== "" ||
-    scenario.processingFee.trim() !== ""
-  );
-}
-
 function withCalculatedPayments(
   scenario: ScenarioDraft,
   context: {
@@ -374,8 +356,6 @@ export function ScenarioForm({
   );
   const missingAnnualInsurance = !insuranceDeterminationComplete;
   const hasComment = comments.trim() !== "";
-  const hasReplaceableDraftData =
-    comments.trim() !== "" || scenarios.some(hasEditableScenarioData);
   const realScenarios = useMemo(
     () =>
       scenarios
@@ -514,7 +494,6 @@ export function ScenarioForm({
         ),
       ),
     );
-    setComments(developmentSeedComments);
     setSelectedScenario(null);
     setIsDirty(true);
   }
@@ -751,14 +730,7 @@ export function ScenarioForm({
                 </AlertDialog>
                 {process.env.NODE_ENV === "development" ? (
                   <AlertDialog
-                    onOpenChange={(open) => {
-                      if (open && !hasReplaceableDraftData) {
-                        seedTestData();
-                        return;
-                      }
-
-                      setSeedDialogOpen(open);
-                    }}
+                    onOpenChange={setSeedDialogOpen}
                     open={seedDialogOpen}
                   >
                     <AlertDialogTrigger asChild>
@@ -780,8 +752,8 @@ export function ScenarioForm({
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                           Seeding test data will replace the current unsaved
-                          scenario options and Overall Comments. Nothing will
-                          be saved until you click Save.
+                          scenario options. Nothing will be saved until you
+                          click Save.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>

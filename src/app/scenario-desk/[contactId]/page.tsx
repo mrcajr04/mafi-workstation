@@ -648,6 +648,7 @@ export default async function ScenarioDeskDetailPage({
           initialComments={contact.opportunityValue?.comments ?? ""}
           initialScenarios={initialScenarios}
           insuranceDeterminationComplete={insuranceDetermination.complete}
+          key={contact.id}
           loanAmount={formatCurrencyDisplay(
             contact.opportunityValue?.loanAmount,
             "",
