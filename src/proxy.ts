@@ -6,7 +6,6 @@ const publicRoutes = [
   "/forgot-password",
   "/reset-password",
   "/set-password",
-  "/loan-estimate-design",
 ];
 const publicRoutesWithAuthenticatedRedirect = ["/login", "/forgot-password"];
 
