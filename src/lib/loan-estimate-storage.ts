@@ -73,6 +73,47 @@ export async function createLoanEstimateSignedUrl(storagePath: string) {
   return data.signedUrl;
 }
 
+/**
+ * Bulk "when was the Loan Estimate last generated" lookup for list views.
+ * Unlike getLatestLoanEstimateGeneration, this does not create a signed
+ * download URL (list rows don't need one) so it's safe to call for many
+ * contacts in a single page load. Phase4Pipeline also logs GENERATE_DOCUMENT
+ * for the Loan Pre-Approval doc (see document-actions.ts), so entries are
+ * filtered to docType === "LOAN_ESTIMATE" via the shared getStoragePath check.
+ */
+export async function getLatestLoanEstimateGenerationTimestamps(
+  pipelineIds: string[],
+): Promise<Map<string, Date>> {
+  const timestamps = new Map<string, Date>();
+
+  if (!pipelineIds.length) {
+    return timestamps;
+  }
+
+  const auditLogs = await prisma.auditLog.findMany({
+    orderBy: {
+      timestamp: "desc",
+    },
+    where: {
+      action: "GENERATE_DOCUMENT",
+      entityId: { in: pipelineIds },
+      entityType: "Phase4Pipeline",
+    },
+  });
+
+  for (const auditLog of auditLogs) {
+    if (timestamps.has(auditLog.entityId)) {
+      continue;
+    }
+
+    if (getStoragePath(auditLog.fieldDiffs)) {
+      timestamps.set(auditLog.entityId, auditLog.timestamp);
+    }
+  }
+
+  return timestamps;
+}
+
 export async function getLatestLoanEstimateGeneration(
   contactId: string,
 ): Promise<LoanEstimateGeneration | null> {
