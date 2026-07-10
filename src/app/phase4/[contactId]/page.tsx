@@ -7,7 +7,8 @@ import {
 } from "@prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  loanEstimateDefaults,
+  loanEstimateProductionDefaults,
+  parseStoredLoanEstimateState,
   type LoanEstimateState,
 } from "@/lib/loan-estimate-calc";
 import { getLatestLoanEstimateGeneration } from "@/lib/loan-estimate-storage";
@@ -140,6 +141,11 @@ export default async function Phase4DetailPage({
       ficoInfo: true,
       opportunityValue: true,
       propertyDetails: true,
+      phase4Pipeline: {
+        select: {
+          loanEstimateState: true,
+        },
+      },
       scenarioDesk: {
         include: {
           scenarios: {
@@ -193,8 +199,8 @@ export default async function Phase4DetailPage({
   const downPaymentAmount =
     realPurchasePrice && loanAmount ? realPurchasePrice - loanAmount : 0;
 
-  const initialState: LoanEstimateState = {
-    ...loanEstimateDefaults,
+  const sourcedInitialState: LoanEstimateState = {
+    ...loanEstimateProductionDefaults,
     applicantName: contact.prospectName,
     cellPhone: access.data.phone ?? "",
     developFee: "No",
@@ -202,7 +208,7 @@ export default async function Phase4DetailPage({
     downPaymentPct: percentString(downPaymentPct),
     email: access.data.email,
     hazardInsEscrow:
-      selectedScenario?.escrowed === false ? "0" : loanEstimateDefaults.hazardInsEscrow,
+      selectedScenario?.escrowed === false ? "0" : "",
     hazardInsAnnual: moneyString(annualInsurance),
     hoaMonthly: moneyString(hoaMonthly),
     loanNumber: contact.id.slice(0, 8).toUpperCase(),
@@ -211,19 +217,32 @@ export default async function Phase4DetailPage({
     officePhone: "",
     originationFlatFee: moneyString(selectedScenario?.originationPay),
     originationMode: "flat",
-    originationPct: "0",
+    originationPct: "",
     presentedBy: access.data.fullName,
     processingFee: moneyString(selectedScenario?.processingFee),
     program: selectedScenario
       ? scenarioProgramLabels[selectedScenario.program]
-      : loanEstimateDefaults.program,
+      : loanEstimateProductionDefaults.program,
     propertyTaxRatePct: percentString(taxRatePct),
     propertyType: mapPropertyType(property?.propertyType),
     purchasePrice: moneyString(realPurchasePrice),
     rate: selectedScenario?.interestRate.toString() ?? "",
     sfrOrCondo: property?.propertyType === PropertyType.CONDO ? "condo" : "sfr",
     taxMonths:
-      selectedScenario?.escrowed === false ? "0" : loanEstimateDefaults.taxMonths,
+      selectedScenario?.escrowed === false ? "0" : "",
+  };
+  const storedState = parseStoredLoanEstimateState(
+    contact.phase4Pipeline?.loanEstimateState,
+  );
+  const initialState: LoanEstimateState = {
+    ...sourcedInitialState,
+    ...storedState,
+    applicantName: sourcedInitialState.applicantName,
+    cellPhone: sourcedInitialState.cellPhone,
+    email: sourcedInitialState.email,
+    loanNumber: sourcedInitialState.loanNumber,
+    officePhone: sourcedInitialState.officePhone,
+    presentedBy: sourcedInitialState.presentedBy,
   };
   const latestLoanEstimateGeneration =
     await getLatestLoanEstimateGeneration(contactId);

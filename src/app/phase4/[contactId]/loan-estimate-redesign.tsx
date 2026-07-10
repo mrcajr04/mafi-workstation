@@ -198,6 +198,10 @@ function equityAppliedLabel(state: Pick<LoanState, "loanPurpose">) {
 }
 
 function numberInputValue(value: number) {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
   return Number.isInteger(value) ? value : Number(value.toFixed(4));
 }
 
@@ -250,7 +254,7 @@ export function LoanEstimateRedesign({
 
   function updateNumber(field: NumericField, value: string) {
     const parsed = Number.parseFloat(value);
-    const nextValue = Number.isFinite(parsed) ? parsed : 0;
+    const nextValue = value.trim() && Number.isFinite(parsed) ? parsed : Number.NaN;
     setState((current) => {
       if (Object.is(current[field], nextValue)) return current;
       return { ...current, [field]: nextValue };
@@ -617,7 +621,14 @@ function MainTab({
                   onFlatChange={(value) => updateNumber("originationFlatFee", value)}
                 />
               ),
-              value: results.loanOrigination,
+              value:
+                state.originationMode === "flat"
+                  ? Number.isFinite(state.originationFlatFee)
+                    ? results.loanOrigination
+                    : Number.NaN
+                  : Number.isFinite(state.originationPct)
+                    ? results.loanOrigination
+                    : Number.NaN,
             },
             {
               kind: "dual",
@@ -635,7 +646,14 @@ function MainTab({
                   onFlatChange={(value) => updateNumber("brokerFeeFlatFee", value)}
                 />
               ),
-              value: results.brokerFee,
+              value:
+                state.brokerFeeMode === "flat"
+                  ? Number.isFinite(state.brokerFeeFlatFee)
+                    ? results.brokerFee
+                    : Number.NaN
+                  : Number.isFinite(state.brokerFeePct)
+                    ? results.brokerFee
+                    : Number.NaN,
             },
             feeInputRow("803. Appraisal Fee & Final Inspection", "appraisalFee", state.appraisalFee, results.appraisalFee, updateNumber, "10"),
             feeInputRow("804. Application Fee (Credit Report)", "applicationFee", state.applicationFee, results.applicationFee, updateNumber, "10"),
@@ -655,7 +673,7 @@ function MainTab({
                   onChange={(value) => updateNumber("interestDays", value)}
                 />
               ),
-              value: results.interestPerDiem,
+              value: Number.isFinite(state.interestDays) ? results.interestPerDiem : Number.NaN,
             },
             feeInputRow("1101. Settlement / Closing Fee", "settlementFee", state.settlementFee, results.settlementFee, updateNumber, "10"),
             feeInputRow("1102. Abstract / Title Search", "titleSearchFee", state.titleSearchFee, results.titleSearchFee, updateNumber, "10"),
@@ -1825,7 +1843,7 @@ function ModeNumberInput({
         className={cn(numericInputClassName, "h-7", widthClassName)}
         type="number"
         step={step}
-        value={value}
+        value={numberInputValue(value)}
         disabled={disabled}
         onFocus={selectInputText}
         onChange={(event) => onChange(event.target.value)}
@@ -1859,7 +1877,7 @@ function InlineNumberInput({
         className={cn(numericInputClassName, "h-7")}
         type="number"
         step={step}
-        value={value}
+        value={numberInputValue(value)}
         disabled={disabled}
         onFocus={selectInputText}
         onChange={(event) => onChange(event.target.value)}
@@ -1888,7 +1906,7 @@ function feeInputRow(
         onChange={(value) => updateNumber(field, value)}
       />
     ),
-    value: resultValue,
+    value: Number.isFinite(stateValue) ? resultValue : Number.NaN,
   };
 }
 
@@ -1946,7 +1964,7 @@ function FinancialTable({
                 </td>
                 <td className="border-b border-slate-200 px-2 py-1.5 text-right">{row.input}</td>
                 <td className="numeric border-b border-slate-200 px-2 py-1.5 text-right font-mono font-black tabular-nums text-[var(--le-navy)]">
-                  <AnimatedValue value={row.value} format="currency" />
+                  {Number.isFinite(row.value) ? <AnimatedValue value={row.value} format="currency" /> : null}
                 </td>
               </tr>
             );

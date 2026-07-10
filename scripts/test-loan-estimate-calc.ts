@@ -1,7 +1,7 @@
 import {
   calculateLoanEstimate,
   formatLoanEstimateCurrency,
-  loanEstimateDefaults,
+  loanEstimateSampleDefaults,
 } from "../src/lib/loan-estimate-calc";
 
 const expected = {
@@ -13,7 +13,7 @@ const expected = {
   totalPrepaid: "$16,647.03",
 };
 
-const result = calculateLoanEstimate(loanEstimateDefaults);
+const result = calculateLoanEstimate(loanEstimateSampleDefaults);
 const actual = {
   reserves: formatLoanEstimateCurrency(result.reserves),
   totalAssetsRequired: formatLoanEstimateCurrency(result.totalAssetsRequired),

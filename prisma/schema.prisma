@@ -361,6 +361,7 @@ model Phase4Pipeline {
   decisionBranch            DecisionBranch            @default(PENDING)
   loanPreApprovalHtml       String?
   loanEstimateHtml          String?
+  loanEstimateState         Json?
   pricingLockFloat          PricingLockFloat          @default(NOT_SET)
   loanApprovalStatus        LoanApprovalStatus        @default(NOT_STARTED)
   creditAuthorizationStatus CreditAuthorizationStatus @default(NOT_STARTED)

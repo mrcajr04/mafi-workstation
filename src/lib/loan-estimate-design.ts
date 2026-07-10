@@ -299,7 +299,13 @@ export function titleTiers(price: number, state: LoanState) {
   return { contributions, premium };
 }
 
-export function calculateLoanEstimate(state: LoanState): LoanResults {
+export function calculateLoanEstimate(inputState: LoanState): LoanResults {
+  const state = new Proxy(inputState, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "number" && !Number.isFinite(value) ? 0 : value;
+    },
+  });
   const purchasePrice = state.purchasePrice;
   const downPaymentPct = state.downPaymentPct;
   const downPayment = purchasePrice * (downPaymentPct / 100);

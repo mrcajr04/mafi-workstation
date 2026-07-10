@@ -1,6 +1,6 @@
 "use server";
 
-import { RoleType } from "@prisma/client";
+import { Prisma, RoleType } from "@prisma/client";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { formatTimestampForDisplay } from "@/lib/dates";
 import type { LoanEstimateState } from "@/lib/loan-estimate-calc";
@@ -55,9 +55,11 @@ export async function generateLoanEstimatePdf(
       create: {
         contactId,
         loanEstimateHtml: html,
+        loanEstimateState: state as unknown as Prisma.InputJsonValue,
       },
       update: {
         loanEstimateHtml: html,
+        loanEstimateState: state as unknown as Prisma.InputJsonValue,
       },
       where: {
         contactId,

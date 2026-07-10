@@ -126,7 +126,7 @@ export type LoanEstimateResult = {
   underwritingFee: number;
 };
 
-export const loanEstimateDefaults: LoanEstimateState = {
+export const loanEstimateSampleDefaults: LoanEstimateState = {
   adminFee: "750",
   appraisalFee: "750",
   applicationFee: "250",
@@ -194,6 +194,90 @@ export const loanEstimateDefaults: LoanEstimateState = {
   transamericaFee: "108",
   underwritingFee: "1500",
 };
+
+export const loanEstimateProductionDefaults: LoanEstimateState = {
+  adminFee: "",
+  appraisalFee: "",
+  applicationFee: "",
+  applicantName: "",
+  brokerFeeFlatFee: "",
+  brokerFeeMode: "flat",
+  brokerFeePct: "",
+  cellPhone: "",
+  cityTaxStamps: "",
+  developFee: "No",
+  developFeeContractPct: "",
+  downPaymentGivenToSeller: "",
+  downPaymentPct: "",
+  email: "",
+  endorsements: "",
+  floodHO6Annual: "",
+  floodZoneCertFee: "",
+  foreignOrDomestic: "F",
+  hazardInsAnnual: "",
+  hazardInsEscrow: "",
+  hoaMonthly: "",
+  interestDays: "",
+  loanNumber: "",
+  lowFlatFee: "",
+  lowThreshold: "",
+  miscFilingFee: "",
+  miscTitleFee: "",
+  newOrUsed: "Used",
+  occupancy: "OTHER",
+  officePhone: "",
+  originationFlatFee: "",
+  originationMode: "flat",
+  originationPct: "",
+  otherCredits: "",
+  presentedBy: "",
+  processingFee: "",
+  program: "30 YR FIXED",
+  propertyTaxRatePct: "",
+  propertyType: "SINGLE FAMILY",
+  purchasePrice: "",
+  rate: "",
+  recordingFees: "",
+  reserveMonths: "",
+  sellerCredit: "",
+  settlementFee: "",
+  sfrOrCondo: "sfr",
+  stampsOnDeed: "",
+  stateTaxStamps: "",
+  surveyFee: "",
+  taxMonths: "",
+  tier1Cap: "",
+  tier1Rate: "",
+  tier2Cap: "",
+  tier2Rate: "",
+  tier3Cap: "",
+  tier3Rate: "",
+  tier4Cap: "",
+  tier4Rate: "",
+  tier5Cap: "",
+  tier5Rate: "",
+  tier6Cap: "",
+  tier6Rate: "",
+  titleInsuranceFee: "",
+  titleSearchFee: "",
+  transamericaFee: "",
+  underwritingFee: "",
+};
+
+export function parseStoredLoanEstimateState(value: unknown): LoanEstimateState | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  for (const key of Object.keys(loanEstimateProductionDefaults) as Array<keyof LoanEstimateState>) {
+    if (typeof candidate[key] !== typeof loanEstimateProductionDefaults[key]) {
+      return null;
+    }
+  }
+
+  return candidate as LoanEstimateState;
+}
 
 const usd = new Intl.NumberFormat("en-US", {
   currency: "USD",
