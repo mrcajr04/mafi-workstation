@@ -789,17 +789,17 @@ export function ScenarioForm({
                             </strong>
                           </div>
                           <div className="border-l border-mafi-blue-primary/20 bg-mafi-blue-primary/8 px-3 py-2.5">
-                            <span className="flex flex-wrap items-baseline gap-x-1 text-[9px] font-extrabold uppercase tracking-[0.06em] text-mafi-blue-primary">
+                            <span className="block text-[10px] font-extrabold uppercase tracking-[0.06em] text-mafi-blue-primary">
                               PITIA
-                              {missingAnnualInsurance ? (
-                                <span className="normal-case tracking-normal text-amber-800">
-                                  · Excludes insurance
-                                </span>
-                              ) : null}
                             </span>
                             <strong className="mt-1 block text-lg font-extrabold tabular-nums text-mafi-blue-primary">
                               {scenario.pitia || "-"}
                             </strong>
+                            {missingAnnualInsurance ? (
+                              <span className="mt-0.5 block whitespace-nowrap text-[9px] font-semibold leading-none text-amber-800">
+                                Insurance excluded
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </CardContent>
@@ -923,11 +923,6 @@ export function ScenarioForm({
                       >
                         <div className="bg-mafi-bg-light px-3 py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-mafi-text-light">
                           {row.label}
-                          {row.label === "PITIA" && missingAnnualInsurance ? (
-                            <span className="block normal-case tracking-normal text-amber-800">
-                              Excludes insurance
-                            </span>
-                          ) : null}
                         </div>
                         {realScenarios.map((scenario) => {
                           const isSelected =
@@ -954,6 +949,12 @@ export function ScenarioForm({
                                   </span>
                                 ) : null}
                               </span>
+                              {row.label === "PITIA" &&
+                              missingAnnualInsurance ? (
+                                <span className="mt-0.5 block whitespace-nowrap text-[9px] font-medium leading-none text-amber-800">
+                                  Insurance excluded
+                                </span>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -1025,17 +1026,17 @@ export function ScenarioForm({
                               >
                                 <dt className="text-[9px] font-bold uppercase tracking-wide text-mafi-text-light">
                                   {label}
-                                  {label === "PITIA" &&
-                                  missingAnnualInsurance ? (
-                                    <span className="ml-1 normal-case tracking-normal text-amber-800">
-                                      · Excludes insurance
-                                    </span>
-                                  ) : null}
                                 </dt>
                                 <dd
                                   className={`mt-1 break-words text-xs font-bold ${label === "PITIA" ? "text-mafi-blue-primary" : "text-mafi-text-dark"}`}
                                 >
                                   {value}
+                                  {label === "PITIA" &&
+                                  missingAnnualInsurance ? (
+                                    <span className="mt-0.5 block whitespace-nowrap text-[9px] font-medium leading-none text-amber-800">
+                                      Insurance excluded
+                                    </span>
+                                  ) : null}
                                 </dd>
                               </div>
                             ))}
