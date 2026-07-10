@@ -275,6 +275,11 @@
     display: none !important;
   }
 
+  body:has(.scenario-desk-print-scope):has(.scenario-desk-comment-dialog)
+    > [data-state="open"] {
+    display: none !important;
+  }
+
   body:has(.scenario-desk-print-scope) .workstation-print-shell {
     height: auto !important;
     margin: 0 !important;

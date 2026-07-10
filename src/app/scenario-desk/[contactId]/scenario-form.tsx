@@ -4,7 +4,18 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useId, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Beaker, Check, Plus, Printer, Save, Send, Trash2 } from "lucide-react";
+import {
+  Beaker,
+  Check,
+  MessageSquareText,
+  Pencil,
+  Plus,
+  Printer,
+  Save,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   ProspectScenarioPrintDocument,
   type ProspectScenarioPrintContext,
@@ -54,6 +65,7 @@ import {
 } from "@/lib/mortgage/scenario-calculations";
 
 type ScenarioDraft = ScenarioInput;
+type CommentDialogMode = "edit" | "read";
 
 type ScenarioFormProps = {
   annualInsurance?: string;
@@ -342,6 +354,10 @@ export function ScenarioForm({
     monthlyHoa,
   };
   const [comments, setComments] = useState(initialComments);
+  const [commentDialogMode, setCommentDialogMode] =
+    useState<CommentDialogMode>(initialComments.trim() ? "read" : "edit");
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState(initialComments);
   const [isDirty, setIsDirty] = useState(false);
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>(() => {
@@ -355,6 +371,7 @@ export function ScenarioForm({
     selectedScenarioNumber ?? null,
   );
   const missingAnnualInsurance = !hasInsuranceValue(annualInsurance);
+  const hasComment = comments.trim() !== "";
   const hasReplaceableDraftData =
     comments.trim() !== "" || scenarios.some(hasEditableScenarioData);
   const realScenarios = useMemo(
@@ -500,6 +517,28 @@ export function ScenarioForm({
     setIsDirty(true);
   }
 
+  function handleCommentDialogOpenChange(open: boolean) {
+    if (open) {
+      setCommentDraft(comments);
+      setCommentDialogMode(hasComment ? "read" : "edit");
+    } else {
+      setCommentDraft(comments);
+    }
+
+    setCommentDialogOpen(open);
+  }
+
+  function applyCommentDraft() {
+    const nextComment = commentDraft.trim() ? commentDraft : "";
+
+    if (nextComment !== comments) {
+      setComments(nextComment);
+      setIsDirty(true);
+    }
+
+    setCommentDialogOpen(false);
+  }
+
   function save() {
     startTransition(async () => {
       const result = await saveScenarioDesk({
@@ -574,6 +613,129 @@ export function ScenarioForm({
                 ) : null}
               </p>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                <AlertDialog
+                  onOpenChange={handleCommentDialogOpenChange}
+                  open={commentDialogOpen}
+                >
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      className={
+                        hasComment
+                          ? "border-mafi-blue-primary/25 bg-mafi-blue-primary/5 text-mafi-blue-primary hover:bg-mafi-blue-primary/10"
+                          : ""
+                      }
+                      disabled={isPending}
+                      type="button"
+                      variant="outline"
+                    >
+                      <MessageSquareText aria-hidden="true" />
+                      {hasComment ? "View Comment" : "Add Comment"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="scenario-desk-comment-dialog scenario-desk-no-print max-h-[calc(100vh-2rem)] overflow-hidden sm:max-w-xl">
+                    <AlertDialogHeader>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <AlertDialogTitle>
+                            {commentDialogMode === "read"
+                              ? "View Comment"
+                              : hasComment
+                                ? "Edit Comment"
+                                : "Add Comment"}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription
+                            className="mt-1"
+                            id={`${formId}-comment-description`}
+                          >
+                            {commentDialogMode === "read"
+                              ? "Case-level context saved with this Scenario Desk draft."
+                              : hasComment
+                                ? "Changes will update this Scenario Desk draft. Click Save to persist them."
+                                : "The comment will be added to this Scenario Desk draft. Click Save to persist it."}
+                          </AlertDialogDescription>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {commentDialogMode === "read" ? (
+                            <Button
+                              aria-label="Edit Comment"
+                              onClick={() => {
+                                setCommentDraft(comments);
+                                setCommentDialogMode("edit");
+                              }}
+                              size="icon"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Pencil aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                          <AlertDialogCancel asChild>
+                            <Button
+                              aria-label="Close comment dialog"
+                              size="icon"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <X aria-hidden="true" />
+                            </Button>
+                          </AlertDialogCancel>
+                        </div>
+                      </div>
+                    </AlertDialogHeader>
+
+                    {commentDialogMode === "edit" ? (
+                      <div className="min-h-0 overflow-y-auto pr-1">
+                        <Label htmlFor={`${formId}-comment-draft`}>
+                          Overall Comment
+                        </Label>
+                        <textarea
+                          aria-describedby={`${formId}-comment-helper ${formId}-comment-count`}
+                          autoFocus
+                          className="mt-2 min-h-[180px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm leading-6 text-mafi-text-dark outline-none transition placeholder:text-muted-foreground focus-visible:border-mafi-blue-primary focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/20"
+                          id={`${formId}-comment-draft`}
+                          maxLength={800}
+                          onChange={(event) =>
+                            setCommentDraft(event.target.value)
+                          }
+                          placeholder="Document the rationale, tradeoffs, and next-step guidance for this scenario review."
+                          value={commentDraft}
+                        />
+                        <div className="mt-1.5 flex items-start justify-between gap-4 text-xs text-mafi-text-mid">
+                          <p id={`${formId}-comment-helper`}>
+                            Changes remain local until you click Save or
+                            finalize the Scenario Desk.
+                          </p>
+                          <p
+                            className="shrink-0 font-medium text-mafi-text-light"
+                            id={`${formId}-comment-count`}
+                          >
+                            {commentDraft.length}/800
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-mafi-border bg-mafi-bg-light px-4 py-3">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-mafi-text-dark [overflow-wrap:anywhere]">
+                          {comments}
+                        </p>
+                      </div>
+                    )}
+
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>
+                        {commentDialogMode === "read" ? "Close" : "Cancel"}
+                      </AlertDialogCancel>
+                      {commentDialogMode === "edit" ? (
+                        <AlertDialogAction
+                          disabled={!hasComment && !commentDraft.trim()}
+                          onClick={applyCommentDraft}
+                        >
+                          {hasComment ? "Apply Changes" : "Add Comment"}
+                        </AlertDialogAction>
+                      ) : null}
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 {process.env.NODE_ENV === "development" ? (
                   <AlertDialog
                     onOpenChange={(open) => {
@@ -1188,34 +1350,6 @@ export function ScenarioForm({
               </Card>
             )}
 
-            <Card className="order-5 w-full border-mafi-border shadow-sm">
-              <CardHeader className="border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
-                <CardTitle className="text-base font-bold text-mafi-text-dark">
-                  Overall Comments
-                </CardTitle>
-                <p className="text-xs text-mafi-text-mid">
-                  Add context that should follow this case into the next phase.
-                </p>
-              </CardHeader>
-              <CardContent className="p-4">
-                <textarea
-                  aria-label="Overall comments"
-                  className="min-h-[108px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5 text-sm leading-6 text-mafi-text-dark outline-none transition placeholder:text-muted-foreground focus-visible:border-mafi-blue-primary focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/20 disabled:opacity-50"
-                  disabled={readOnly || isPending}
-                  id={`${formId}-comments`}
-                  maxLength={800}
-                  onChange={(event) => {
-                    setComments(event.target.value);
-                    setIsDirty(true);
-                  }}
-                  placeholder="Document the rationale, tradeoffs, and next-step guidance for this scenario review."
-                  value={comments}
-                />
-                <div className="mt-1.5 text-right text-[10px] font-medium text-mafi-text-light">
-                  {comments.length}/800
-                </div>
-              </CardContent>
-            </Card>
           </div>
           <div className="min-w-0">{contextRail}</div>
         </div>
