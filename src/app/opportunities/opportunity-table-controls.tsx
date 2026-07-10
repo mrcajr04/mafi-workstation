@@ -382,7 +382,7 @@ export const borrowerTypeOptions = [
   { label: "Primary", value: "PRIMARY" },
   { label: "Second Home", value: "SECOND_HOME" },
   { label: "Investment", value: "INVESTMENT" },
-  { label: "Other", value: "OTHER" },
+  { label: "Business", value: "OTHER" },
 ];
 
 export const loanPurposeOptions = [

@@ -376,7 +376,7 @@ const borrowerTypeSearchLabels: Record<BorrowerType, string> = {
   [BorrowerType.PRIMARY]: "Primary",
   [BorrowerType.SECOND_HOME]: "Second Home",
   [BorrowerType.INVESTMENT]: "Investment",
-  [BorrowerType.OTHER]: "Other",
+  [BorrowerType.OTHER]: "Business",
 };
 
 const loanPurposeSearchLabels: Record<LoanPurpose, string> = {
