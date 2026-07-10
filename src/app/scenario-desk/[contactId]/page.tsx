@@ -97,7 +97,7 @@ function PhaseProgress({ finalized }: { finalized: boolean }) {
         const isActive = phaseNumber === activePhase;
 
         return (
-          <li className="relative min-w-0 pt-5" key={phase}>
+          <li className="relative min-w-0 pt-[18px]" key={phase}>
             {index < phases.length - 1 ? (
               <span
                 aria-hidden="true"
@@ -157,8 +157,16 @@ function ScenarioContextRail({
   return (
     <aside
       aria-label="Borrower and opportunity context"
-      className="min-w-0 space-y-4 min-[1180px]:sticky min-[1180px]:top-[76px]"
+      className="min-w-0 space-y-3 min-[1180px]:sticky min-[1180px]:top-[76px]"
     >
+      <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-mafi-text-light">
+          Borrower & opportunity context
+        </p>
+        <span className="rounded-full border border-mafi-blue-primary/15 bg-mafi-blue-primary/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-mafi-blue-primary">
+          From intake · Read only
+        </span>
+      </div>
       <SummaryCard kicker="Borrower snapshot" title="Contact Information">
         <SummaryItem
           className="col-span-2"
@@ -210,23 +218,20 @@ function ScenarioContextRail({
       </SummaryCard>
 
       <Card className="overflow-hidden border-mafi-border bg-mafi-bg-white shadow-sm">
-        <section className="p-4" aria-labelledby="property-details-title">
+        <section className="p-3.5" aria-labelledby="property-details-title">
           <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-mafi-text-light">
             Scenario assumptions
           </p>
-          <div className="mt-1 flex items-start justify-between gap-3">
+          <div className="mt-1">
             <h2
               id="property-details-title"
               className="text-base font-bold text-mafi-text-dark"
             >
               Property Details
             </h2>
-            <span className="rounded-full border border-mafi-blue-primary/15 bg-mafi-blue-primary/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-mafi-blue-primary">
-              From intake
-            </span>
           </div>
           <PropertyDuplicateNotice matches={duplicatePropertyContacts} />
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3.5">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
             <SummaryItem
               className="col-span-2"
               label="Address"
@@ -262,7 +267,7 @@ function ScenarioContextRail({
         </section>
 
         <section
-          className="border-t border-mafi-border p-4"
+          className="border-t border-mafi-border p-3.5"
           aria-labelledby="opportunity-value-title"
         >
           <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-mafi-text-light">
@@ -274,7 +279,7 @@ function ScenarioContextRail({
           >
             Opportunity Value
           </h2>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3.5">
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
             <SummaryItem
               featured
               label="Property Value"
@@ -538,7 +543,7 @@ export default async function ScenarioDeskDetailPage({
 
   return (
     <div className="scenario-desk-print-scope -mx-4 -mt-4 overflow-x-clip sm:-mx-6 sm:-mt-6">
-      <header className="scenario-desk-screen-only border-b border-mafi-border bg-mafi-bg-white px-4 py-4 sm:px-6 lg:px-8">
+      <header className="scenario-desk-screen-only border-b border-mafi-border bg-mafi-bg-white px-4 py-3.5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1530px]">
           <Link
             className="scenario-desk-no-print inline-flex min-h-8 items-center gap-1.5 text-xs font-bold text-mafi-text-mid transition hover:text-mafi-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30"
@@ -547,22 +552,24 @@ export default async function ScenarioDeskDetailPage({
             <ArrowLeft className="size-3.5" aria-hidden="true" />
             Back to Scenario Desk
           </Link>
-          <div className="mt-2.5 flex items-end justify-between gap-8">
+          <div className="mt-2 flex items-end justify-between gap-8">
             <div className="min-w-0">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-mafi-blue-primary">
                 {isFinalizedReadOnly
                   ? "Phase 4 handoff complete"
                   : "Phase 3 / Scenario Review"}
               </p>
-              <h1 className="mt-1.5 flex flex-wrap items-center gap-2 text-2xl font-bold text-mafi-text-dark sm:text-3xl">
-                <span className="break-words">{contact.prospectName}</span>
+              <h1 className="mt-1 flex flex-wrap items-center gap-2 text-2xl font-bold text-mafi-text-dark sm:text-3xl">
+                <span className="break-words [overflow-wrap:anywhere]">
+                  {contact.prospectName}
+                </span>
                 <StatusBadge
                   className="shrink-0"
                   label={isFinalizedReadOnly ? "Finalized" : "In Review"}
                   tone={isFinalizedReadOnly ? "success" : "neutral"}
                 />
               </h1>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-mafi-text-mid">
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-mafi-text-mid">
                 <span className="rounded-full border border-mafi-blue-primary/20 bg-mafi-blue-primary/5 px-2 py-0.5 font-bold text-mafi-blue-primary">
                   {loanPurposeLabels[contact.loanPurpose]}
                 </span>
@@ -1059,7 +1066,7 @@ function SummaryCard({
 }) {
   return (
     <Card className="h-full break-inside-avoid border-mafi-border bg-mafi-bg-white shadow-sm">
-      <CardHeader className="border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
+      <CardHeader className="border-b border-mafi-border bg-mafi-bg-light px-4 py-2.5">
         {kicker ? (
           <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-mafi-text-light">
             {kicker}
@@ -1069,7 +1076,7 @@ function SummaryCard({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3.5 p-4">
+      <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2.5 p-3.5">
         {children}
       </CardContent>
     </Card>
@@ -1098,7 +1105,7 @@ function SummaryItem({
         <div className="mt-1">{valueNode}</div>
       ) : (
         <p
-          className={`mt-0.5 break-words leading-5 text-mafi-text-dark ${featured ? "text-lg font-bold tabular-nums" : "text-sm font-semibold"}`}
+          className={`mt-0.5 break-words leading-5 text-mafi-text-dark [overflow-wrap:anywhere] ${featured ? "text-lg font-bold tabular-nums" : "text-sm font-semibold"}`}
         >
           {value}
         </p>

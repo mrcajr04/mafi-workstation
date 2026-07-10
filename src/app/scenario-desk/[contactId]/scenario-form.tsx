@@ -654,7 +654,7 @@ export function ScenarioForm({
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-3 p-3.5">
-                        <ScenarioGroup title="Loan Terms">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <Field
                             className="sm:col-span-2"
                             label="Lender & Product"
@@ -724,7 +724,7 @@ export function ScenarioForm({
                               </SelectContent>
                             </Select>
                           </Field>
-                        </ScenarioGroup>
+                        </div>
 
                         {(rateWarning || missingAnnualInsurance) && (
                           <div className="space-y-2">
@@ -923,7 +923,7 @@ export function ScenarioForm({
                             <div
                               className={`min-w-0 break-words px-3 py-2.5 text-xs font-semibold ${
                                 isSelected
-                                  ? "bg-mafi-blue-primary/8 text-mafi-text-dark ring-1 ring-inset ring-mafi-blue-primary/15"
+                                  ? "bg-mafi-blue-primary/[0.03] text-mafi-text-dark ring-1 ring-inset ring-mafi-blue-primary/25"
                                   : "bg-white text-mafi-text-mid"
                               } ${row.emphasize ? "font-extrabold text-mafi-blue-primary" : ""}`}
                               key={scenario.scenarioNumber}
@@ -1045,7 +1045,7 @@ export function ScenarioForm({
               </Card>
             )}
 
-            <Card className="order-5 mx-auto w-full max-w-[950px] border-mafi-border shadow-sm">
+            <Card className="order-5 w-full border-mafi-border shadow-sm">
               <CardHeader className="border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
                 <CardTitle className="text-base font-bold text-mafi-text-dark">
                   Overall Comments
@@ -1084,23 +1084,6 @@ export function ScenarioForm({
         selectedScenarioNumber={selectedScenario}
       />
     </>
-  );
-}
-
-function ScenarioGroup({
-  children,
-  title,
-}: {
-  children: React.ReactNode;
-  title: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-bold uppercase text-mafi-text-mid">
-        {title}
-      </h3>
-      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
-    </div>
   );
 }
 
