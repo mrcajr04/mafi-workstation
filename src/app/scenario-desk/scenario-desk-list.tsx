@@ -24,6 +24,8 @@ const getCachedScenarioDeskContacts = unstable_cache(
       select: {
         id: true,
         createdAt: true,
+        enteredReviewAt: true,
+        updatedAt: true,
         loanPurpose: true,
         prospectEmail: true,
         prospectName: true,
@@ -73,7 +75,7 @@ export async function ScenarioDeskList() {
           <div className="divide-y divide-mafi-border">
             {contacts.map((contact) => (
               <Link
-                className="grid gap-2 px-4 py-3 text-sm transition hover:bg-mafi-bg-light md:grid-cols-[1.2fr_1fr_1fr_1fr] md:items-center"
+                className="grid gap-3 px-4 py-3 text-sm transition hover:bg-mafi-bg-light md:grid-cols-[1.2fr_0.8fr_1.1fr_0.8fr_auto] md:items-center"
                 href={`/scenario-desk/${contact.id}`}
                 key={contact.id}
               >
@@ -93,8 +95,16 @@ export async function ScenarioDeskList() {
                   BDR: {contact.bdr.fullName} · {contact.bdr.email}
                 </p>
                 <p className="text-mafi-text-mid">
-                  Ready since {formatDate(contact.createdAt)}
+                  Ready since{" "}
+                  {formatDate(
+                    contact.enteredReviewAt ??
+                      contact.updatedAt ??
+                      contact.createdAt,
+                  )}
                 </p>
+                <span className="inline-flex justify-center rounded-md bg-mafi-blue-primary px-3 py-2 text-xs font-bold text-white">
+                  Review Scenario -&gt;
+                </span>
               </Link>
             ))}
           </div>

@@ -62,9 +62,9 @@ import { useSectionEditState } from "@/components/workstation/section-edit-state
 import {
   currencyInputToRaw,
   formatCurrencyInput,
-  formatRatioPercentDisplay,
 } from "@/lib/currency";
 import type { DuplicatePropertyContact } from "@/lib/duplicate-property-contacts";
+import { isRefinanceLoanPurpose } from "@/lib/labels";
 import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -98,7 +98,8 @@ type ProspectIntakeFormState = {
   propertyType: PropertyType;
   propertyTaxesLastYear: string;
   propertyTaxesPresentYear: string;
-  insuranceType: InsuranceType | "";
+  estimatedInsuranceAnnual: string;
+  insuranceTypes: InsuranceType[];
   hoaName: string;
   hoaManagementInfo: string;
   additionalHoaFees: string;
@@ -154,7 +155,8 @@ const initialForm: ProspectIntakeFormState = {
   propertyType: PropertyType.SFR,
   propertyTaxesLastYear: "",
   propertyTaxesPresentYear: "",
-  insuranceType: "" as InsuranceType | "",
+  estimatedInsuranceAnnual: "",
+  insuranceTypes: [],
   hoaName: "",
   hoaManagementInfo: "",
   additionalHoaFees: "",
@@ -190,7 +192,8 @@ type PropertyDetailsSnapshot = Pick<
   | "additionalHoaFees"
   | "hoaManagementInfo"
   | "hoaName"
-  | "insuranceType"
+  | "insuranceTypes"
+  | "estimatedInsuranceAnnual"
   | "propertyAddress"
   | "propertyTaxesLastYear"
   | "propertyTaxesPresentYear"
@@ -235,7 +238,8 @@ function propertyDetailsSnapshot(
     additionalHoaFees: form.additionalHoaFees,
     hoaManagementInfo: form.hoaManagementInfo,
     hoaName: form.hoaName,
-    insuranceType: form.insuranceType,
+    insuranceTypes: form.insuranceTypes,
+    estimatedInsuranceAnnual: form.estimatedInsuranceAnnual,
     propertyAddress: form.propertyAddress,
     propertyTaxesLastYear: form.propertyTaxesLastYear,
     propertyTaxesPresentYear: form.propertyTaxesPresentYear,
@@ -260,7 +264,7 @@ const borrowerTypeLabels = {
   [BorrowerType.PRIMARY]: "Primary",
   [BorrowerType.SECOND_HOME]: "Second Home",
   [BorrowerType.INVESTMENT]: "Investment",
-  [BorrowerType.OTHER]: "Other",
+  [BorrowerType.OTHER]: "Business",
 };
 
 const vestingLabels = {
@@ -306,10 +310,22 @@ const insuranceLabels = {
   [InsuranceType.OTHER]: "Other",
 };
 
+const selectableInsuranceTypes = Object.entries(insuranceLabels).filter(
+  ([value]) =>
+    value !== InsuranceType.MASTER_INSURANCE &&
+    value !== InsuranceType.MASTER_FLOOD &&
+    value !== InsuranceType.MASTER_WINDSTORM,
+) as Array<[InsuranceType, string]>;
+
+function formatInsuranceTypes(values: InsuranceType[]) {
+  return values.length
+    ? values.map((value) => insuranceLabels[value]).join(", ")
+    : "Not provided";
+}
+
 const realtorLabels = {
   [RealtorStatus.YES]: "Yes",
   [RealtorStatus.NO]: "No",
-  [RealtorStatus.NEEDS_HELP]: "Needs Help",
 };
 
 const opportunityStatusLabels = {
@@ -424,6 +440,7 @@ export function ProspectIntakeForm({
   );
   const [isProspectPhoneEdited, setIsProspectPhoneEdited] = useState(false);
   const [isGlobalSaving, setIsGlobalSaving] = useState(false);
+  const [isOpportunitySaving, setIsOpportunitySaving] = useState(false);
   const [isPending, startTransition] = useTransition();
   const contactCreatePromiseRef = useRef<Promise<string | null> | null>(null);
   const {
@@ -501,7 +518,8 @@ export function ProspectIntakeForm({
     isContactSaving ||
     isCoBorrowersSaving ||
     isFinancialSaving ||
-    isPropertySaving;
+    isPropertySaving ||
+    isOpportunitySaving;
 
   function updateField<T extends keyof typeof form>(
     field: T,
@@ -533,6 +551,7 @@ export function ProspectIntakeForm({
     if (
       field === "opportunityPropertyValue" ||
       field === "opportunityLoanAmount" ||
+      field === "opportunityLtv" ||
       field === "opportunityStatus"
     ) {
       setOpportunityErrors({});
@@ -894,6 +913,7 @@ export function ProspectIntakeForm({
         }
 
         toast.success("Co-borrowers saved.");
+        onOptimisticSaved?.(form);
         router.refresh();
         return coBorrowersSnapshot(form);
     });
@@ -914,6 +934,7 @@ export function ProspectIntakeForm({
         }
 
         toast.success("Financial Snapshot saved.");
+        onOptimisticSaved?.(form);
         router.refresh();
         return financialSnapshot(form);
     });
@@ -992,7 +1013,10 @@ export function ProspectIntakeForm({
         propertyTaxesPresentYear: currencyInputToRaw(
           form.propertyTaxesPresentYear,
         ),
-        insuranceType: form.insuranceType || undefined,
+        estimatedInsuranceAnnual: currencyInputToRaw(
+          form.estimatedInsuranceAnnual,
+        ),
+        insuranceTypes: form.insuranceTypes,
         hoaName: form.hoaName,
         hoaManagementInfo: form.hoaManagementInfo,
         additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
@@ -1077,7 +1101,10 @@ export function ProspectIntakeForm({
           propertyTaxesPresentYear: currencyInputToRaw(
             form.propertyTaxesPresentYear,
           ),
-          insuranceType: form.insuranceType || undefined,
+          estimatedInsuranceAnnual: currencyInputToRaw(
+            form.estimatedInsuranceAnnual,
+          ),
+          insuranceTypes: form.insuranceTypes,
           hoaName: form.hoaName,
           hoaManagementInfo: form.hoaManagementInfo,
           additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
@@ -1090,6 +1117,7 @@ export function ProspectIntakeForm({
         }
 
         toast.success("Property Details saved.");
+        onOptimisticSaved?.(form);
         router.refresh();
         return propertyDetailsSnapshot(form);
     });
@@ -1171,7 +1199,10 @@ export function ProspectIntakeForm({
                 propertyTaxesPresentYear: currencyInputToRaw(
                   form.propertyTaxesPresentYear,
                 ),
-                insuranceType: form.insuranceType || undefined,
+                estimatedInsuranceAnnual: currencyInputToRaw(
+                  form.estimatedInsuranceAnnual,
+                ),
+                insuranceTypes: form.insuranceTypes,
                 hoaName: form.hoaName,
                 hoaManagementInfo: form.hoaManagementInfo,
                 additionalHoaFees: currencyInputToRaw(form.additionalHoaFees),
@@ -1296,20 +1327,142 @@ export function ProspectIntakeForm({
     return true;
   }
 
+  // Dense-mode inline save for the Opportunity Value card. Unlike Contact
+  // Basics/Financial/Property, this section has no separate view/edit toggle
+  // (it's always editable in the modal), so it previously had no save button
+  // of its own: edits here were only persisted when the user clicked the
+  // modal's outer "Save" button. Closing the modal any other way (X, Escape,
+  // backdrop) silently discarded them, even after saving a sibling section.
+  function saveOpportunityValueInline() {
+    setError("");
+
+    if (!contactId) {
+      const message = "Save Phase 1 before adding Opportunity Value.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    setIsOpportunitySaving(true);
+
+    void (async () => {
+      try {
+        const saved = await saveOpportunityValueRequest(contactId);
+
+        if (!saved) {
+          return;
+        }
+
+        toast.success("Opportunity Value saved.");
+        onOptimisticSaved?.(form);
+        router.refresh();
+      } finally {
+        setIsOpportunitySaving(false);
+      }
+    })();
+  }
+
   function parseCurrencyValue(value: string) {
     const parsed = Number(value.replace(/[$,]/g, ""));
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  function calculateLtvDisplay() {
-    const propertyValue = parseCurrencyValue(form.opportunityPropertyValue);
-    const loanAmount = parseCurrencyValue(form.opportunityLoanAmount);
+  function parsePercentValue(value: string) {
+    const parsed = Number(value.replace(/[%\s,]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
 
-    if (!propertyValue || !loanAmount) {
-      return "—";
-    }
+  function formatOpportunityCurrency(value: number) {
+    return new Intl.NumberFormat("en-US", {
+      currency: "USD",
+      maximumFractionDigits: 0,
+      style: "currency",
+    }).format(value);
+  }
 
-    return formatRatioPercentDisplay((loanAmount / propertyValue) * 100, "-");
+  function formatOpportunityPercent(value: number) {
+    return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
+  }
+
+  function formatPercentInput(value: string) {
+    const cleaned = value.replace(/[^\d.]/g, "");
+    const [wholePart = "", ...fractionParts] = cleaned.split(".");
+    const fractionPart = fractionParts.join("");
+
+    return fractionParts.length
+      ? `${wholePart}.${fractionPart.slice(0, 2)}`
+      : wholePart;
+  }
+
+  function calculateLtvValue(propertyValue: number, loanAmount: number) {
+    if (!propertyValue || !loanAmount) return "";
+
+    return ((loanAmount / propertyValue) * 100)
+      .toFixed(2)
+      .replace(/\.?0+$/, "");
+  }
+
+  function formatLoanAmountFromLtv(propertyValue: number, ltv: number) {
+    if (!propertyValue || !ltv) return "";
+
+    return formatCurrencyInput(String((propertyValue * ltv) / 100));
+  }
+
+  function handleOpportunityPropertyValueChange(value: string) {
+    const nextPropertyValue = formatCurrencyInput(value);
+
+    setForm((currentForm) => {
+      const propertyValue = parseCurrencyValue(nextPropertyValue);
+      const ltv = parsePercentValue(currentForm.opportunityLtv);
+
+      return {
+        ...currentForm,
+        opportunityPropertyValue: nextPropertyValue,
+        opportunityLoanAmount:
+          propertyValue && ltv
+            ? formatLoanAmountFromLtv(propertyValue, ltv)
+            : currentForm.opportunityLoanAmount,
+      };
+    });
+
+    setOpportunityErrors({});
+  }
+
+  function handleOpportunityLoanAmountChange(value: string) {
+    const nextLoanAmount = formatCurrencyInput(value);
+
+    setForm((currentForm) => {
+      const propertyValue = parseCurrencyValue(currentForm.opportunityPropertyValue);
+      const loanAmount = parseCurrencyValue(nextLoanAmount);
+
+      return {
+        ...currentForm,
+        opportunityLoanAmount: nextLoanAmount,
+        opportunityLtv: calculateLtvValue(propertyValue, loanAmount),
+      };
+    });
+
+    setOpportunityErrors({});
+  }
+
+  function handleOpportunityLtvChange(value: string) {
+    const nextLtv = formatPercentInput(value);
+
+    setForm((currentForm) => {
+      const propertyValue = parseCurrencyValue(currentForm.opportunityPropertyValue);
+      const ltv = parsePercentValue(nextLtv);
+
+      return {
+        ...currentForm,
+        opportunityLtv: nextLtv,
+        opportunityLoanAmount:
+          propertyValue && nextLtv
+            ? formatLoanAmountFromLtv(propertyValue, ltv)
+            : currentForm.opportunityLoanAmount,
+      };
+    });
+
+    setOpportunityErrors({});
   }
 
   function handleSubmit() {
@@ -1319,7 +1472,8 @@ export function ProspectIntakeForm({
       ...form,
       borrowerType: form.borrowerType || undefined,
       loanPurpose: form.loanPurpose as LoanPurpose,
-      insuranceType: form.insuranceType || undefined,
+      estimatedInsuranceAnnual: currencyInputToRaw(form.estimatedInsuranceAnnual),
+      insuranceTypes: form.insuranceTypes,
     };
 
     startTransition(async () => {
@@ -1383,6 +1537,21 @@ export function ProspectIntakeForm({
         return contactBasicsSnapshot(form);
     });
   }
+
+  const opportunityPropertyValueNumber = parseCurrencyValue(
+    form.opportunityPropertyValue,
+  );
+  const opportunityLoanAmountNumber = parseCurrencyValue(
+    form.opportunityLoanAmount,
+  );
+  const impliedDownPaymentAmount =
+    opportunityPropertyValueNumber && form.opportunityLoanAmount.trim()
+      ? opportunityPropertyValueNumber - opportunityLoanAmountNumber
+      : null;
+  const impliedDownPaymentPercent =
+    impliedDownPaymentAmount !== null && opportunityPropertyValueNumber
+      ? (impliedDownPaymentAmount / opportunityPropertyValueNumber) * 100
+      : null;
 
   return (
     <div className={cn("mx-auto max-w-6xl text-left", dense ? "space-y-3" : "space-y-6")}>
@@ -2241,9 +2410,14 @@ export function ProspectIntakeForm({
                       : "Not provided"}
                   </SummaryIconRow>
                   <SummaryIconRow icon={Umbrella} label="Insurance">
-                    {form.insuranceType
-                      ? insuranceLabels[form.insuranceType]
-                      : "Not provided"}
+                    {[
+                      formatInsuranceTypes(form.insuranceTypes),
+                      form.estimatedInsuranceAnnual
+                        ? `${form.estimatedInsuranceAnnual} annual estimate`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" / ")}
                   </SummaryIconRow>
                   <SummaryIconRow icon={Building2} label="HOA">
                     {form.hoaName ||
@@ -2363,25 +2537,19 @@ export function ProspectIntakeForm({
                   value={form.propertyTaxesPresentYear}
                 />
               </Field>
-              <Field label="Insurance type">
-                <Select
-                  onValueChange={(value) =>
-                    updateField("insuranceType", value as InsuranceType)
-                  }
+              <Field label="Estimated insurance annual">
+                <Input
                   disabled={isPropertySaving}
-                  value={form.insuranceType}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select insurance type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(insuranceLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  inputMode="decimal"
+                  onChange={(event) =>
+                    updateField(
+                      "estimatedInsuranceAnnual",
+                      formatCurrencyInput(event.target.value),
+                    )
+                  }
+                  type="text"
+                  value={form.estimatedInsuranceAnnual}
+                />
               </Field>
               <Field label="HOA name">
                 <Input
@@ -2412,6 +2580,37 @@ export function ProspectIntakeForm({
                   type="text"
                   value={form.additionalHoaFees}
                 />
+              </Field>
+              <Field label="Insurance type">
+                <div className="rounded-md border border-mafi-border bg-mafi-bg-white p-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {selectableInsuranceTypes.map(([value, label]) => {
+                      const checked = form.insuranceTypes.includes(value);
+                      return (
+                        <label
+                          key={value}
+                          className="flex items-center gap-2 text-sm text-mafi-text-dark"
+                        >
+                          <input
+                            checked={checked}
+                            className="size-4 rounded border-mafi-border accent-mafi-blue-primary"
+                            disabled={isPropertySaving}
+                            onChange={(event) => {
+                              updateField(
+                                "insuranceTypes",
+                                event.target.checked
+                                  ? [...form.insuranceTypes, value]
+                                  : form.insuranceTypes.filter((item) => item !== value),
+                              );
+                            }}
+                            type="checkbox"
+                          />
+                          <span>{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </Field>
               {dense && isEditMode && isPropertyEditing ? (
               <div className="flex items-end justify-end gap-2">
@@ -2469,12 +2668,10 @@ export function ProspectIntakeForm({
                           "border-destructive",
                       )}
                       data-focus-field="opportunityPropertyValue"
+                      disabled={isOpportunitySaving}
                       inputMode="decimal"
                       onChange={(event) =>
-                        updateField(
-                          "opportunityPropertyValue",
-                          formatCurrencyInput(event.target.value),
-                        )
+                        handleOpportunityPropertyValueChange(event.target.value)
                       }
                       type="text"
                       value={form.opportunityPropertyValue}
@@ -2499,12 +2696,10 @@ export function ProspectIntakeForm({
                           "border-destructive",
                       )}
                       data-focus-field="opportunityLoanAmount"
+                      disabled={isOpportunitySaving}
                       inputMode="decimal"
                       onChange={(event) =>
-                        updateField(
-                          "opportunityLoanAmount",
-                          formatCurrencyInput(event.target.value),
-                        )
+                        handleOpportunityLoanAmountChange(event.target.value)
                       }
                       type="text"
                       value={form.opportunityLoanAmount}
@@ -2515,8 +2710,9 @@ export function ProspectIntakeForm({
                       </p>
                     ) : null}
                   </Field>
-                  <Field label="Are you working with a realtor, or do you need help connecting with one?">
+                  <Field label="Do you need help finding a realtor?">
                     <Select
+                      disabled={isOpportunitySaving}
                       onValueChange={(value) =>
                         updateField("hasRealtor", value as RealtorStatus)
                       }
@@ -2536,14 +2732,42 @@ export function ProspectIntakeForm({
                   </Field>
                 </div>
                 <div className="rounded-md border border-mafi-border bg-mafi-bg-light p-3">
-                  <p className="text-sm text-mafi-text-mid">LTV</p>
-                  <p className="mt-1 text-2xl font-bold text-mafi-blue-primary">
-                    {calculateLtvDisplay()}
-                  </p>
+                  <Field label="LTV">
+                    <div className="relative">
+                      <Input
+                        className="h-12 pr-8 text-3xl font-bold text-mafi-blue-primary"
+                        disabled={isOpportunitySaving}
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          handleOpportunityLtvChange(event.target.value)
+                        }
+                        type="text"
+                        value={form.opportunityLtv}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-mafi-text-mid">
+                        %
+                      </span>
+                    </div>
+                  </Field>
+                  {impliedDownPaymentAmount !== null &&
+                  impliedDownPaymentPercent !== null ? (
+                    <div className="mt-3 border-t border-mafi-border pt-3">
+                      <p className="text-xs font-medium text-mafi-text-mid">
+                        {isRefinanceLoanPurpose(form.loanPurpose)
+                          ? "Implied equity position"
+                          : "Implied down payment"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-mafi-text-dark">
+                        {formatOpportunityCurrency(impliedDownPaymentAmount)} ·{" "}
+                        {formatOpportunityPercent(impliedDownPaymentPercent)}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-3 rounded-md border border-mafi-gold bg-mafi-gold-light/40 p-3">
                   <Field label="Opportunity status">
                     <Select
+                      disabled={isOpportunitySaving}
                       onValueChange={(value) =>
                         updateField(
                           "opportunityStatus",
@@ -2570,6 +2794,7 @@ export function ProspectIntakeForm({
                   OpportunityStatus.NOT_MOVING_FORWARD ? (
                     <Field label="Reason" required>
                       <Select
+                        disabled={isOpportunitySaving}
                         onValueChange={(value) =>
                           updateField("notMovingForwardReason", value)
                         }
@@ -2597,6 +2822,7 @@ export function ProspectIntakeForm({
                     <Field label="Other reason" required>
                       <Input
                         data-focus-field="notMovingForwardOtherReason"
+                        disabled={isOpportunitySaving}
                         onChange={(event) =>
                           updateField(
                             "notMovingForwardOtherReason",
@@ -2609,6 +2835,17 @@ export function ProspectIntakeForm({
                     </Field>
                   ) : null}
                 </div>
+                {dense && isEditMode ? (
+                  <div className="flex items-end justify-end gap-2">
+                    <Button
+                      disabled={isOpportunitySaving}
+                      onClick={saveOpportunityValueInline}
+                      type="button"
+                    >
+                      {isOpportunitySaving ? "Saving..." : "Save"}
+                    </Button>
+                  </div>
+                ) : null}
                 </CardContent>
               </Card>
           </div>

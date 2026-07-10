@@ -174,9 +174,15 @@
   }
 }
 
-.loan-estimate-design {
+/*
+ * Loan Estimate design tokens live at :root (not scoped to .loan-estimate-design)
+ * because several loan-estimate UI pieces (formula-insight tooltips, the
+ * traceability panel) render via createPortal to document.body, which sits
+ * outside the .loan-estimate-design subtree and would otherwise see these
+ * custom properties as undefined.
+ */
+:root {
   --le-font-sans: var(--font-sans), "Plus Jakarta Sans", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
   --le-page: #f8fafc;
   --le-paper: #ffffff;
   --le-panel: #f8fafc;
@@ -203,6 +209,10 @@
   --type-3xl: 1.82rem;
   --shadow-soft: 0 10px 28px rgb(15 23 42 / 0.06);
   --shadow-lift: 0 18px 42px rgb(15 23 42 / 0.1);
+}
+
+.loan-estimate-design {
+  --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
   background: var(--le-page);
   color: var(--le-ink);
   font-family: var(--le-font-sans);
@@ -221,6 +231,52 @@
   @page {
     size: auto;
     margin: 0;
+  }
+
+  body:has(.scenario-desk-print) {
+    background: #ffffff !important;
+    height: auto !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html:has(.scenario-desk-print) {
+    height: auto !important;
+  }
+
+  body:has(.scenario-desk-print) .workstation-print-chrome {
+    display: none !important;
+  }
+
+  body:has(.scenario-desk-print) .workstation-print-shell {
+    min-height: auto !important;
+  }
+
+  body:has(.scenario-desk-print) .workstation-print-main {
+    min-height: auto !important;
+    padding-left: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  body:has(.scenario-desk-print) .workstation-print-content {
+    padding: 0 !important;
+  }
+
+  .scenario-desk-print {
+    max-width: none !important;
+    padding: 0.45in !important;
+  }
+
+  .scenario-desk-print .scenario-desk-no-print {
+    display: none !important;
+  }
+
+  .scenario-desk-print section,
+  .scenario-desk-print .rounded-lg.border {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   body:has(.loan-estimate-design) {

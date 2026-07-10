@@ -11,6 +11,7 @@ import {
 import type { LoanEstimateState } from "@/lib/loan-estimate-calc";
 import type { LoanState } from "@/lib/loan-estimate-design";
 import { LoanEstimateRedesign } from "./loan-estimate-redesign";
+import type { LoanEstimateTraceability } from "./loan-estimate-traceability";
 
 type LoanEstimateBuilderProps = {
   contactId: string;
@@ -18,6 +19,7 @@ type LoanEstimateBuilderProps = {
   initialDownloadUrl?: string;
   initialGeneratedAt?: string;
   initialState: LoanEstimateState;
+  traceability: LoanEstimateTraceability;
 };
 
 /**
@@ -33,6 +35,7 @@ export function LoanEstimateBuilder({
   initialDownloadUrl,
   initialGeneratedAt,
   initialState,
+  traceability,
 }: LoanEstimateBuilderProps) {
   const [downloadUrl, setDownloadUrl] = useState(initialDownloadUrl);
   const [generatedAt, setGeneratedAt] = useState(initialGeneratedAt);
@@ -71,6 +74,7 @@ export function LoanEstimateBuilder({
       initialState={designInitialState}
       isGenerating={isGenerating}
       onGenerate={handleGenerate}
+      traceability={traceability}
     />
   );
 }

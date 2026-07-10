@@ -52,6 +52,10 @@ import {
 } from "@/lib/loan-estimate-design";
 import { formatUSPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
+import {
+  TraceabilityTrigger,
+  type LoanEstimateTraceability,
+} from "./loan-estimate-traceability";
 
 type TabId = "main" | "costs" | "marketing" | "legal" | "formulas";
 type NumericField = {
@@ -72,7 +76,6 @@ const tabs: Array<{ id: TabId; label: string; icon: typeof Calculator; audience:
   { id: "costs", label: "Summary Costs", icon: ChartNoAxesCombined, audience: "internal" },
   { id: "marketing", label: "Summary Marketing", icon: FileText, audience: "client" },
   { id: "legal", label: "Marketing Complete Legal Size", icon: Landmark, audience: "client" },
-  { id: "formulas", label: "Formula Title", icon: BriefcaseBusiness, audience: "internal" },
 ];
 
 const chartColors = {
@@ -208,6 +211,7 @@ export type LoanEstimateRedesignProps = {
   isGenerating: boolean;
   generatedAt?: string;
   downloadUrl?: string;
+  traceability: LoanEstimateTraceability;
 };
 
 export function LoanEstimateRedesign({
@@ -216,6 +220,7 @@ export function LoanEstimateRedesign({
   isGenerating,
   generatedAt,
   downloadUrl,
+  traceability,
 }: LoanEstimateRedesignProps) {
   const [state, setState] = useState<LoanState>(initialState);
   const [activeTab, setActiveTab] = useState<TabId>("main");
@@ -446,7 +451,12 @@ export function LoanEstimateRedesign({
               ) : null}
             </motion.div>
           </AnimatePresence>
-          <LoanSummarySidebar state={state} results={results} insights={insights} />
+          <LoanSummarySidebar
+            state={state}
+            results={results}
+            insights={insights}
+            traceability={traceability}
+          />
         </div>
       </Tabs.Root>
 
@@ -1200,10 +1210,12 @@ function LoanSummarySidebar({
   state,
   results,
   insights,
+  traceability,
 }: {
   state: LoanState;
   results: LoanResults;
   insights: Record<string, FieldInsight>;
+  traceability: LoanEstimateTraceability;
 }) {
   return (
     <aside
@@ -1216,7 +1228,11 @@ function LoanSummarySidebar({
       </div>
       <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5">
         <div className="space-y-2">
-          <SidebarTextValue label="Applicant" value={state.applicantName} />
+          <SidebarTextValue
+            label="Applicant"
+            value={state.applicantName}
+            action={<TraceabilityTrigger data={traceability} />}
+          />
           <SidebarTextValue label="Loan Number" value={state.loanNumber} />
           <SidebarTextValue label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
           <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
@@ -1254,13 +1270,24 @@ function LoanSummarySidebar({
   );
 }
 
-function SidebarTextValue({ label, value }: { label: string; value: string }) {
+function SidebarTextValue({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="block min-w-0 rounded-sm text-left">
       <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
-      <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
-        {value}
-      </p>
+      <span className="flex items-center">
+        <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
+          {value}
+        </p>
+        {action}
+      </span>
     </div>
   );
 }
@@ -1898,8 +1925,8 @@ function SimpleTable({
       <tbody>
         {rows.map(([label, value]) => (
           <tr key={`${label}-${value}`}>
-            <td className="border-b border-[var(--le-line)] px-0 py-2.5 font-semibold text-[var(--le-ink)]">{label}</td>
-            <td className="numeric border-b border-[var(--le-line)] px-0 py-2.5 text-right font-bold text-[var(--le-navy)]">
+            <td className="border-b border-[var(--le-line)] px-4 py-2.5 text-left align-middle font-semibold text-[var(--le-ink)]">{label}</td>
+            <td className="numeric border-b border-[var(--le-line)] px-4 py-2.5 text-right align-middle font-bold text-[var(--le-navy)]">
               {value}
             </td>
           </tr>
@@ -1907,9 +1934,9 @@ function SimpleTable({
       </tbody>
       {footer ? (
         <tfoot>
-          <tr>
-            <td className="pt-3 text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">{footer[0]}</td>
-            <td className="numeric pt-3 text-right text-[length:var(--type-md)] font-black text-[var(--le-navy)]">{footer[1]}</td>
+          <tr className="border-t border-slate-200">
+            <td className="px-4 py-2.5 text-left align-middle text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">{footer[0]}</td>
+            <td className="numeric px-4 py-2.5 text-right align-middle text-[length:var(--type-md)] font-black text-[var(--le-navy)]">{footer[1]}</td>
           </tr>
         </tfoot>
       ) : null}

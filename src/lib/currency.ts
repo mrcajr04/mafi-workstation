@@ -14,6 +14,12 @@ function normalizeCurrencyText(value?: string) {
   return cleaned;
 }
 
+/** Parse a Prisma Decimal (or any toString()-able numeric value) to a plain number, defaulting to 0. */
+export function decimalToNumber(value?: { toString(): string } | null) {
+  const parsed = Number(value?.toString() ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function normalizeCurrencyInput(value?: string) {
   const cleaned = normalizeCurrencyText(value);
 

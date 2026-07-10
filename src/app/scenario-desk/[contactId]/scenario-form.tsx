@@ -1,8 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import type React from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScenarioProgram } from "@prisma/client";
+import { ScenarioLoanTerm, ScenarioProgram } from "@prisma/client";
 import {
   finalizeScenarioDesk,
   saveScenarioDesk,
@@ -24,27 +36,44 @@ import {
   currencyInputToNumber,
   currencyInputToRaw,
   formatCurrencyDisplayWithCents,
-  formatCurrencyInput,
 } from "@/lib/currency";
-import { scenarioProgramOptions } from "@/lib/scenario-program";
+import {
+  calculateLtvMismatch,
+  calculatePitia,
+  calculatePrincipalAndInterest,
+  getLoanTermMetadata,
+  isInterestRateOutsideExpectedRange,
+  numericValue,
+  roundMoney,
+  scenarioDeskTermOptions,
+} from "@/lib/mortgage/scenario-calculations";
 
 type ScenarioDraft = ScenarioInput;
 
 type ScenarioFormProps = {
+  annualInsurance?: string;
   annualPropertyTaxes: string;
   contactId: string;
+  initialComments?: string;
   initialScenarios: ScenarioInput[];
   loanAmount: string;
   monthlyHoa: string;
+  propertyValue?: string;
   readOnly?: boolean;
   selectedScenarioNumber?: number | null;
+  statedLtv?: string;
 };
 
+const missingInsuranceMessage =
+  "Estimated insurance is missing. PITIA may be understated.";
+
 const emptyScenario = (number: number): ScenarioDraft => ({
+  comments: "",
   escrowed: false,
   interestRate: "",
   lenderAndProduct: "",
-  loanTerm: "30",
+  loanTerm: ScenarioLoanTerm.FIXED_30,
+  mortgageInsurance: false,
   monthlyInsurance: "",
   originationPay: "",
   pitia: "",
@@ -54,17 +83,58 @@ const emptyScenario = (number: number): ScenarioDraft => ({
   scenarioNumber: number,
 });
 
-function scenarioSet(initialScenarios: ScenarioInput[], readOnly: boolean) {
-  if (readOnly) {
-    return initialScenarios.length ? initialScenarios : [emptyScenario(1)];
+function normalizeLoanTerm(value: string, program?: ScenarioProgram) {
+  if (value in ScenarioLoanTerm) {
+    return value as ScenarioLoanTerm;
   }
 
-  return [1, 2, 3].map(
-    (number) =>
-      initialScenarios.find(
-        (scenario) => scenario.scenarioNumber === number,
-      ) ?? emptyScenario(number),
-  );
+  if (value === "15") {
+    return ScenarioLoanTerm.FIXED_15;
+  }
+
+  if (value === "20") {
+    return ScenarioLoanTerm.FIXED_20;
+  }
+
+  if (program === ScenarioProgram.ARM_3_1) {
+    return ScenarioLoanTerm.ARM_3_1;
+  }
+
+  if (program === ScenarioProgram.ARM_5_1) {
+    return ScenarioLoanTerm.ARM_5_1;
+  }
+
+  if (program === ScenarioProgram.ARM_7_1) {
+    return ScenarioLoanTerm.ARM_7_1;
+  }
+
+  if (program === ScenarioProgram.IO) {
+    return ScenarioLoanTerm.INTEREST_ONLY;
+  }
+
+  return ScenarioLoanTerm.FIXED_30;
+}
+
+function programFromLoanTerm(value: string) {
+  if (value === ScenarioLoanTerm.INTEREST_ONLY) {
+    return ScenarioProgram.IO;
+  }
+
+  if (value === ScenarioLoanTerm.ARM_3_1) {
+    return ScenarioProgram.ARM_3_1;
+  }
+
+  if (value === ScenarioLoanTerm.ARM_5_1) {
+    return ScenarioProgram.ARM_5_1;
+  }
+
+  if (value === ScenarioLoanTerm.ARM_7_1) {
+    return ScenarioProgram.ARM_7_1;
+  }
+
+  return value === ScenarioLoanTerm.FIXED_15
+    ? ScenarioProgram.FIXED_15
+    : ScenarioProgram.FIXED_30;
 }
 
 function parsePercent(value: string) {
@@ -72,75 +142,159 @@ function parsePercent(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function monthlyPrincipalAndInterest(
-  loanAmount: number,
-  annualRate: number,
-  termYears: number,
-) {
-  if (!loanAmount || !termYears) {
-    return 0;
+function formatPercentInput(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const [wholePart = "", ...fractionParts] = cleaned.split(".");
+  const fractionPart = fractionParts.join("");
+  const percentValue = fractionParts.length
+    ? `${wholePart}.${fractionPart.slice(0, 3)}`
+    : wholePart;
+
+  return percentValue ? `${percentValue}%` : "";
+}
+
+function normalizeScenario(scenario: ScenarioInput): ScenarioDraft {
+  const loanTerm = normalizeLoanTerm(scenario.loanTerm, scenario.program);
+
+  return {
+    ...scenario,
+    loanTerm,
+    mortgageInsurance: scenario.mortgageInsurance ?? false,
+    program: programFromLoanTerm(loanTerm),
+  };
+}
+
+function sortedInitialScenarios(initialScenarios: ScenarioInput[]) {
+  return initialScenarios
+    .slice(0, 3)
+    .map(normalizeScenario)
+    .sort((a, b) => a.scenarioNumber - b.scenarioNumber);
+}
+
+function nextScenarioNumber(scenarios: ScenarioDraft[]) {
+  const usedNumbers = new Set(scenarios.map((scenario) => scenario.scenarioNumber));
+
+  for (const number of [1, 2, 3]) {
+    if (!usedNumbers.has(number)) {
+      return number;
+    }
   }
 
-  const monthlyRate = annualRate / 100 / 12;
-  const totalPayments = termYears * 12;
+  return scenarios.length + 1;
+}
 
-  if (!monthlyRate) {
-    return loanAmount / totalPayments;
-  }
+function hasInsuranceValue(value: string) {
+  return value.trim() !== "";
+}
 
-  return (
-    loanAmount *
-    ((monthlyRate * (1 + monthlyRate) ** totalPayments) /
-      ((1 + monthlyRate) ** totalPayments - 1))
-  );
+function hasRealScenario(scenario: ScenarioDraft) {
+  return scenario.lenderAndProduct.trim() !== "";
 }
 
 function withCalculatedPayments(
   scenario: ScenarioDraft,
   context: {
+    annualInsurance: string;
     annualPropertyTaxes: string;
     loanAmount: string;
     monthlyHoa: string;
   },
 ) {
-  const principalAndInterest = monthlyPrincipalAndInterest(
-    currencyInputToNumber(context.loanAmount),
-    parsePercent(scenario.interestRate),
-    Number(scenario.loanTerm),
-  );
-  const pitia =
-    principalAndInterest +
-    currencyInputToNumber(context.annualPropertyTaxes) / 12 +
-    currencyInputToNumber(scenario.monthlyInsurance) +
-    currencyInputToNumber(context.monthlyHoa);
+  const annualRate = parsePercent(scenario.interestRate);
+  const loanAmountValue = currencyInputToNumber(context.loanAmount);
+  const loanTerm = normalizeLoanTerm(scenario.loanTerm, scenario.program);
+  const shouldCalculate = scenario.interestRate.trim() !== "" && loanAmountValue > 0;
+  const principalAndInterest = shouldCalculate
+    ? roundMoney(
+        calculatePrincipalAndInterest({
+          annualRate,
+          loanAmount: loanAmountValue,
+          loanTerm,
+        }),
+      )
+    : 0;
+  const pitia = shouldCalculate
+    ? roundMoney(
+        calculatePitia({
+          annualInsurance: currencyInputToNumber(context.annualInsurance),
+          annualPropertyTaxes: currencyInputToNumber(context.annualPropertyTaxes),
+          monthlyHoa: currencyInputToNumber(context.monthlyHoa),
+          principalAndInterest,
+        }),
+      )
+    : 0;
 
   return {
     ...scenario,
-    pitia: principalAndInterest ? formatCurrencyDisplayWithCents(pitia, "") : "",
-    principalAndInterest: principalAndInterest
+    loanTerm,
+    pitia: shouldCalculate ? formatCurrencyDisplayWithCents(pitia, "") : "",
+    principalAndInterest: shouldCalculate
       ? formatCurrencyDisplayWithCents(principalAndInterest, "")
       : "",
+    program: programFromLoanTerm(loanTerm),
   };
 }
 
 export function ScenarioForm({
+  annualInsurance = "",
   annualPropertyTaxes,
   contactId,
+  initialComments = "",
   initialScenarios,
   loanAmount,
   monthlyHoa,
+  propertyValue = "",
   readOnly = false,
   selectedScenarioNumber,
+  statedLtv = "",
 }: ScenarioFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const calculationContext = { annualPropertyTaxes, loanAmount, monthlyHoa };
-  const [scenarios, setScenarios] = useState<ScenarioDraft[]>(
-    () => scenarioSet(initialScenarios, readOnly),
-  );
+  const calculationContext = {
+    annualInsurance,
+    annualPropertyTaxes,
+    loanAmount,
+    monthlyHoa,
+  };
+  const [comments, setComments] = useState(initialComments);
+  const [scenarios, setScenarios] = useState<ScenarioDraft[]>(() => {
+    const initial = sortedInitialScenarios(initialScenarios);
+    const normalized = initial.length ? initial : [emptyScenario(1)];
+    return normalized.map((scenario) =>
+      withCalculatedPayments(scenario, calculationContext),
+    );
+  });
   const [selectedScenario, setSelectedScenario] = useState<number | null>(
     selectedScenarioNumber ?? null,
   );
+  const missingAnnualInsurance = !hasInsuranceValue(annualInsurance);
+  const realScenarios = useMemo(
+    () => scenarios.filter(hasRealScenario).sort((a, b) => a.scenarioNumber - b.scenarioNumber),
+    [scenarios],
+  );
+  const selectedRealScenario = selectedScenario
+    ? scenarios.some(
+        (scenario) =>
+          scenario.scenarioNumber === selectedScenario && hasRealScenario(scenario),
+      )
+    : false;
+  const ltvWarning = useMemo(() => {
+    const propertyValueNumber = currencyInputToNumber(propertyValue);
+    const loanAmountNumber = currencyInputToNumber(loanAmount);
+    const ltvNumber = numericValue(statedLtv);
+
+    if (!propertyValueNumber || !loanAmountNumber || !ltvNumber) {
+      return null;
+    }
+
+    const result = calculateLtvMismatch({
+      loanAmount: loanAmountNumber,
+      ltv: ltvNumber,
+      propertyValue: propertyValueNumber,
+    });
+
+    return result.hasMismatch ? result : null;
+  }, [loanAmount, propertyValue, statedLtv]);
 
   function updateScenario<T extends keyof ScenarioDraft>(
     scenarioNumber: number,
@@ -151,7 +305,13 @@ export function ScenarioForm({
       currentScenarios.map((scenario) =>
         scenario.scenarioNumber === scenarioNumber
           ? withCalculatedPayments(
-              { ...scenario, [field]: value },
+              {
+                ...scenario,
+                [field]: value,
+                ...(field === "loanTerm"
+                  ? { program: programFromLoanTerm(String(value)) }
+                  : {}),
+              },
               calculationContext,
             )
           : scenario,
@@ -159,18 +319,52 @@ export function ScenarioForm({
     );
   }
 
+  function addScenario() {
+    setScenarios((currentScenarios) => {
+      if (currentScenarios.length >= 3) {
+        return currentScenarios;
+      }
+
+      return [
+        ...currentScenarios,
+        withCalculatedPayments(
+          emptyScenario(nextScenarioNumber(currentScenarios)),
+          calculationContext,
+        ),
+      ].sort((a, b) => a.scenarioNumber - b.scenarioNumber);
+    });
+  }
+
+  function removeScenario(scenarioNumber: number) {
+    setScenarios((currentScenarios) => {
+      const remainingScenarios = currentScenarios.filter(
+        (scenario) => scenario.scenarioNumber !== scenarioNumber,
+      );
+
+      if (selectedScenario === scenarioNumber) {
+        setSelectedScenario(null);
+      }
+
+      return remainingScenarios.length
+        ? remainingScenarios
+        : [withCalculatedPayments(emptyScenario(1), calculationContext)];
+    });
+  }
+
   function scenarioPayload() {
     return scenarios.map((scenario) => ({
+      comments: scenario.comments,
       escrowed: scenario.escrowed,
       interestRate: scenario.interestRate,
       lenderAndProduct: scenario.lenderAndProduct,
-      loanTerm: scenario.loanTerm,
-      monthlyInsurance: currencyInputToRaw(scenario.monthlyInsurance),
+      loanTerm: normalizeLoanTerm(scenario.loanTerm, scenario.program),
+      mortgageInsurance: scenario.mortgageInsurance ?? false,
+      monthlyInsurance: "",
       originationPay: currencyInputToRaw(scenario.originationPay),
       pitia: currencyInputToRaw(scenario.pitia),
       principalAndInterest: currencyInputToRaw(scenario.principalAndInterest),
       processingFee: currencyInputToRaw(scenario.processingFee),
-      program: scenario.program,
+      program: programFromLoanTerm(scenario.loanTerm),
       scenarioNumber: scenario.scenarioNumber,
     }));
   }
@@ -178,6 +372,7 @@ export function ScenarioForm({
   function save() {
     startTransition(async () => {
       const result = await saveScenarioDesk({
+        comments,
         contactId,
         scenarios: scenarioPayload(),
         selectedScenarioNumber: selectedScenario,
@@ -199,8 +394,19 @@ export function ScenarioForm({
       return;
     }
 
+    if (!selectedRealScenario) {
+      toast.error("Select a final scenario with a lender and product.");
+      return;
+    }
+
+    if (missingAnnualInsurance) {
+      toast.error(missingInsuranceMessage);
+      return;
+    }
+
     startTransition(async () => {
       const result = await finalizeScenarioDesk({
+        comments,
         contactId,
         scenarios: scenarioPayload(),
         selectedScenarioNumber: selectedScenario,
@@ -218,233 +424,365 @@ export function ScenarioForm({
   }
 
   return (
-    <section className="space-y-4">
-      <div>
+    <section className="space-y-5">
+      {missingAnnualInsurance ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          {missingInsuranceMessage}
+        </div>
+      ) : null}
+
+      {ltvWarning ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Loan amount does not match the stated LTV. Implied loan amount is{" "}
+          {formatCurrencyDisplayWithCents(ltvWarning.impliedLoanAmount)}.
+        </div>
+      ) : null}
+
+      <Card className="border-mafi-border">
+        <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
+          <CardTitle className="text-base text-mafi-blue-primary">
+            Opportunity Comments
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <textarea
+            className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-mafi-text-dark shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+            onChange={(event) => setComments(event.target.value)}
+            placeholder="Capture scenario notes, compensating factors, pricing assumptions, and follow-up items."
+            readOnly={readOnly}
+            value={comments}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-mafi-text-dark">
             Scenario Options
           </h2>
           <p className="text-sm text-mafi-text-mid">
-            Add up to three options. P&I and PITIA calculate from the pulled-forward loan amount, current-year taxes, monthly insurance, HOA, rate, and term.
+            Add up to three options. P&I and PITIA calculate from loan amount,
+            rate, loan term, annual taxes, annual insurance, and monthly HOA.
           </p>
         </div>
+        {readOnly ? null : (
+          <Button
+            className="scenario-desk-no-print"
+            disabled={isPending || scenarios.length >= 3}
+            onClick={addScenario}
+            type="button"
+            variant="outline"
+          >
+            Add Scenario
+          </Button>
+        )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         {scenarios
+          .slice()
           .sort((a, b) => a.scenarioNumber - b.scenarioNumber)
-          .map((scenario) => (
-            <Card className="border-mafi-border" key={scenario.scenarioNumber}>
-              <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-base text-mafi-blue-primary">
-                    Scenario {scenario.scenarioNumber}
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    {readOnly ? (
-                      <span
-                        className={`text-xs font-semibold ${
-                          selectedScenario === scenario.scenarioNumber
-                            ? "text-mafi-blue-primary"
-                            : "text-mafi-text-light"
-                        }`}
-                      >
-                        {selectedScenario === scenario.scenarioNumber
-                          ? "Final selected"
-                          : "Not selected"}
-                      </span>
-                    ) : (
-                      <>
-                        <button
-                          className="text-xs font-semibold text-mafi-blue-primary hover:text-mafi-blue-dark"
-                          onClick={() =>
-                            setSelectedScenario(scenario.scenarioNumber)
-                          }
-                          type="button"
-                        >
-                          <span
-                            className={
-                              selectedScenario === scenario.scenarioNumber
-                                ? "text-mafi-blue-primary"
-                                : "text-mafi-text-light"
+          .map((scenario) => {
+            const annualRate = parsePercent(scenario.interestRate);
+            const rateWarning = isInterestRateOutsideExpectedRange(annualRate);
+            const isSelected = selectedScenario === scenario.scenarioNumber;
+
+            return (
+              <Card
+                className={`border-mafi-border ${
+                  isSelected ? "ring-2 ring-mafi-blue-primary" : ""
+                }`}
+                key={scenario.scenarioNumber}
+              >
+                <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base text-mafi-blue-primary">
+                      Scenario {scenario.scenarioNumber}
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      {readOnly ? (
+                        <span className="text-xs font-semibold text-mafi-text-mid">
+                          {isSelected ? "Final selected" : "Not selected"}
+                        </span>
+                      ) : (
+                        <>
+                          <Button
+                            className="scenario-desk-no-print"
+                            onClick={() =>
+                              setSelectedScenario(scenario.scenarioNumber)
                             }
+                            size="sm"
+                            type="button"
+                            variant={isSelected ? "default" : "outline"}
                           >
-                            {selectedScenario === scenario.scenarioNumber
-                              ? "Final selected"
-                              : "Select as Final"}
-                          </span>
-                        </button>
-                      </>
-                    )}
+                            {isSelected ? "Final" : "Select Final"}
+                          </Button>
+                          <Button
+                            className="scenario-desk-no-print"
+                            onClick={() => removeScenario(scenario.scenarioNumber)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            Remove
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                <ScenarioGroup title="Loan Terms">
-                  <Field className="sm:col-span-2" label="Lender & Product">
-                    <Input
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "lenderAndProduct",
-                          event.target.value,
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.lenderAndProduct}
-                    />
-                  </Field>
-                  <Field label="Interest Rate">
-                    <Input
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "interestRate",
-                          event.target.value,
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.interestRate}
-                    />
-                  </Field>
-                  <Field label="Loan Term (years)">
-                    <Input
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "loanTerm",
-                          event.target.value,
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.loanTerm}
-                    />
-                  </Field>
-                  <Field label="Program">
-                    <Select
-                      disabled={readOnly}
-                      onValueChange={(value) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "program",
-                          value as ScenarioProgram,
-                        )
-                      }
-                      value={scenario.program}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {scenarioProgramOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </ScenarioGroup>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-4">
+                  <ScenarioGroup title="Loan Terms">
+                    <Field className="sm:col-span-2" label="Lender & Product">
+                      <Input
+                        onChange={(event) =>
+                          updateScenario(
+                            scenario.scenarioNumber,
+                            "lenderAndProduct",
+                            event.target.value,
+                          )
+                        }
+                        readOnly={readOnly}
+                        value={scenario.lenderAndProduct}
+                      />
+                    </Field>
+                    <Field label="Interest Rate">
+                      <Input
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          updateScenario(
+                            scenario.scenarioNumber,
+                            "interestRate",
+                            formatPercentInput(event.target.value),
+                          )
+                        }
+                        readOnly={readOnly}
+                        value={scenario.interestRate}
+                      />
+                    </Field>
+                    <Field label="Loan Term">
+                      <Select
+                        disabled={readOnly}
+                        onValueChange={(value) =>
+                          updateScenario(
+                            scenario.scenarioNumber,
+                            "loanTerm",
+                            value,
+                          )
+                        }
+                        value={normalizeLoanTerm(
+                          scenario.loanTerm,
+                          scenario.program,
+                        )}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scenarioDeskTermOptions.map((term) => (
+                            <SelectItem key={term} value={term}>
+                              {getLoanTermMetadata(term).label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </ScenarioGroup>
 
-                <ScenarioGroup title="Payment Breakdown">
-                  <Field label="Principal & Interest (P&I)">
-                    <Input
-                      className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
-                      inputMode="decimal"
-                      readOnly
-                      value={scenario.principalAndInterest}
-                    />
-                  </Field>
-                  <Field label="Monthly Insurance">
-                    <Input
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "monthlyInsurance",
-                          formatCurrencyInput(event.target.value),
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.monthlyInsurance}
-                    />
-                  </Field>
-                  <Field label="PITIA">
-                    <Input
-                      className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
-                      inputMode="decimal"
-                      readOnly
-                      value={scenario.pitia}
-                    />
-                  </Field>
-                  <Field label="Escrowed">
-                    <Select
-                      disabled={readOnly}
-                      onValueChange={(value) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "escrowed",
-                          value === "true",
-                        )
-                      }
-                      value={String(scenario.escrowed)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="true">Yes</SelectItem>
-                        <SelectItem value="false">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </ScenarioGroup>
+                  {(rateWarning || missingAnnualInsurance) && (
+                    <div className="space-y-2">
+                      {rateWarning ? (
+                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                          Interest rate is outside the expected 2% to 12%
+                          review range.
+                        </p>
+                      ) : null}
+                      {missingAnnualInsurance ? (
+                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                          {missingInsuranceMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
 
-                <ScenarioGroup title="Fees">
-                  <Field label="Origination Pay">
-                    <Input
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "originationPay",
-                          formatCurrencyInput(event.target.value),
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.originationPay}
-                    />
-                  </Field>
-                  <Field label="Processing Fee">
-                    <Input
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        updateScenario(
-                          scenario.scenarioNumber,
-                          "processingFee",
-                          formatCurrencyInput(event.target.value),
-                        )
-                      }
-                      readOnly={readOnly}
-                      value={scenario.processingFee}
-                    />
-                  </Field>
-                </ScenarioGroup>
-              </CardContent>
-            </Card>
-          ))}
+                  <ScenarioGroup title="Payment Breakdown">
+                    <Field label="Principal & Interest">
+                      <Input
+                        className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
+                        readOnly
+                        value={scenario.principalAndInterest}
+                      />
+                    </Field>
+                    <Field label="PITIA">
+                      <Input
+                        className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
+                        readOnly
+                        value={scenario.pitia}
+                      />
+                    </Field>
+                    <Field label="Escrowed">
+                      <Select
+                        disabled={readOnly}
+                        onValueChange={(value) =>
+                          updateScenario(
+                            scenario.scenarioNumber,
+                            "escrowed",
+                            value === "true",
+                          )
+                        }
+                        value={String(scenario.escrowed)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Yes</SelectItem>
+                          <SelectItem value="false">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Mortgage Insurance Premium">
+                      <Select
+                        disabled={readOnly}
+                        onValueChange={(value) =>
+                          updateScenario(
+                            scenario.scenarioNumber,
+                            "mortgageInsurance",
+                            value === "true",
+                          )
+                        }
+                        value={String(scenario.mortgageInsurance ?? false)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Yes</SelectItem>
+                          <SelectItem value="false">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </ScenarioGroup>
+                </CardContent>
+              </Card>
+            );
+          })}
       </div>
+
+      {realScenarios.length >= 2 ? (
+        <Card className="border-mafi-border">
+          <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
+            <CardTitle className="text-base text-mafi-blue-primary">
+              Scenario Comparison
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="bg-mafi-bg-light text-left text-xs font-bold uppercase text-mafi-text-mid">
+                <tr>
+                  <th className="px-4 py-3">Scenario</th>
+                  <th className="px-4 py-3">Lender & Product</th>
+                  <th className="px-4 py-3">Rate</th>
+                  <th className="px-4 py-3">Term</th>
+                  <th className="px-4 py-3">P&I</th>
+                  <th className="px-4 py-3">PITIA</th>
+                  <th className="px-4 py-3">MI</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-mafi-border">
+                {realScenarios.map((scenario) => {
+                  const isSelected = selectedScenario === scenario.scenarioNumber;
+
+                  return (
+                    <tr
+                      className={isSelected ? "bg-mafi-blue-primary/10" : ""}
+                      key={scenario.scenarioNumber}
+                    >
+                      <td className="px-4 py-3 font-semibold text-mafi-text-dark">
+                        Scenario {scenario.scenarioNumber}
+                        {isSelected ? " (Final)" : ""}
+                      </td>
+                      <td className="px-4 py-3 text-mafi-text-mid">
+                        {scenario.lenderAndProduct}
+                      </td>
+                      <td className="px-4 py-3 text-mafi-text-mid">
+                        {scenario.interestRate || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-mafi-text-mid">
+                        {getLoanTermMetadata(
+                          normalizeLoanTerm(scenario.loanTerm, scenario.program),
+                        ).label}
+                      </td>
+                      <td className="px-4 py-3 text-mafi-text-mid">
+                        {scenario.principalAndInterest || "-"}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-mafi-text-dark">
+                        {scenario.pitia || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-mafi-text-mid">
+                        {scenario.mortgageInsurance ? "Yes" : "No"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {readOnly ? null : (
-        <div className="flex justify-end gap-2">
-          <Button disabled={isPending} onClick={save} type="button" variant="outline">
-            Save
-          </Button>
-          <Button disabled={isPending} onClick={finalize} type="button">
-            Finalize Scenario Desk
-          </Button>
+        <div className="scenario-desk-no-print sticky bottom-0 z-10 -mx-1 rounded-t-lg border border-mafi-border bg-mafi-bg-white/95 p-3 shadow-lg backdrop-blur">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button disabled={isPending} onClick={save} type="button" variant="outline">
+              Save
+            </Button>
+            <Button
+              disabled={isPending}
+              onClick={() => window.print()}
+              type="button"
+              variant="outline"
+            >
+              Print as PDF
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  disabled={isPending || !selectedRealScenario}
+                  type="button"
+                >
+                  Send to Loan Estimate & Pre-Approval
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Finalize Scenario Desk?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will lock the selected scenario and move the contact to
+                    Phase 4 for Loan Estimate and Pre-Approval work.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {missingAnnualInsurance ? (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                    {missingInsuranceMessage}
+                  </p>
+                ) : null}
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isPending}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={
+                      isPending || missingAnnualInsurance || !selectedRealScenario
+                    }
+                    onClick={finalize}
+                  >
+                    Finalize and Move to Phase 4
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       )}
     </section>
@@ -460,7 +798,7 @@ function ScenarioGroup({
 }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-bold uppercase tracking-wide text-mafi-text-mid">
+      <h3 className="text-xs font-bold uppercase text-mafi-text-mid">
         {title}
       </h3>
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>

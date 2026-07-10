@@ -59,7 +59,9 @@ export type ProspectIntakeInput = {
   propertyType: PropertyType;
   propertyTaxesLastYear?: string;
   propertyTaxesPresentYear?: string;
+  estimatedInsuranceAnnual?: string;
   insuranceType?: InsuranceType;
+  insuranceTypes?: InsuranceType[];
   hoaName?: string;
   hoaManagementInfo?: string;
   additionalHoaFees?: string;
@@ -95,7 +97,9 @@ export type ProspectPropertyDetailsInput = {
   propertyType: PropertyType;
   propertyTaxesLastYear?: string;
   propertyTaxesPresentYear?: string;
+  estimatedInsuranceAnnual?: string;
   insuranceType?: InsuranceType;
+  insuranceTypes?: InsuranceType[];
   hoaName?: string;
   hoaManagementInfo?: string;
   additionalHoaFees?: string;
@@ -159,7 +163,8 @@ type ProspectEditDataResult =
         propertyType: PropertyType;
         propertyTaxesLastYear: string;
         propertyTaxesPresentYear: string;
-        insuranceType: InsuranceType | "";
+        estimatedInsuranceAnnual: string;
+        insuranceTypes: InsuranceType[];
         hoaName: string;
         hoaManagementInfo: string;
         additionalHoaFees: string;
@@ -295,7 +300,9 @@ export async function getProspectIntakeEditData(
           propertyType: true,
           propertyTaxesLastYear: true,
           propertyTaxesPresentYear: true,
+          estimatedInsuranceAnnual: true,
           insuranceType: true,
+          insuranceTypes: true,
           hoaName: true,
           hoaManagementInfo: true,
           additionalHoaFees: true,
@@ -371,7 +378,15 @@ export async function getProspectIntakeEditData(
       propertyTaxesPresentYear: formatCurrencyForForm(
         contact.propertyDetails?.propertyTaxesPresentYear,
       ),
-      insuranceType: contact.propertyDetails?.insuranceType ?? "",
+      estimatedInsuranceAnnual: formatCurrencyForForm(
+        contact.propertyDetails?.estimatedInsuranceAnnual,
+      ),
+      insuranceTypes:
+        contact.propertyDetails?.insuranceTypes.length
+          ? contact.propertyDetails.insuranceTypes
+          : contact.propertyDetails?.insuranceType
+            ? [contact.propertyDetails.insuranceType]
+            : [],
       hoaName: contact.propertyDetails?.hoaName ?? "",
       hoaManagementInfo: contact.propertyDetails?.hoaManagementInfo ?? "",
       additionalHoaFees: formatCurrencyForForm(
@@ -891,7 +906,9 @@ export async function updateProspectPropertyDetails(
         propertyType: input.propertyType,
         propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
         propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
-        insuranceType: input.insuranceType || null,
+        estimatedInsuranceAnnual: optionalDecimal(input.estimatedInsuranceAnnual),
+        insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
+        insuranceTypes: input.insuranceTypes ?? [],
         hoaName: input.hoaName?.trim() || null,
         hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
         additionalHoaFees: optionalDecimal(input.additionalHoaFees),
@@ -901,7 +918,9 @@ export async function updateProspectPropertyDetails(
         propertyType: input.propertyType,
         propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
         propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
-        insuranceType: input.insuranceType || null,
+        estimatedInsuranceAnnual: optionalDecimal(input.estimatedInsuranceAnnual),
+        insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
+        insuranceTypes: input.insuranceTypes ?? [],
         hoaName: input.hoaName?.trim() || null,
         hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
         additionalHoaFees: optionalDecimal(input.additionalHoaFees),
@@ -920,7 +939,8 @@ export async function updateProspectPropertyDetails(
         "propertyType",
         "propertyTaxesLastYear",
         "propertyTaxesPresentYear",
-        "insuranceType",
+        "estimatedInsuranceAnnual",
+        "insuranceTypes",
         "hoaName",
         "hoaManagementInfo",
         "additionalHoaFees",
@@ -1033,7 +1053,11 @@ export async function createProspectIntake(
             propertyTaxesPresentYear: optionalDecimal(
               input.propertyTaxesPresentYear,
             ),
-            insuranceType: input.insuranceType || null,
+            estimatedInsuranceAnnual: optionalDecimal(
+              input.estimatedInsuranceAnnual,
+            ),
+            insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
+            insuranceTypes: input.insuranceTypes ?? [],
             hoaName: input.hoaName?.trim() || null,
             hoaManagementInfo: input.hoaManagementInfo?.trim() || null,
             additionalHoaFees: optionalDecimal(input.additionalHoaFees),
@@ -1181,6 +1205,7 @@ export async function createOpportunityValue(
             id: contact.id,
           },
           data: {
+            enteredReviewAt: new Date(),
             status: ContactStatus.IN_SCENARIO_REVIEW,
           },
         });

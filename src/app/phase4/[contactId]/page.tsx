@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   BorrowerType,
   PropertyType,
@@ -11,17 +12,35 @@ import {
 } from "@/lib/loan-estimate-calc";
 import { getLatestLoanEstimateGeneration } from "@/lib/loan-estimate-storage";
 import type { LoanEstimateHeaderExtras } from "@/lib/loan-estimate-bridge";
+import {
+  decimalToNumber,
+  formatCurrencyDisplay,
+  formatCurrencyDisplayWithCents,
+  formatInterestRateDisplay,
+  formatRatioPercentDisplay,
+} from "@/lib/currency";
 import { formatTimestampForDisplay } from "@/lib/dates";
-import { loanPurposeLabels } from "@/lib/labels";
+import {
+  assetLabels,
+  borrowerTypeLabels,
+  ficoSourceLabels,
+  insuranceLabels,
+  labelFromMap,
+  loanPurposeLabels,
+  opportunityStatusLabels,
+  propertyTypeLabels,
+  realtorLabels,
+  vestingLabels,
+} from "@/lib/labels";
+import { getLoanTermMetadata } from "@/lib/mortgage/scenario-calculations";
+import { formatUSPhone } from "@/lib/phone";
 import { scenarioProgramLabels } from "@/lib/scenario-program";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 import { LoanEstimateBuilder } from "./loan-estimate-builder";
+import type { LoanEstimateTraceability } from "./loan-estimate-traceability";
 
-function decimalToNumber(value?: { toString(): string } | null) {
-  const parsed = Number(value?.toString() ?? "");
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+const EMPTY_VALUE = "Not provided";
 
 function moneyString(value?: { toString(): string } | number | null) {
   const parsed =
@@ -30,9 +49,17 @@ function moneyString(value?: { toString(): string } | number | null) {
   return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : "";
 }
 
+// High precision (not just display rounding): downPaymentPct/propertyTaxRatePct
+// drive the fee-sheet calculator, which reconstructs dollar amounts by
+// multiplying purchasePrice back by this percentage. Truncating to too few
+// decimals here silently drifts the recomputed Loan Amount / Property Tax away
+// from the source OpportunityValue/PropertyDetails dollar figures (e.g. a
+// $500,000 loan on a $700,000 price becomes "28.571%", which reconstructs to
+// $500,003 instead of $500,000). 10 decimals keeps the round-trip accurate to
+// the cent for realistic purchase prices.
 function percentString(value: number) {
   return Number.isFinite(value) && value > 0
-    ? value.toFixed(3).replace(/\.?0+$/, "")
+    ? value.toFixed(10).replace(/\.?0+$/, "")
     : "";
 }
 
@@ -99,6 +126,18 @@ export default async function Phase4DetailPage({
       },
     },
     include: {
+      assets: true,
+      bdr: {
+        select: {
+          fullName: true,
+        },
+      },
+      coBorrowers: {
+        orderBy: {
+          order: "asc",
+        },
+      },
+      ficoInfo: true,
       opportunityValue: true,
       propertyDetails: true,
       scenarioDesk: {
@@ -147,7 +186,10 @@ export default async function Phase4DetailPage({
   const taxRatePct =
     realPurchasePrice && annualTaxes ? (annualTaxes / realPurchasePrice) * 100 : 0;
   const hoaMonthly = decimalToNumber(property?.additionalHoaFees);
-  const monthlyInsurance = decimalToNumber(selectedScenario?.monthlyInsurance);
+  const annualInsurance =
+    property?.estimatedInsuranceAnnual != null
+      ? decimalToNumber(property.estimatedInsuranceAnnual)
+      : decimalToNumber(selectedScenario?.monthlyInsurance) * 12;
   const downPaymentAmount =
     realPurchasePrice && loanAmount ? realPurchasePrice - loanAmount : 0;
 
@@ -159,7 +201,9 @@ export default async function Phase4DetailPage({
     downPaymentGivenToSeller: moneyString(downPaymentAmount),
     downPaymentPct: percentString(downPaymentPct),
     email: access.data.email,
-    hazardInsAnnual: moneyString(monthlyInsurance * 12),
+    hazardInsEscrow:
+      selectedScenario?.escrowed === false ? "0" : loanEstimateDefaults.hazardInsEscrow,
+    hazardInsAnnual: moneyString(annualInsurance),
     hoaMonthly: moneyString(hoaMonthly),
     loanNumber: contact.id.slice(0, 8).toUpperCase(),
     newOrUsed: "Used",
@@ -178,6 +222,8 @@ export default async function Phase4DetailPage({
     purchasePrice: moneyString(realPurchasePrice),
     rate: selectedScenario?.interestRate.toString() ?? "",
     sfrOrCondo: property?.propertyType === PropertyType.CONDO ? "condo" : "sfr",
+    taxMonths:
+      selectedScenario?.escrowed === false ? "0" : loanEstimateDefaults.taxMonths,
   };
   const latestLoanEstimateGeneration =
     await getLatestLoanEstimateGeneration(contactId);
@@ -193,8 +239,95 @@ export default async function Phase4DetailPage({
     propertyAddress: property?.address ?? "",
   };
 
+  // Source-data panel for the sidebar's traceability trigger. Mirrors what a
+  // reviewer sees on the Opportunity/Scenario Desk detail pages, pre-formatted
+  // here so the client component stays a pure display layer.
+  const traceability: LoanEstimateTraceability = {
+    contact: {
+      name: contact.prospectName,
+      phone: formatUSPhone(contact.prospectPhone),
+      email: contact.prospectEmail ?? EMPTY_VALUE,
+      borrowerType: labelFromMap(contact.borrowerType, borrowerTypeLabels),
+      vesting: labelFromMap(contact.vesting, vestingLabels),
+      fico: contact.ficoInfo
+        ? `${ficoSourceLabels[contact.ficoInfo.source]}${
+            contact.ficoInfo.score ? ` / ${contact.ficoInfo.score}` : ""
+          }`
+        : EMPTY_VALUE,
+      coBorrowers: contact.coBorrowers.map((coBorrower) =>
+        [
+          coBorrower.name,
+          formatUSPhone(coBorrower.phone, EMPTY_VALUE),
+          coBorrower.email ?? EMPTY_VALUE,
+        ].join(" - "),
+      ),
+      assets: contact.assets.map(
+        (asset) =>
+          `${assetLabels[asset.type]} · ${formatCurrencyDisplay(asset.amount)}`,
+      ),
+      bdrName: contact.bdr.fullName,
+    },
+    property: {
+      address: property?.address ?? EMPTY_VALUE,
+      propertyType: property
+        ? propertyTypeLabels[property.propertyType]
+        : EMPTY_VALUE,
+      taxesLastYear: formatCurrencyDisplay(property?.propertyTaxesLastYear),
+      taxesPresentYear: formatCurrencyDisplay(
+        property?.propertyTaxesPresentYear,
+      ),
+      insurance: property?.insuranceTypes.length
+        ? property.insuranceTypes
+            .map((insuranceType) => insuranceLabels[insuranceType])
+            .join(", ")
+        : property?.insuranceType
+          ? insuranceLabels[property.insuranceType]
+          : EMPTY_VALUE,
+      insuranceAnnual: formatCurrencyDisplay(property?.estimatedInsuranceAnnual),
+      hoaName: property?.hoaName ?? EMPTY_VALUE,
+      hoaManagement: property?.hoaManagementInfo ?? EMPTY_VALUE,
+      hoaFees: formatCurrencyDisplay(property?.additionalHoaFees),
+    },
+    opportunity: {
+      propertyValue: formatCurrencyDisplay(opportunity?.propertyValue),
+      loanAmount: formatCurrencyDisplay(opportunity?.loanAmount),
+      ltv: formatRatioPercentDisplay(opportunity?.ltv),
+      hasRealtor: opportunity
+        ? realtorLabels[opportunity.hasRealtor]
+        : EMPTY_VALUE,
+      status: opportunity
+        ? opportunityStatusLabels[opportunity.status]
+        : EMPTY_VALUE,
+      reason: opportunity?.notMovingForwardReason ?? EMPTY_VALUE,
+    },
+    scenarios: contact.scenarioDesk.scenarios.map((scenario) => ({
+      scenarioNumber: scenario.scenarioNumber,
+      lenderAndProduct: scenario.lenderAndProduct,
+      interestRate: formatInterestRateDisplay(scenario.interestRate),
+      loanTerm: getLoanTermMetadata(scenario.loanTermCode).label,
+      program: scenarioProgramLabels[scenario.program],
+      mortgageInsurance: scenario.mortgageInsurance ? "Yes" : "No",
+      principalAndInterest: formatCurrencyDisplayWithCents(
+        scenario.principalAndInterest,
+      ),
+      pitia: formatCurrencyDisplayWithCents(scenario.pitia),
+      escrowed: scenario.escrowed ? "Yes" : "No",
+      originationPay: formatCurrencyDisplay(scenario.originationPay),
+      processingFee: formatCurrencyDisplay(scenario.processingFee),
+      comments: scenario.comments ?? "",
+      isSelected:
+        scenario.scenarioNumber === contact.scenarioDesk?.selectedScenarioNumber,
+    })),
+  };
+
   return (
-    <div className="mx-auto max-w-[1500px]">
+    <div className="mx-auto max-w-[1500px] space-y-3">
+      <Link
+        className="inline-flex text-sm font-semibold text-mafi-blue-primary hover:text-mafi-blue-dark"
+        href="/phase4"
+      >
+        Back to Pipeline
+      </Link>
       <LoanEstimateBuilder
         contactId={contactId}
         headerExtras={headerExtras}
@@ -205,6 +338,7 @@ export default async function Phase4DetailPage({
         }
         initialDownloadUrl={latestLoanEstimateGeneration?.downloadUrl}
         initialState={initialState}
+        traceability={traceability}
       />
     </div>
   );

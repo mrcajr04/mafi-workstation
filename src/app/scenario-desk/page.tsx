@@ -14,7 +14,9 @@ export default function ScenarioDeskPage() {
         </h1>
         <p className="mt-2 max-w-3xl text-sm text-mafi-text-mid">
           Review prospects marked ready for scenario review and finalize the
-          licensed loan scenario.
+          licensed loan scenario. Prospects arrive here from the Opportunity
+          creation interview once marked ready, and move forward into Borrower
+          creation once finalized.
         </p>
       </div>
       <ScenarioDeskList />

@@ -24,11 +24,29 @@ export const loanPurposeLabels = {
   [LoanPurpose.LIMITED_CASH_OUT]: "Limited Cash-Out",
 };
 
+/**
+ * Canonical purchase/refi split, mirrored from the fee sheet's string-based
+ * isRefinanceLoan (loan-estimate-redesign.tsx), which checks the *formatted*
+ * loanPurpose label for "refi"/"cash-out" once it reaches LoanState. This
+ * enum-based version is for call sites (intake form, Scenario Desk summary)
+ * that still hold the raw Contact.loanPurpose value. Unset ("") is treated as
+ * not-refi, matching prior default behavior before a purpose is chosen.
+ */
+export function isRefinanceLoanPurpose(
+  loanPurpose: LoanPurpose | "" | null | undefined,
+): boolean {
+  return (
+    loanPurpose === LoanPurpose.RATE_TERM_REFI ||
+    loanPurpose === LoanPurpose.CASH_OUT_REFI ||
+    loanPurpose === LoanPurpose.LIMITED_CASH_OUT
+  );
+}
+
 export const borrowerTypeLabels = {
   [BorrowerType.PRIMARY]: "Primary",
   [BorrowerType.SECOND_HOME]: "Second Home",
   [BorrowerType.INVESTMENT]: "Investment",
-  [BorrowerType.OTHER]: "Other",
+  [BorrowerType.OTHER]: "Business",
 };
 
 export const vestingLabels: Record<string, string> = {
