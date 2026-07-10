@@ -40,7 +40,6 @@ export type LoanEstimateTraceability = {
     ltv: string;
     hasRealtor: string;
     status: string;
-    reason: string;
   };
   scenarios: Array<{
     scenarioNumber: number;
@@ -206,7 +205,6 @@ function TraceabilityContent({
             <Field label="LTV" value={data.opportunity.ltv} />
             <Field label="Has Realtor" value={data.opportunity.hasRealtor} />
             <Field label="Status" value={data.opportunity.status} />
-            <Field label="Reason" value={data.opportunity.reason} />
           </div>
         </section>
 

@@ -298,7 +298,6 @@ export default async function Phase4DetailPage({
       status: opportunity
         ? opportunityStatusLabels[opportunity.status]
         : EMPTY_VALUE,
-      reason: opportunity?.notMovingForwardReason ?? EMPTY_VALUE,
     },
     scenarios: contact.scenarioDesk.scenarios.map((scenario) => ({
       scenarioNumber: scenario.scenarioNumber,
