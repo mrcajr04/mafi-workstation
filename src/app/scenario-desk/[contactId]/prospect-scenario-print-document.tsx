@@ -169,7 +169,7 @@ export function ProspectScenarioPrintDocument({
         <div className="prospect-print-section-heading">
           <p className="prospect-print-section-number">01</p>
           <div>
-            <h2 id="loan-assumptions">Core Loan Assumptions</h2>
+            <h2 id="loan-assumptions">Loan Overview</h2>
             <p>The starting figures used to compare these financing options.</p>
           </div>
         </div>
