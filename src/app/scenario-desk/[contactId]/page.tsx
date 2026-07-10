@@ -24,7 +24,6 @@ import {
   StatusBadge,
   type StatusBadgeTone,
 } from "@/components/ui/status-badge";
-import { PropertyDuplicateNotice } from "@/components/workstation/property-duplicate-notice";
 import {
   decimalToNumber,
   formatCurrencyDisplay,
@@ -33,7 +32,6 @@ import {
   formatRatioPercentDisplay,
 } from "@/lib/currency";
 import { formatDateForDisplay, formatTimestampForDisplay } from "@/lib/dates";
-import { getVisibleDuplicatePropertyContacts } from "@/lib/duplicate-property-contacts";
 import {
   auditActionLabels,
   borrowerTypeLabels,
@@ -143,15 +141,11 @@ function PhaseProgress({ finalized }: { finalized: boolean }) {
 function ScenarioContextRail({
   annualPropertyTaxes,
   contact,
-  duplicatePropertyContacts,
   impliedPositionAmount,
   impliedPositionPercent,
 }: {
   annualPropertyTaxes: Prisma.Decimal | null;
   contact: ScenarioDeskContact;
-  duplicatePropertyContacts: React.ComponentProps<
-    typeof PropertyDuplicateNotice
-  >["matches"];
   impliedPositionAmount: number | null;
   impliedPositionPercent: number | null;
 }) {
@@ -231,7 +225,6 @@ function ScenarioContextRail({
               Property Details
             </h2>
           </div>
-          <PropertyDuplicateNotice matches={duplicatePropertyContacts} />
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5">
             <SummaryItem
               className="col-span-2"
@@ -451,12 +444,6 @@ export default async function ScenarioDeskDetailPage({
       program: scenario.program,
       scenarioNumber: scenario.scenarioNumber,
     })) ?? [];
-  const duplicatePropertyContacts = await getVisibleDuplicatePropertyContacts({
-    address: contact.propertyDetails?.address,
-    contactId: contact.id,
-    viewerId: access.data.id,
-    viewerRole: access.data.role,
-  });
   const isFinalizedReadOnly =
     contact.status === ContactStatus.IN_PROCESSING &&
     contact.scenarioDesk?.status === ScenarioDeskStatus.FINALIZED;
@@ -541,7 +528,6 @@ export default async function ScenarioDeskDetailPage({
     <ScenarioContextRail
       annualPropertyTaxes={annualPropertyTaxes}
       contact={contact}
-      duplicatePropertyContacts={duplicatePropertyContacts}
       impliedPositionAmount={impliedDownPaymentAmount}
       impliedPositionPercent={impliedDownPaymentPercent}
     />
