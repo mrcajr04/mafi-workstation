@@ -73,6 +73,8 @@ type ScenarioFormProps = {
 
 const missingInsuranceMessage =
   "Estimated insurance is missing. PITIA may be understated.";
+const missingInsuranceWarning =
+  "Insurance estimate missing — PITIA excludes homeowners insurance.";
 
 const emptyScenario = (number: number): ScenarioDraft => ({
   comments: "",
@@ -532,13 +534,13 @@ export function ScenarioForm({
                         This will lock the selected scenario and move the
                         contact to Phase 4 for Loan Estimate and Pre-Approval
                         work.
+                        {missingAnnualInsurance ? (
+                          <span className="mt-2 block font-semibold text-amber-800">
+                            Add an annual insurance estimate before finalizing.
+                          </span>
+                        ) : null}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    {missingAnnualInsurance ? (
-                      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-                        {missingInsuranceMessage}
-                      </p>
-                    ) : null}
                     <AlertDialogFooter>
                       <AlertDialogCancel disabled={isPending}>
                         Cancel
@@ -563,15 +565,6 @@ export function ScenarioForm({
 
         <div className="mx-auto grid max-w-[1530px] items-start gap-5 px-4 pt-5 sm:px-6 lg:px-8 min-[1180px]:grid-cols-[minmax(0,1fr)_330px] min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(330px,390px)]">
           <div className="flex min-w-0 flex-col gap-4">
-            {missingAnnualInsurance ? (
-              <div
-                className="order-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-medium leading-5 text-amber-900"
-                role="status"
-              >
-                {missingInsuranceMessage}
-              </div>
-            ) : null}
-
             {ltvWarning ? (
               <div
                 className="order-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900"
@@ -593,6 +586,14 @@ export function ScenarioForm({
                   amount, rate, loan term, annual taxes, annual insurance, and
                   monthly HOA.
                 </p>
+                {missingAnnualInsurance ? (
+                  <p
+                    className="mt-2 inline-flex max-w-full items-center rounded-md border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-xs font-medium leading-5 text-amber-900"
+                    role="status"
+                  >
+                    {missingInsuranceWarning}
+                  </p>
+                ) : null}
               </div>
               {readOnly ? null : (
                 <Button
@@ -737,21 +738,12 @@ export function ScenarioForm({
                           </Field>
                         </div>
 
-                        {(rateWarning || missingAnnualInsurance) && (
-                          <div className="space-y-2">
-                            {rateWarning ? (
-                              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
-                                Interest rate is outside the expected 2% to 12%
-                                review range.
-                              </p>
-                            ) : null}
-                            {missingAnnualInsurance ? (
-                              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
-                                {missingInsuranceMessage}
-                              </p>
-                            ) : null}
-                          </div>
-                        )}
+                        {rateWarning ? (
+                          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
+                            Interest rate is outside the expected 2% to 12%
+                            review range.
+                          </p>
+                        ) : null}
 
                         <div className="grid grid-cols-2 gap-3">
                           <Field label="Escrowed">
@@ -797,8 +789,13 @@ export function ScenarioForm({
                             </strong>
                           </div>
                           <div className="border-l border-mafi-blue-primary/20 bg-mafi-blue-primary/8 px-3 py-2.5">
-                            <span className="block text-[9px] font-extrabold uppercase tracking-[0.06em] text-mafi-blue-primary">
+                            <span className="flex flex-wrap items-baseline gap-x-1 text-[9px] font-extrabold uppercase tracking-[0.06em] text-mafi-blue-primary">
                               PITIA
+                              {missingAnnualInsurance ? (
+                                <span className="normal-case tracking-normal text-amber-800">
+                                  · Excludes insurance
+                                </span>
+                              ) : null}
                             </span>
                             <strong className="mt-1 block text-lg font-extrabold tabular-nums text-mafi-blue-primary">
                               {scenario.pitia || "-"}
@@ -926,6 +923,11 @@ export function ScenarioForm({
                       >
                         <div className="bg-mafi-bg-light px-3 py-2.5 text-[10px] font-extrabold uppercase tracking-wide text-mafi-text-light">
                           {row.label}
+                          {row.label === "PITIA" && missingAnnualInsurance ? (
+                            <span className="block normal-case tracking-normal text-amber-800">
+                              Excludes insurance
+                            </span>
+                          ) : null}
                         </div>
                         {realScenarios.map((scenario) => {
                           const isSelected =
@@ -1023,6 +1025,12 @@ export function ScenarioForm({
                               >
                                 <dt className="text-[9px] font-bold uppercase tracking-wide text-mafi-text-light">
                                   {label}
+                                  {label === "PITIA" &&
+                                  missingAnnualInsurance ? (
+                                    <span className="ml-1 normal-case tracking-normal text-amber-800">
+                                      · Excludes insurance
+                                    </span>
+                                  ) : null}
                                 </dt>
                                 <dd
                                   className={`mt-1 break-words text-xs font-bold ${label === "PITIA" ? "text-mafi-blue-primary" : "text-mafi-text-dark"}`}
