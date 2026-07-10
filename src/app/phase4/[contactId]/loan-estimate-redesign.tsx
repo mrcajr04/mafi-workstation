@@ -340,7 +340,12 @@ export function LoanEstimateRedesign({
         data-loan-summary="top"
         className="no-print sticky top-16 z-30 mb-2.5 grid gap-2 rounded-md border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)] backdrop-blur md:grid-cols-3"
       >
-        <CompactSummaryValue label="Total Assets Required" value={results.totalAssetsRequired} emphasis />
+        <CompactSummaryValue
+          label="Total Assets Required"
+          value={results.totalAssetsRequired}
+          action={<TraceabilityTrigger data={traceability} />}
+          emphasis
+        />
         <CompactSummaryValue label="Total Monthly Payment" value={results.totalMonthlyPayment} />
         <CompactSummaryValue label="Total Cash to Close" value={results.totalCashToClose} />
       </div>
@@ -420,13 +425,7 @@ export function LoanEstimateRedesign({
           </div>
         </div>
 
-        <div className="space-y-4">
-          <LoanWorkspaceSummary
-            state={state}
-            results={results}
-            insights={insights}
-            traceability={traceability}
-          />
+        <div>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -1185,15 +1184,20 @@ function Panel({
 function CompactSummaryValue({
   label,
   value,
+  action,
   emphasis = false,
 }: {
   label: string;
   value: number;
+  action?: React.ReactNode;
   emphasis?: boolean;
 }) {
   return (
     <div className={cn("rounded-md border px-3 py-2", emphasis ? "border-[var(--le-blue)] bg-blue-50/60" : "border-slate-100 bg-gray-50")}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+        {action}
+      </div>
       <AnimatedValue
         value={value}
         format="currency"
@@ -1203,120 +1207,6 @@ function CompactSummaryValue({
         )}
       />
     </div>
-  );
-}
-
-function LoanWorkspaceSummary({
-  state,
-  results,
-  insights,
-  traceability,
-}: {
-  state: LoanState;
-  results: LoanResults;
-  insights: Record<string, FieldInsight>;
-  traceability: LoanEstimateTraceability;
-}) {
-  return (
-    <section
-      data-loan-summary="workspace"
-      className="no-print grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,1.05fr)]"
-    >
-      <div className="rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)]">
-        <div className="mb-3 border-b border-slate-100 pb-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Loan Summary</p>
-          <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
-        </div>
-        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-1 min-[1500px]:grid-cols-2">
-          <SidebarTextValue
-            label="Applicant"
-            value={state.applicantName}
-            action={<TraceabilityTrigger data={traceability} />}
-          />
-          <SidebarTextValue label="Loan Number" value={state.loanNumber} />
-          <SidebarTextValue label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
-          <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
-          <SidebarTextValue label="Email" value={state.email} />
-        </div>
-      </div>
-      <SidebarBreakdown
-        title="Total Monthly Payment"
-        total={results.totalMonthlyPayment}
-        insight={insights["Total Monthly Payment"]}
-        rows={[
-          ["Principal & Interest", results.principalInterest],
-          ["Property Taxes", results.monthlyPropertyTax],
-          ["Hazard Insurance", results.monthlyHazard],
-          ["Flood / HO6", results.monthlyFlood],
-          ["HOA / Condo Fee", results.monthlyHOA],
-        ]}
-      />
-      <SidebarBreakdown
-        title="Total Cash to Close"
-        total={results.totalCashToClose}
-        insight={insights["Total Cash to Close"]}
-        rows={[
-          [equityLabel(state), results.downPayment],
-          ["Closing Costs", results.totalClosingCosts],
-          ["Pre-Paid Items", results.totalPrepaid],
-          ["Seller Credit", -results.sellerCredit],
-          ["Other Credits", -results.otherCredits],
-        ]}
-      />
-    </section>
-  );
-}
-
-function SidebarTextValue({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="block min-w-0 rounded-sm text-left">
-      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
-      <span className="flex items-center">
-        <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
-          {value}
-        </p>
-        {action}
-      </span>
-    </div>
-  );
-}
-
-function SidebarBreakdown({
-  title,
-  total,
-  insight,
-  rows,
-}: {
-  title: string;
-  total: number;
-  insight?: FieldInsight;
-  rows: Array<[string, number]>;
-}) {
-  return (
-    <section className="h-full rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)]">
-      <div className="mb-2 flex items-end justify-between gap-2">
-        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{title}</h3>
-        <ReadOnlyInsight insight={insight} className="rounded-sm">
-          <AnimatedValue value={total} format="currency" className="text-right text-[length:var(--type-lg)] font-black text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]" />
-        </ReadOnlyInsight>
-      </div>
-      <dl className="space-y-1">
-        {rows.map(([label, amount]) => (
-          <div key={label} className="flex items-center justify-between gap-2 text-[length:var(--type-sm)]">
-            <dt className="truncate text-slate-500">{label}</dt>
-            <dd className="numeric font-mono font-bold tabular-nums text-slate-800">{formatCurrency(amount)}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
   );
 }
 

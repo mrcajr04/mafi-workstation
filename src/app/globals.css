@@ -232,6 +232,11 @@
 }
 
 @media print {
+  .loan-estimate-traceability-dialog,
+  .loan-estimate-traceability-overlay {
+    display: none !important;
+  }
+
   .scenario-desk-print-guidance,
   .scenario-desk-no-print,
   [data-scenario-print-guidance] {
