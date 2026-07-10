@@ -239,7 +239,7 @@
 
   @page scenario-prospect {
     size: letter portrait;
-    margin: 0.48in;
+    margin: 10mm 12mm;
   }
 
   body:has(.scenario-desk-print-scope) {
@@ -247,12 +247,16 @@
     height: auto !important;
     margin: 0 !important;
     min-height: 0 !important;
+    overflow: visible !important;
+    width: auto !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   html:has(.scenario-desk-print-scope) {
     height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 
   body:has(.scenario-desk-print-scope) .workstation-print-chrome {
@@ -260,22 +264,61 @@
   }
 
   body:has(.scenario-desk-print-scope) .workstation-print-shell {
+    height: auto !important;
+    margin: 0 !important;
     min-height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
   }
 
   body:has(.scenario-desk-print-scope) .workstation-print-main {
+    height: auto !important;
+    margin: 0 !important;
     min-height: auto !important;
+    overflow: visible !important;
     padding-left: 0 !important;
     padding-top: 0 !important;
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
   }
 
   body:has(.scenario-desk-print-scope) .workstation-print-content {
+    height: auto !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    overflow: visible !important;
     padding: 0 !important;
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
   }
 
   .scenario-desk-print-scope {
-    max-width: none !important;
+    box-sizing: border-box !important;
+    break-after: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    overflow: visible !important;
     padding: 0 !important;
+    page: scenario-prospect;
+    page-break-after: auto !important;
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+  }
+
+  .scenario-desk-print-scope *,
+  .scenario-desk-print-scope *::before,
+  .scenario-desk-print-scope *::after {
+    box-sizing: border-box;
   }
 
   .scenario-desk-print-scope .scenario-desk-screen-only,
@@ -284,12 +327,24 @@
   }
 
   .scenario-desk-print-scope .prospect-scenario-print-document {
+    break-after: auto;
     color: #172033;
     display: block !important;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 9.5pt;
+    height: auto;
     line-height: 1.4;
+    margin: 0;
+    max-width: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: visible;
+    padding: 0;
     page: scenario-prospect;
+    page-break-after: auto;
+    position: static;
+    transform: none;
+    width: 100%;
   }
 
   .prospect-print-header {
@@ -299,6 +354,13 @@
     justify-content: space-between;
     gap: 0.3in;
     padding-bottom: 0.18in;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .prospect-print-header > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .prospect-print-logo {
@@ -327,8 +389,9 @@
   }
 
   .prospect-print-prepared {
+    flex: 0 0 1.55in;
     margin: 0;
-    min-width: 1.7in;
+    min-width: 0;
     text-align: right;
   }
 
@@ -353,6 +416,7 @@
     font-size: 9.5pt;
     font-weight: 700;
     margin: 0.02in 0 0;
+    overflow-wrap: anywhere;
   }
 
   .prospect-print-intro {
@@ -360,6 +424,8 @@
     border-left: 4px solid #b98224;
     margin-top: 0.18in;
     padding: 0.14in 0.18in;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .prospect-print-intro .prospect-print-section-label {
@@ -371,11 +437,13 @@
     font-size: 15pt;
     letter-spacing: 0;
     margin: 0.02in 0;
+    overflow-wrap: anywhere;
   }
 
   .prospect-print-intro p:not(.prospect-print-section-label) {
     color: #465a6c;
     margin: 0.01in 0;
+    overflow-wrap: anywhere;
   }
 
   .prospect-print-section {
@@ -471,6 +539,8 @@
     border: 1px solid #d5dde4;
     border-top: 0;
     padding: 0.14in;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .prospect-print-payment-heading {
@@ -492,7 +562,9 @@
   }
 
   .prospect-print-payment-total {
+    flex: 0 0 auto;
     margin: 0;
+    min-width: 0;
     text-align: right;
   }
 
@@ -532,6 +604,7 @@
     font-weight: 700;
     margin: 0;
     text-align: right;
+    overflow-wrap: anywhere;
   }
 
   .prospect-print-payment-lines .is-total {
@@ -564,18 +637,34 @@
     padding: 0.16in;
   }
 
+  .prospect-print-alternatives-note,
+  .prospect-print-no-selection {
+    color: #52677a;
+    font-size: 8pt;
+    margin: 0.09in 0 0;
+  }
+
+  .prospect-print-no-selection {
+    background: #f3f6f8;
+    border-left: 3px solid #b98224;
+    font-weight: 700;
+    margin-bottom: 0.1in;
+    padding: 0.08in 0.1in;
+  }
+
   .prospect-print-comparison {
     display: grid;
-    gap: 0.1in;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.08in;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .prospect-print-option {
     border: 1px solid #cfd8df;
     break-inside: avoid;
     min-width: 0;
-    padding: 0.11in;
+    padding: 0.1in 0.12in;
     page-break-inside: avoid;
+    width: 100%;
   }
 
   .prospect-print-option.is-selected {
@@ -587,7 +676,7 @@
     display: flex;
     justify-content: space-between;
     gap: 0.06in;
-    min-height: 0.52in;
+    min-height: 0;
   }
 
   .prospect-print-option-heading p {
@@ -606,18 +695,16 @@
     margin: 0.02in 0 0;
   }
 
-  .prospect-print-option-heading span {
-    border: 1px solid #174d7c;
-    color: #174d7c;
-    font-size: 6.5pt;
-    font-weight: 800;
-    padding: 0.02in 0.04in;
-    text-transform: uppercase;
+  .prospect-print-option dl {
+    display: grid;
+    font-size: 8pt;
+    gap: 0 0.2in;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0.08in 0 0;
   }
 
-  .prospect-print-option dl {
-    font-size: 8pt;
-    margin: 0.08in 0 0;
+  .prospect-print-option dl > div {
+    min-width: 0;
   }
 
   .prospect-print-option .is-emphasis {
@@ -631,6 +718,10 @@
     font-size: 7pt;
     margin-top: 0.2in;
     padding-top: 0.09in;
+    break-after: auto;
+    page-break-after: auto;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .prospect-print-footer p {

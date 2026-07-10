@@ -84,6 +84,9 @@ export function ProspectScenarioPrintDocument({
   const selectedScenario = realScenarios.find(
     (scenario) => scenario.scenarioNumber === selectedScenarioNumber,
   );
+  const hasAlternativeScenarios = Boolean(
+    selectedScenario && realScenarios.length > 1,
+  );
   const monthlyTaxes = hasValue(annualPropertyTaxes)
     ? (annualPropertyTaxes as number) / 12
     : null;
@@ -97,7 +100,8 @@ export function ProspectScenarioPrintDocument({
       Math.round((hoaMonthly ?? 0) * 100) / 100
     : 0;
   const paymentRoundingAdjustment = selectedScenario
-    ? Math.round((selectedScenario.pitia - roundedPaymentComponents) * 100) / 100
+    ? Math.round((selectedScenario.pitia - roundedPaymentComponents) * 100) /
+      100
     : 0;
   const showPaymentRoundingAdjustment =
     Math.abs(paymentRoundingAdjustment) >= 0.01 &&
@@ -120,11 +124,17 @@ export function ProspectScenarioPrintDocument({
             width={210}
           />
           <p className="prospect-print-eyebrow">
-            {documentState === "finalized"
+            {selectedScenario && documentState === "finalized"
               ? "Finalized scenario summary"
-              : "Draft scenario comparison"}
+              : selectedScenario
+                ? "Draft selected-scenario summary"
+                : "Draft scenario comparison"}
           </p>
-          <h1>Mortgage Scenario Comparison</h1>
+          <h1>
+            {selectedScenario
+              ? "Mortgage Scenario Summary"
+              : "Mortgage Scenario Comparison"}
+          </h1>
         </div>
         <dl className="prospect-print-prepared">
           <div>
@@ -140,7 +150,10 @@ export function ProspectScenarioPrintDocument({
         </dl>
       </header>
 
-      <section className="prospect-print-intro" aria-labelledby="prospect-print-for">
+      <section
+        className="prospect-print-intro"
+        aria-labelledby="prospect-print-for"
+      >
         <p className="prospect-print-section-label" id="prospect-print-for">
           Prepared for
         </p>
@@ -149,7 +162,10 @@ export function ProspectScenarioPrintDocument({
         <p>{loanPurpose}</p>
       </section>
 
-      <section className="prospect-print-section" aria-labelledby="loan-assumptions">
+      <section
+        className="prospect-print-section"
+        aria-labelledby="loan-assumptions"
+      >
         <div className="prospect-print-section-heading">
           <p className="prospect-print-section-number">01</p>
           <div>
@@ -162,12 +178,17 @@ export function ProspectScenarioPrintDocument({
           <PrintMetric label="Loan amount" value={money(loanAmount)} />
           <PrintMetric
             label="Loan-to-value (LTV)"
-            value={hasValue(statedLtv) ? formatRatioPercentDisplay(statedLtv) : "Not provided"}
+            value={
+              hasValue(statedLtv)
+                ? formatRatioPercentDisplay(statedLtv)
+                : "Not provided"
+            }
           />
           <PrintMetric
             label={impliedPositionLabel}
             value={
-              hasValue(impliedPositionAmount) && hasValue(impliedPositionPercent)
+              hasValue(impliedPositionAmount) &&
+              hasValue(impliedPositionPercent)
                 ? `${money(impliedPositionAmount)} (${formatRatioPercentDisplay(impliedPositionPercent)})`
                 : "Not available"
             }
@@ -175,20 +196,23 @@ export function ProspectScenarioPrintDocument({
         </dl>
       </section>
 
-      <section className="prospect-print-section prospect-print-selected" aria-labelledby="selected-option">
-        <div className="prospect-print-section-heading">
-          <p className="prospect-print-section-number">02</p>
-          <div>
-            <h2 id="selected-option">Selected Financing Scenario</h2>
-            <p>
-              {selectedScenario
-                ? "The option selected by your Loan Originator for the next step."
-                : "No financing scenario has been selected yet."}
-            </p>
+      {selectedScenario ? (
+        <section
+          className="prospect-print-section prospect-print-selected"
+          aria-labelledby="selected-option"
+        >
+          <div className="prospect-print-section-heading">
+            <p className="prospect-print-section-number">02</p>
+            <div>
+              <h2 id="selected-option">Selected Financing Scenario</h2>
+              <p>
+                {documentState === "finalized"
+                  ? "The saved financing option selected for the next step."
+                  : "The draft financing option selected for the next step."}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {selectedScenario ? (
           <>
             <div className="prospect-print-recommendation">
               <div className="prospect-print-selected-label">
@@ -198,13 +222,18 @@ export function ProspectScenarioPrintDocument({
               <dl className="prospect-print-selected-terms">
                 <PrintMetric
                   label="Interest rate"
-                  value={formatInterestRateDisplay(selectedScenario.interestRate)}
+                  value={formatInterestRateDisplay(
+                    selectedScenario.interestRate,
+                  )}
                 />
                 <PrintMetric
                   label="Loan term"
                   value={getLoanTermMetadata(selectedScenario.loanTerm).label}
                 />
-                <PrintMetric label="Escrowed" value={selectedScenario.escrowed ? "Yes" : "No"} />
+                <PrintMetric
+                  label="Escrowed"
+                  value={selectedScenario.escrowed ? "Yes" : "No"}
+                />
                 <PrintMetric
                   label="Mortgage insurance"
                   value={selectedScenario.mortgageInsurance ? "Yes" : "No"}
@@ -215,7 +244,9 @@ export function ProspectScenarioPrintDocument({
             <div className="prospect-print-payment">
               <div className="prospect-print-payment-heading">
                 <div>
-                  <p className="prospect-print-section-label">Estimated monthly payment</p>
+                  <p className="prospect-print-section-label">
+                    Estimated monthly payment
+                  </p>
                   <h3>How the total is constructed</h3>
                 </div>
                 <p className="prospect-print-payment-total">
@@ -228,7 +259,10 @@ export function ProspectScenarioPrintDocument({
                   label="Principal & Interest"
                   value={money(selectedScenario.principalAndInterest, true)}
                 />
-                <PaymentLine label="Estimated property taxes" value={money(monthlyTaxes, true)} />
+                <PaymentLine
+                  label="Estimated property taxes"
+                  value={money(monthlyTaxes, true)}
+                />
                 <PaymentLine
                   label="Estimated homeowners insurance"
                   value={money(monthlyInsurance, true)}
@@ -240,43 +274,55 @@ export function ProspectScenarioPrintDocument({
                     value={money(paymentRoundingAdjustment, true)}
                   />
                 ) : null}
-                <PaymentLine emphasis label="Estimated PITIA" value={money(selectedScenario.pitia, true)} />
+                <PaymentLine
+                  emphasis
+                  label="Estimated PITIA"
+                  value={money(selectedScenario.pitia, true)}
+                />
               </dl>
               {annualInsurance === null ? (
                 <p className="prospect-print-notice">
-                  Homeowners insurance has not yet been estimated and is not included in the total shown.
+                  Homeowners insurance has not yet been estimated and is not
+                  included in the total shown.
                 </p>
               ) : null}
               {selectedScenario.mortgageInsurance ? (
                 <p className="prospect-print-footnote">
-                  Mortgage insurance is indicated as applicable, but no monthly mortgage-insurance amount is included in this worksheet.
+                  Mortgage insurance is indicated as applicable, but no monthly
+                  mortgage-insurance amount is included in this worksheet.
                 </p>
               ) : null}
             </div>
-          </>
-        ) : (
-          <div className="prospect-print-empty">
-            This draft contains financing options, but a recommended scenario has not been selected.
-          </div>
-        )}
-      </section>
 
-      {realScenarios.length >= 2 ? (
-        <section className="prospect-print-section" aria-labelledby="option-comparison">
+            {hasAlternativeScenarios ? (
+              <p className="prospect-print-alternatives-note">
+                Additional financing options were reviewed.
+              </p>
+            ) : null}
+          </>
+        </section>
+      ) : (
+        <section
+          className="prospect-print-section prospect-print-comparison-section"
+          aria-labelledby="option-comparison"
+        >
           <div className="prospect-print-section-heading">
-            <p className="prospect-print-section-number">03</p>
+            <p className="prospect-print-section-number">02</p>
             <div>
-              <h2 id="option-comparison">Compare Your Options</h2>
-              <p>A side-by-side view of the scenarios prepared for you.</p>
+              <h2 id="option-comparison">Draft Scenario Comparison</h2>
+              <p>Financing scenarios prepared for review.</p>
             </div>
           </div>
-          <div className="prospect-print-comparison">
-            {realScenarios.map((scenario) => {
-              const isSelected = scenario.scenarioNumber === selectedScenarioNumber;
 
-              return (
+          <p className="prospect-print-no-selection">
+            No recommended scenario has been selected yet.
+          </p>
+
+          {realScenarios.length ? (
+            <div className="prospect-print-comparison">
+              {realScenarios.map((scenario) => (
                 <section
-                  className={`prospect-print-option${isSelected ? " is-selected" : ""}`}
+                  className="prospect-print-option"
                   key={scenario.scenarioNumber}
                 >
                   <div className="prospect-print-option-heading">
@@ -284,26 +330,50 @@ export function ProspectScenarioPrintDocument({
                       <p>Scenario {scenario.scenarioNumber}</p>
                       <h3>{scenario.lenderAndProduct}</h3>
                     </div>
-                    {isSelected ? <span>Selected</span> : null}
                   </div>
                   <dl>
-                    <ComparisonLine label="Interest rate" value={formatInterestRateDisplay(scenario.interestRate)} />
-                    <ComparisonLine label="Loan term" value={getLoanTermMetadata(scenario.loanTerm).label} />
-                    <ComparisonLine label="Principal & Interest" value={money(scenario.principalAndInterest, true)} />
-                    <ComparisonLine label="Estimated PITIA" value={money(scenario.pitia, true)} emphasis />
-                    <ComparisonLine label="Escrowed" value={scenario.escrowed ? "Yes" : "No"} />
-                    <ComparisonLine label="Mortgage insurance" value={scenario.mortgageInsurance ? "Yes" : "No"} />
+                    <ComparisonLine
+                      label="Interest rate"
+                      value={formatInterestRateDisplay(scenario.interestRate)}
+                    />
+                    <ComparisonLine
+                      label="Loan term"
+                      value={getLoanTermMetadata(scenario.loanTerm).label}
+                    />
+                    <ComparisonLine
+                      label="Principal & Interest"
+                      value={money(scenario.principalAndInterest, true)}
+                    />
+                    <ComparisonLine
+                      emphasis
+                      label="Estimated PITIA"
+                      value={money(scenario.pitia, true)}
+                    />
+                    <ComparisonLine
+                      label="Escrowed"
+                      value={scenario.escrowed ? "Yes" : "No"}
+                    />
+                    <ComparisonLine
+                      label="Mortgage insurance"
+                      value={scenario.mortgageInsurance ? "Yes" : "No"}
+                    />
                   </dl>
                 </section>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="prospect-print-empty">
+              No complete financing scenarios are available for comparison.
+            </div>
+          )}
         </section>
-      ) : null}
+      )}
 
       <footer className="prospect-print-footer">
         <p>{disclaimer}</p>
-        <p className="prospect-print-footer-brand">MLG Home Financial | MAFI Workstation</p>
+        <p className="prospect-print-footer-brand">
+          MLG Home Financial | MAFI Workstation
+        </p>
       </footer>
     </article>
   );
