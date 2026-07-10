@@ -227,13 +227,22 @@
   background: var(--le-paper);
 }
 
+.prospect-scenario-print-document {
+  display: none;
+}
+
 @media print {
   @page {
     size: auto;
     margin: 0;
   }
 
-  body:has(.scenario-desk-print) {
+  @page scenario-prospect {
+    size: letter portrait;
+    margin: 0.48in;
+  }
+
+  body:has(.scenario-desk-print-scope) {
     background: #ffffff !important;
     height: auto !important;
     margin: 0 !important;
@@ -242,41 +251,397 @@
     print-color-adjust: exact;
   }
 
-  html:has(.scenario-desk-print) {
+  html:has(.scenario-desk-print-scope) {
     height: auto !important;
   }
 
-  body:has(.scenario-desk-print) .workstation-print-chrome {
+  body:has(.scenario-desk-print-scope) .workstation-print-chrome {
     display: none !important;
   }
 
-  body:has(.scenario-desk-print) .workstation-print-shell {
+  body:has(.scenario-desk-print-scope) .workstation-print-shell {
     min-height: auto !important;
   }
 
-  body:has(.scenario-desk-print) .workstation-print-main {
+  body:has(.scenario-desk-print-scope) .workstation-print-main {
     min-height: auto !important;
     padding-left: 0 !important;
     padding-top: 0 !important;
   }
 
-  body:has(.scenario-desk-print) .workstation-print-content {
+  body:has(.scenario-desk-print-scope) .workstation-print-content {
     padding: 0 !important;
   }
 
-  .scenario-desk-print {
+  .scenario-desk-print-scope {
     max-width: none !important;
-    padding: 0.45in !important;
+    padding: 0 !important;
   }
 
-  .scenario-desk-print .scenario-desk-no-print {
+  .scenario-desk-print-scope .scenario-desk-screen-only,
+  .scenario-desk-print-scope .scenario-desk-no-print {
     display: none !important;
   }
 
-  .scenario-desk-print section,
-  .scenario-desk-print .rounded-lg.border {
+  .scenario-desk-print-scope .prospect-scenario-print-document {
+    color: #172033;
+    display: block !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    page: scenario-prospect;
+  }
+
+  .prospect-print-header {
+    align-items: flex-start;
+    border-bottom: 2px solid #174d7c;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.3in;
+    padding-bottom: 0.18in;
+  }
+
+  .prospect-print-logo {
+    height: auto;
+    max-width: 1.85in;
+    object-fit: contain;
+    width: auto;
+  }
+
+  .prospect-print-eyebrow,
+  .prospect-print-section-label {
+    color: #476278;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin: 0.1in 0 0;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-header h1 {
+    color: #123c61;
+    font-size: 20pt;
+    letter-spacing: 0;
+    line-height: 1.1;
+    margin: 0.04in 0 0;
+  }
+
+  .prospect-print-prepared {
+    margin: 0;
+    min-width: 1.7in;
+    text-align: right;
+  }
+
+  .prospect-print-prepared div + div {
+    margin-top: 0.08in;
+  }
+
+  .prospect-print-prepared dt,
+  .prospect-print-assumptions dt,
+  .prospect-print-selected-terms dt {
+    color: #607487;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-prepared dd,
+  .prospect-print-assumptions dd,
+  .prospect-print-selected-terms dd {
+    color: #172033;
+    font-size: 9.5pt;
+    font-weight: 700;
+    margin: 0.02in 0 0;
+  }
+
+  .prospect-print-intro {
+    background: #f3f6f8;
+    border-left: 4px solid #b98224;
+    margin-top: 0.18in;
+    padding: 0.14in 0.18in;
+  }
+
+  .prospect-print-intro .prospect-print-section-label {
+    margin-top: 0;
+  }
+
+  .prospect-print-intro h2 {
+    color: #123c61;
+    font-size: 15pt;
+    letter-spacing: 0;
+    margin: 0.02in 0;
+  }
+
+  .prospect-print-intro p:not(.prospect-print-section-label) {
+    color: #465a6c;
+    margin: 0.01in 0;
+  }
+
+  .prospect-print-section {
+    margin-top: 0.2in;
+  }
+
+  .prospect-print-section-heading {
+    align-items: flex-start;
+    break-after: avoid-page;
+    display: flex;
+    gap: 0.1in;
+    margin-bottom: 0.11in;
+    page-break-after: avoid;
+  }
+
+  .prospect-print-section-number {
+    align-items: center;
+    background: #174d7c;
+    border-radius: 50%;
+    color: #ffffff;
+    display: flex;
+    flex: 0 0 0.27in;
+    font-size: 7.5pt;
+    font-weight: 800;
+    height: 0.27in;
+    justify-content: center;
+    margin: 0;
+  }
+
+  .prospect-print-section-heading h2 {
+    color: #123c61;
+    font-size: 13pt;
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .prospect-print-section-heading p:not(.prospect-print-section-number) {
+    color: #607487;
+    font-size: 8.5pt;
+    margin: 0.01in 0 0;
+  }
+
+  .prospect-print-assumptions,
+  .prospect-print-selected-terms {
+    display: grid;
+    gap: 0.11in 0.16in;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+  }
+
+  .prospect-print-assumptions > div,
+  .prospect-print-selected-terms > div {
+    border: 1px solid #d5dde4;
+    min-width: 0;
+    padding: 0.1in;
+  }
+
+  .prospect-print-assumptions dd,
+  .prospect-print-selected-terms dd,
+  .prospect-print-option h3 {
+    overflow-wrap: anywhere;
+  }
+
+  .prospect-print-selected {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .prospect-print-recommendation {
+    border: 1.5px solid #174d7c;
+    border-top: 5px solid #174d7c;
+    padding: 0.14in;
+  }
+
+  .prospect-print-selected-label {
+    color: #174d7c;
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-recommendation h3 {
+    color: #172033;
+    font-size: 13pt;
+    letter-spacing: 0;
+    margin: 0.03in 0 0.11in;
+    overflow-wrap: anywhere;
+  }
+
+  .prospect-print-payment {
+    background: #f5f7f9;
+    border: 1px solid #d5dde4;
+    border-top: 0;
+    padding: 0.14in;
+  }
+
+  .prospect-print-payment-heading {
+    align-items: flex-end;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.2in;
+  }
+
+  .prospect-print-payment-heading .prospect-print-section-label {
+    margin-top: 0;
+  }
+
+  .prospect-print-payment-heading h3 {
+    color: #172033;
+    font-size: 11pt;
+    letter-spacing: 0;
+    margin: 0.02in 0 0;
+  }
+
+  .prospect-print-payment-total {
+    margin: 0;
+    text-align: right;
+  }
+
+  .prospect-print-payment-total span {
+    color: #607487;
+    display: block;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-payment-total strong {
+    color: #123c61;
+    display: block;
+    font-size: 16pt;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  .prospect-print-payment-lines {
+    margin: 0.1in 0 0;
+  }
+
+  .prospect-print-payment-lines > div,
+  .prospect-print-option dl > div {
+    align-items: baseline;
+    border-bottom: 1px solid #dce3e8;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.16in;
+    padding: 0.045in 0;
+  }
+
+  .prospect-print-payment-lines dd,
+  .prospect-print-option dd {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    margin: 0;
+    text-align: right;
+  }
+
+  .prospect-print-payment-lines .is-total {
+    border-bottom: 0;
+    border-top: 2px solid #174d7c;
+    color: #123c61;
+    font-weight: 800;
+    margin-top: 0.05in;
+    padding-top: 0.07in;
+  }
+
+  .prospect-print-notice {
+    border-left: 3px solid #b98224;
+    color: #5e461b;
+    font-size: 8pt;
+    font-weight: 700;
+    margin: 0.1in 0 0;
+    padding-left: 0.08in;
+  }
+
+  .prospect-print-footnote {
+    color: #607487;
+    font-size: 7.5pt;
+    margin: 0.06in 0 0;
+  }
+
+  .prospect-print-empty {
+    border: 1px dashed #9eabb7;
+    color: #52677a;
+    padding: 0.16in;
+  }
+
+  .prospect-print-comparison {
+    display: grid;
+    gap: 0.1in;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .prospect-print-option {
+    border: 1px solid #cfd8df;
+    break-inside: avoid;
+    min-width: 0;
+    padding: 0.11in;
+    page-break-inside: avoid;
+  }
+
+  .prospect-print-option.is-selected {
+    border: 2px solid #174d7c;
+  }
+
+  .prospect-print-option-heading {
+    align-items: flex-start;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.06in;
+    min-height: 0.52in;
+  }
+
+  .prospect-print-option-heading p {
+    color: #607487;
+    font-size: 7.5pt;
+    font-weight: 800;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-option-heading h3 {
+    color: #172033;
+    font-size: 9.5pt;
+    letter-spacing: 0;
+    line-height: 1.25;
+    margin: 0.02in 0 0;
+  }
+
+  .prospect-print-option-heading span {
+    border: 1px solid #174d7c;
+    color: #174d7c;
+    font-size: 6.5pt;
+    font-weight: 800;
+    padding: 0.02in 0.04in;
+    text-transform: uppercase;
+  }
+
+  .prospect-print-option dl {
+    font-size: 8pt;
+    margin: 0.08in 0 0;
+  }
+
+  .prospect-print-option .is-emphasis {
+    color: #123c61;
+    font-weight: 800;
+  }
+
+  .prospect-print-footer {
+    border-top: 1px solid #b8c3cc;
+    color: #607487;
+    font-size: 7pt;
+    margin-top: 0.2in;
+    padding-top: 0.09in;
+  }
+
+  .prospect-print-footer p {
+    margin: 0;
+  }
+
+  .prospect-print-footer-brand {
+    color: #123c61;
+    font-weight: 700;
+    margin-top: 0.05in !important;
+    text-align: right;
   }
 
   body:has(.loan-estimate-design) {

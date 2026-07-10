@@ -6,6 +6,10 @@ import {
   RoleType,
   ScenarioDeskStatus,
 } from "@prisma/client";
+import {
+  ProspectScenarioPrintDocument,
+  type ProspectScenarioPrintContext,
+} from "@/app/scenario-desk/[contactId]/prospect-scenario-print-document";
 import { ScenarioForm } from "@/app/scenario-desk/[contactId]/scenario-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge, type StatusBadgeTone } from "@/components/ui/status-badge";
@@ -177,18 +181,53 @@ export default async function ScenarioDeskDetailPage({
   const opportunityPropertyValue = decimalToNumber(
     contact.opportunityValue?.propertyValue,
   );
+  const opportunityLoanAmount = decimalToNumber(
+    contact.opportunityValue?.loanAmount,
+  );
   const impliedDownPaymentAmount =
     opportunityPropertyValue && contact.opportunityValue?.loanAmount != null
-      ? opportunityPropertyValue - decimalToNumber(contact.opportunityValue.loanAmount)
+      ? opportunityPropertyValue - opportunityLoanAmount
       : null;
   const impliedDownPaymentPercent =
     impliedDownPaymentAmount !== null && opportunityPropertyValue
       ? (impliedDownPaymentAmount / opportunityPropertyValue) * 100
       : null;
+  const printContext: ProspectScenarioPrintContext = {
+    annualInsurance:
+      contact.propertyDetails?.estimatedInsuranceAnnual == null
+        ? null
+        : decimalToNumber(contact.propertyDetails.estimatedInsuranceAnnual),
+    annualPropertyTaxes:
+      annualPropertyTaxes == null ? null : decimalToNumber(annualPropertyTaxes),
+    datePrepared: formatDate(new Date()),
+    hoaMonthly:
+      contact.propertyDetails?.additionalHoaFees == null
+        ? null
+        : decimalToNumber(contact.propertyDetails.additionalHoaFees),
+    impliedPositionAmount: impliedDownPaymentAmount,
+    impliedPositionLabel: isRefinanceLoanPurpose(contact.loanPurpose)
+      ? "Implied Equity Position"
+      : "Implied Down Payment",
+    impliedPositionPercent: impliedDownPaymentPercent,
+    loanAmount:
+      contact.opportunityValue?.loanAmount == null ? null : opportunityLoanAmount,
+    loanPurpose: loanPurposeLabels[contact.loanPurpose],
+    preparedBy: access.data.fullName,
+    propertyAddress: contact.propertyDetails?.address ?? null,
+    propertyValue:
+      contact.opportunityValue?.propertyValue == null
+        ? null
+        : opportunityPropertyValue,
+    prospectName: contact.prospectName,
+    statedLtv:
+      contact.opportunityValue?.ltv == null
+        ? null
+        : decimalToNumber(contact.opportunityValue.ltv),
+  };
 
   return (
-    <div className="scenario-desk-print mx-auto max-w-7xl space-y-5">
-      <div className="space-y-3">
+    <div className="scenario-desk-print-scope mx-auto max-w-7xl space-y-5">
+      <div className="scenario-desk-screen-only space-y-3">
         <Link
           className="scenario-desk-no-print text-sm font-semibold text-mafi-blue-primary hover:text-mafi-blue-dark"
           href="/scenario-desk"
@@ -213,7 +252,7 @@ export default async function ScenarioDeskDetailPage({
         </div>
       </div>
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-3">
+      <div className="scenario-desk-screen-only grid items-stretch gap-4 lg:grid-cols-3">
         <SummaryCard title="Contact Information">
           <SummaryItem label="Name" value={contact.prospectName} />
           <SummaryItem label="Phone" value={formatUSPhone(contact.prospectPhone)} />
@@ -330,11 +369,34 @@ export default async function ScenarioDeskDetailPage({
       </div>
 
       {isFinalizedReadOnly ? (
-        <LockedFinalizedScenarioDesk
-          auditLogs={auditLogs}
-          contactId={contact.id}
-          scenarioDesk={contact.scenarioDesk}
-        />
+        <>
+          <LockedFinalizedScenarioDesk
+            auditLogs={auditLogs}
+            contactId={contact.id}
+            scenarioDesk={contact.scenarioDesk}
+          />
+          <ProspectScenarioPrintDocument
+            {...printContext}
+            documentState="finalized"
+            scenarios={
+              contact.scenarioDesk?.scenarios.map((scenario) => ({
+                escrowed: scenario.escrowed,
+                interestRate: decimalToNumber(scenario.interestRate),
+                lenderAndProduct: scenario.lenderAndProduct,
+                loanTerm: scenario.loanTermCode,
+                mortgageInsurance: scenario.mortgageInsurance,
+                pitia: decimalToNumber(scenario.pitia),
+                principalAndInterest: decimalToNumber(
+                  scenario.principalAndInterest,
+                ),
+                scenarioNumber: scenario.scenarioNumber,
+              })) ?? []
+            }
+            selectedScenarioNumber={
+              contact.scenarioDesk?.selectedScenarioNumber ?? null
+            }
+          />
+        </>
       ) : (
         <ScenarioForm
           annualInsurance={formatCurrencyDisplay(
@@ -350,6 +412,7 @@ export default async function ScenarioDeskDetailPage({
             contact.propertyDetails?.additionalHoaFees,
             "",
           )}
+          printContext={printContext}
           propertyValue={formatCurrencyDisplay(
             contact.opportunityValue?.propertyValue,
             "",
@@ -401,7 +464,7 @@ function LockedFinalizedScenarioDesk({
   }
 
   return (
-    <section className="space-y-5">
+    <section className="scenario-desk-screen-only space-y-5">
       <Card className="border-mafi-status-green bg-mafi-status-green/10 shadow-sm">
         <CardContent className="grid gap-3 px-4 py-4 text-sm text-mafi-text-dark sm:grid-cols-[auto_1fr] sm:items-start">
           <span className="inline-flex min-h-9 items-center justify-center rounded-full bg-mafi-status-green/15 px-3 text-xs font-bold uppercase text-mafi-status-green">

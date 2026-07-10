@@ -5,6 +5,10 @@ import type React from "react";
 import { useId, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
+  ProspectScenarioPrintDocument,
+  type ProspectScenarioPrintContext,
+} from "@/app/scenario-desk/[contactId]/prospect-scenario-print-document";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -58,6 +62,7 @@ type ScenarioFormProps = {
   initialScenarios: ScenarioInput[];
   loanAmount: string;
   monthlyHoa: string;
+  printContext: ProspectScenarioPrintContext;
   propertyValue?: string;
   readOnly?: boolean;
   selectedScenarioNumber?: number | null;
@@ -243,6 +248,7 @@ export function ScenarioForm({
   initialScenarios,
   loanAmount,
   monthlyHoa,
+  printContext,
   propertyValue = "",
   readOnly = false,
   selectedScenarioNumber,
@@ -272,6 +278,22 @@ export function ScenarioForm({
   const realScenarios = useMemo(
     () => scenarios.filter(hasRealScenario).sort((a, b) => a.scenarioNumber - b.scenarioNumber),
     [scenarios],
+  );
+  const printScenarios = useMemo(
+    () =>
+      realScenarios.map((scenario) => ({
+        escrowed: scenario.escrowed,
+        interestRate: parsePercent(scenario.interestRate),
+        lenderAndProduct: scenario.lenderAndProduct,
+        loanTerm: normalizeLoanTerm(scenario.loanTerm, scenario.program),
+        mortgageInsurance: scenario.mortgageInsurance ?? false,
+        pitia: currencyInputToNumber(scenario.pitia),
+        principalAndInterest: currencyInputToNumber(
+          scenario.principalAndInterest,
+        ),
+        scenarioNumber: scenario.scenarioNumber,
+      })),
+    [realScenarios],
   );
   const selectedRealScenario = selectedScenario
     ? scenarios.some(
@@ -425,7 +447,8 @@ export function ScenarioForm({
   }
 
   return (
-    <section className="space-y-5">
+    <>
+      <section className="scenario-desk-screen-only space-y-5">
       {missingAnnualInsurance ? (
         <div
           className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-900"
@@ -834,7 +857,14 @@ export function ScenarioForm({
           </div>
         </div>
       )}
-    </section>
+      </section>
+      <ProspectScenarioPrintDocument
+        {...printContext}
+        documentState="draft"
+        scenarios={printScenarios}
+        selectedScenarioNumber={selectedScenario}
+      />
+    </>
   );
 }
 
