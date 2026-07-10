@@ -550,7 +550,7 @@ export function ScenarioForm({
           </div>
         )}
 
-        <div className="mx-auto grid max-w-[1530px] items-start gap-5 px-4 pt-5 sm:px-6 lg:px-8 min-[980px]:grid-cols-[minmax(0,1fr)_330px] min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(330px,390px)]">
+        <div className="mx-auto grid max-w-[1530px] items-start gap-5 px-4 pt-5 sm:px-6 lg:px-8 min-[1180px]:grid-cols-[minmax(0,1fr)_330px] min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(330px,390px)]">
           <div className="flex min-w-0 flex-col gap-4">
             {missingAnnualInsurance ? (
               <div

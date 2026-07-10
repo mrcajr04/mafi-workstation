@@ -11,7 +11,7 @@ export default function ScenarioDeskDetailLoading() {
         </div>
       </div>
       <div className="h-16 border-b border-mafi-border bg-mafi-bg-light" />
-      <div className="mx-auto grid max-w-[1530px] items-start gap-5 px-4 pt-5 sm:px-6 lg:px-8 min-[980px]:grid-cols-[minmax(0,1fr)_330px] min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(330px,390px)]">
+      <div className="mx-auto grid max-w-[1530px] items-start gap-5 px-4 pt-5 sm:px-6 lg:px-8 min-[1180px]:grid-cols-[minmax(0,1fr)_330px] min-[1280px]:grid-cols-[minmax(0,1fr)_minmax(330px,390px)]">
         <div className="space-y-4">
           <Card className="border-mafi-border bg-mafi-bg-white">
             <CardContent className="p-4">
