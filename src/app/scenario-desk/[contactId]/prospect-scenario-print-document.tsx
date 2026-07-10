@@ -116,7 +116,7 @@ export function ProspectScenarioPrintDocument({
             className="prospect-print-logo"
             height={52}
             priority
-            src="/brand/mafi-workstation-logotype-header-v2.png"
+            src="/brand/mafi-workstation-logotype.png"
             width={210}
           />
           <p className="prospect-print-eyebrow">
