@@ -504,7 +504,7 @@ export function ScenarioForm({
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
-                      className="col-span-2 bg-mafi-status-green text-white hover:bg-mafi-status-green/90 sm:col-auto"
+                      className="col-span-2 bg-[#23805F] text-white hover:bg-[#1B684D] active:bg-[#15543F] focus-visible:border-[#15543F] focus-visible:ring-[#23805F]/35 disabled:bg-[#23805F] disabled:text-white disabled:hover:bg-[#23805F] sm:col-auto"
                       disabled={isPending || !selectedRealScenario}
                       type="button"
                     >
