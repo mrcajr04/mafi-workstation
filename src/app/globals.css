@@ -227,6 +227,18 @@
   background: var(--le-paper);
 }
 
+.loan-estimate-sidebar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 80rem) {
+  .loan-estimate-sidebar-layout,
+  .loan-estimate-marketing-layout {
+    grid-template-columns: minmax(0, 1fr) 282px;
+  }
+}
+
 .prospect-scenario-print-document {
   display: none;
 }

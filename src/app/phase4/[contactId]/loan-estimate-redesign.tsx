@@ -425,7 +425,12 @@ export function LoanEstimateRedesign({
           </div>
         </div>
 
-        <div>
+        <div
+          className={cn(
+            "items-start gap-4",
+            activeTab !== "marketing" && "loan-estimate-sidebar-layout",
+          )}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -448,7 +453,13 @@ export function LoanEstimateRedesign({
               ) : null}
               {activeTab === "costs" ? <SummaryCostsTab state={state} results={results} /> : null}
               {activeTab === "marketing" ? (
-                <SummaryMarketingTab state={state} results={results} assetSegments={assetSegments} />
+                <SummaryMarketingTab
+                  state={state}
+                  results={results}
+                  insights={insights}
+                  assetSegments={assetSegments}
+                  traceability={traceability}
+                />
               ) : null}
               {activeTab === "legal" ? <LegalSizeTab state={state} results={results} /> : null}
               {activeTab === "formulas" ? (
@@ -456,6 +467,14 @@ export function LoanEstimateRedesign({
               ) : null}
             </motion.div>
           </AnimatePresence>
+          {activeTab !== "marketing" ? (
+            <LoanSummarySidebar
+              state={state}
+              results={results}
+              insights={insights}
+              traceability={traceability}
+            />
+          ) : null}
         </div>
       </Tabs.Root>
 
@@ -810,11 +829,15 @@ function SummaryCostsTab({
 function SummaryMarketingTab({
   state,
   results,
+  insights,
   assetSegments,
+  traceability,
 }: {
   state: LoanState;
   results: ReturnType<typeof calculateLoanEstimate>;
+  insights: Record<string, FieldInsight>;
   assetSegments: Array<{ name: string; value: number; color: string }>;
+  traceability: LoanEstimateTraceability;
 }) {
   const renderBreakdownContent = () => (
     <div className="print-breakdown-content mt-4 grid gap-5 lg:grid-cols-2">
@@ -844,34 +867,15 @@ function SummaryMarketingTab({
   );
 
   return (
-    <DocumentFrame>
-      <ClientHeader state={state} subtitle="Borrower Fee Sheet Summary" />
-      <section className="print-client-section print-keep-together grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="hidden rounded-md border border-[var(--le-line)] p-5 print:block">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[length:var(--type-xs)] font-bold uppercase text-[var(--le-muted)]">Total Assets Required</p>
-              <AnimatedValue
-                value={results.totalAssetsRequired}
-                format="currency"
-                className="numeric mt-2 block text-[length:var(--type-3xl)] font-black text-[var(--le-navy)]"
-              />
-            </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[var(--le-gold-soft)] text-[var(--le-gold)]">
-              <ShieldCheck className="h-7 w-7" aria-hidden="true" />
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Badge tone="gold">Estimate</Badge>
-            <Badge tone="danger">Rate Not Locked</Badge>
-          </div>
-          <Disclaimer>
-            The information provided reflects estimates of charges you are likely to incur at settlement. Fees may be
-            more or less and this is not a commitment to lend.
-          </Disclaimer>
-        </div>
-
-        <div className="rounded-md border border-[var(--le-line)] p-5">
+    <DocumentFrame className="!max-w-[1390px]">
+      <div className="loan-estimate-marketing-layout grid items-start gap-5">
+        <div className="space-y-5 print:col-span-2">
+          <ClientHeader state={state} subtitle="Borrower Fee Sheet Summary" />
+          <section
+            data-summary-marketing="core"
+            className="print-client-section print-keep-together grid gap-5 lg:grid-cols-2"
+          >
+        <div data-summary-marketing-card="loan" className="rounded-md border border-[var(--le-line)] p-5">
           <h2 className="mb-4 flex items-center gap-2 text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">
             <Home className="h-5 w-5" aria-hidden="true" />
             Loan Information
@@ -884,21 +888,16 @@ function SummaryMarketingTab({
               [equityLabel(state), formatCurrency(results.downPayment)],
               ["Loan Amount", formatCurrency(results.loanAmount)],
               ["LTV", formatPercent(results.ltv)],
-              ["Program", state.program],
-              ["Rate", formatPercent(state.rate)],
             ]}
           />
-        </div>
-      </section>
-
-      <section className="print-client-section print-keep-together grid gap-5 lg:grid-cols-[1fr_360px]">
-        <div className="rounded-md border border-[var(--le-line)] p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">
+          <h2 className="mb-4 mt-5 flex items-center gap-2 text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">
             <BadgeDollarSign className="h-5 w-5" aria-hidden="true" />
             Monthly Payment Summary
           </h2>
           <SimpleTable
             rows={[
+              ["Program", state.program],
+              ["Rate", formatPercent(state.rate)],
               ["Principal & Interest", formatCurrency(results.principalInterest)],
               ["Property Taxes", formatCurrency(results.monthlyPropertyTax)],
               ["Hazard Insurance", formatCurrency(results.monthlyHazard)],
@@ -908,23 +907,70 @@ function SummaryMarketingTab({
             footer={["Total Monthly Payment", formatCurrency(results.totalMonthlyPayment)]}
           />
         </div>
-        <div className="rounded-md border border-[var(--le-line)] p-5">
-          <AssetsPieChart data={assetSegments} compact />
+
+        <div data-summary-marketing-card="costs" className="rounded-md border border-[var(--le-line)] p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">
+            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            Prepaid &amp; Closing Costs
+          </h2>
+          <SimpleTable
+            rows={[
+              ["Flood / HO6", formatCurrency(results.floodHO6Escrow)],
+              ["Developer Fee (per contract)", formatCurrency(results.developFeeContract)],
+              ["Capital Contribution", formatCurrency(results.capitalContribution)],
+              ["Total Prepaid Costs", formatCurrency(results.totalPrepaid)],
+              ["Fixed Loan Costs", formatCurrency(results.fixedLoanCosts)],
+              ["Fixed Title Costs", formatCurrency(results.fixedTitleCosts)],
+              ["Total Closing Costs", formatCurrency(results.totalClosingCosts)],
+              ["Seller Credit", formatCurrency(results.sellerCredit)],
+              ["Other Credits", formatCurrency(results.otherCredits)],
+              [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
+              ["Total Cash Required at Closing", formatCurrency(results.totalCashToClose)],
+              ["Reserves Savings", formatCurrency(results.reserves)],
+            ]}
+            emphasizedRows={["Total Closing Costs"]}
+            footer={["Total Assets Required to Approve Loan", formatCurrency(results.totalAssetsRequired)]}
+          />
         </div>
-      </section>
+          </section>
+        </div>
 
-      <details className="screen-full-breakdown print-client-section rounded-md border border-[var(--le-line)] p-5">
-        <summary className="cursor-pointer text-[length:var(--type-sm)] font-black uppercase text-[var(--le-navy)]">
-          View full breakdown
-        </summary>
-        {renderBreakdownContent()}
-      </details>
+        <LoanSummarySidebar
+          state={state}
+          results={results}
+          insights={insights}
+          traceability={traceability}
+        />
 
-      <section className="print-full-breakdown print-client-section hidden rounded-md border border-[var(--le-line)] p-5">
-        {renderBreakdownContent()}
-      </section>
+        <section
+          data-summary-marketing="assets"
+          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5 xl:col-span-2"
+        >
+          <AssetsPieChart data={assetSegments} />
+        </section>
 
-      <SignatureBlock />
+        <details className="screen-full-breakdown print-client-section rounded-md border border-[var(--le-line)] p-5 xl:col-span-2">
+          <summary className="cursor-pointer text-[length:var(--type-sm)] font-black uppercase text-[var(--le-navy)]">
+            View full breakdown
+          </summary>
+          {renderBreakdownContent()}
+        </details>
+
+        <section className="print-full-breakdown print-client-section hidden rounded-md border border-[var(--le-line)] p-5 xl:col-span-2">
+          {renderBreakdownContent()}
+        </section>
+
+        <section
+          data-summary-marketing="disclosure"
+          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5 xl:col-span-2"
+        >
+          <Disclaimer>
+            The information provided reflects estimates of charges you are likely to incur at settlement. Fees may be
+            more or less and this is not a commitment to lend.
+          </Disclaimer>
+          <SignatureBlock />
+        </section>
+      </div>
     </DocumentFrame>
   );
 }
@@ -1207,6 +1253,127 @@ function CompactSummaryValue({
         )}
       />
     </div>
+  );
+}
+
+function LoanSummarySidebar({
+  state,
+  results,
+  insights,
+  traceability,
+}: {
+  state: LoanState;
+  results: LoanResults;
+  insights: Record<string, FieldInsight>;
+  traceability: LoanEstimateTraceability;
+}) {
+  return (
+    <aside
+      data-loan-summary="sidebar"
+      className="no-print w-full rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)] sm:max-w-[282px] xl:sticky xl:top-[196px] xl:max-w-none"
+    >
+      <div className="mb-3 border-b border-slate-100 pb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Live Summary</p>
+        <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
+      </div>
+      <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5">
+        <div className="space-y-2">
+          <SidebarTextValue
+            label="Applicant"
+            value={state.applicantName}
+            action={<TraceabilityTrigger data={traceability} />}
+          />
+          <SidebarTextValue label="Loan Number" value={state.loanNumber} />
+          <SidebarTextValue label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
+          <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
+          <SidebarTextValue label="Email" value={state.email} />
+        </div>
+      </section>
+      <div className="mb-3 border-b border-slate-100 pb-2">
+        <p className="text-sm font-extrabold text-slate-900">Payment &amp; Cash to Close</p>
+      </div>
+      <SidebarBreakdown
+        title="Total Monthly Payment"
+        total={results.totalMonthlyPayment}
+        insight={insights["Total Monthly Payment"]}
+        rows={[
+          ["Principal & Interest", results.principalInterest],
+          ["Property Taxes", results.monthlyPropertyTax],
+          ["Hazard Insurance", results.monthlyHazard],
+          ["Flood / HO6", results.monthlyFlood],
+          ["HOA / Condo Fee", results.monthlyHOA],
+        ]}
+      />
+      <SidebarBreakdown
+        title="Total Cash to Close"
+        total={results.totalCashToClose}
+        insight={insights["Total Cash to Close"]}
+        rows={[
+          [equityLabel(state), results.downPayment],
+          ["Closing Costs", results.totalClosingCosts],
+          ["Pre-Paid Items", results.totalPrepaid],
+          ["Seller Credit", -results.sellerCredit],
+          ["Other Credits", -results.otherCredits],
+        ]}
+      />
+    </aside>
+  );
+}
+
+function SidebarTextValue({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="block min-w-0 rounded-sm text-left">
+      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
+      <span className="flex items-center">
+        <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
+          {value}
+        </p>
+        {action}
+      </span>
+    </div>
+  );
+}
+
+function SidebarBreakdown({
+  title,
+  total,
+  insight,
+  rows,
+}: {
+  title: string;
+  total: number;
+  insight?: FieldInsight;
+  rows: Array<[string, number]>;
+}) {
+  return (
+    <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5 last:mb-0">
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{title}</h3>
+        <ReadOnlyInsight insight={insight} className="rounded-sm">
+          <AnimatedValue
+            value={total}
+            format="currency"
+            className="text-right text-[length:var(--type-lg)] font-black text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]"
+          />
+        </ReadOnlyInsight>
+      </div>
+      <dl className="space-y-1">
+        {rows.map(([label, amount]) => (
+          <div key={label} className="flex items-center justify-between gap-2 text-[length:var(--type-sm)]">
+            <dt className="truncate text-slate-500">{label}</dt>
+            <dd className="numeric font-mono font-bold tabular-nums text-slate-800">{formatCurrency(amount)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -1803,15 +1970,17 @@ function FinancialTable({
 function SimpleTable({
   rows,
   footer,
+  emphasizedRows = [],
 }: {
   rows: Array<[string, string]>;
   footer?: [string, string];
+  emphasizedRows?: string[];
 }) {
   return (
     <table className="w-full border-collapse text-[length:var(--type-sm)]">
       <tbody>
         {rows.map(([label, value]) => (
-          <tr key={`${label}-${value}`}>
+          <tr key={`${label}-${value}`} className={cn(emphasizedRows.includes(label) && "bg-slate-100")}>
             <td className="border-b border-[var(--le-line)] px-4 py-2.5 text-left align-middle font-semibold text-[var(--le-ink)]">{label}</td>
             <td className="numeric border-b border-[var(--le-line)] px-4 py-2.5 text-right align-middle font-bold text-[var(--le-navy)]">
               {value}
