@@ -187,7 +187,7 @@ export default async function ScenarioDeskDetailPage({
       : null;
 
   return (
-    <div className="scenario-desk-print mx-auto max-w-6xl space-y-6">
+    <div className="scenario-desk-print mx-auto max-w-7xl space-y-5">
       <div className="space-y-3">
         <Link
           className="scenario-desk-no-print text-sm font-semibold text-mafi-blue-primary hover:text-mafi-blue-dark"
@@ -206,14 +206,14 @@ export default async function ScenarioDeskDetailPage({
               tone={isFinalizedReadOnly ? "success" : "neutral"}
             />
           </h1>
-          <p className="mt-2 text-sm text-mafi-text-mid">
-            {loanPurposeLabels[contact.loanPurpose]} - Created{" "}
-            {formatDate(contact.createdAt)} - BDR {contact.bdr.fullName}
+          <p className="mt-2 text-sm leading-6 text-mafi-text-mid">
+            {loanPurposeLabels[contact.loanPurpose]} | Created{" "}
+            {formatDate(contact.createdAt)} | BDR {contact.bdr.fullName}
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid items-stretch gap-4 lg:grid-cols-3">
         <SummaryCard title="Contact Information">
           <SummaryItem label="Name" value={contact.prospectName} />
           <SummaryItem label="Phone" value={formatUSPhone(contact.prospectPhone)} />
@@ -402,14 +402,19 @@ function LockedFinalizedScenarioDesk({
 
   return (
     <section className="space-y-5">
-      <Card className="border-mafi-status-green bg-mafi-status-green/10">
-        <CardContent className="space-y-2 px-4 py-4 text-sm text-mafi-text-dark">
-          <p className="font-bold">Scenario Desk is locked.</p>
-          <p>
+      <Card className="border-mafi-status-green bg-mafi-status-green/10 shadow-sm">
+        <CardContent className="grid gap-3 px-4 py-4 text-sm text-mafi-text-dark sm:grid-cols-[auto_1fr] sm:items-start">
+          <span className="inline-flex min-h-9 items-center justify-center rounded-full bg-mafi-status-green/15 px-3 text-xs font-bold uppercase text-mafi-status-green">
+            Final
+          </span>
+          <div className="space-y-1">
+            <p className="font-bold">Scenario Desk is locked and moved to Phase 4.</p>
+            <p className="leading-6">
             This scenario has been finalized and sent to Loan Estimate &
             Pre-Approval / Phase 4. The values shown below are the saved
             finalized values and are not recalculated on page load.
-          </p>
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -427,7 +432,7 @@ function LockedFinalizedScenarioDesk({
             <StatusBadge label="Finalized" tone="success" />
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4 md:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="grid gap-4 pt-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryItem
             label="Lender & Product"
             value={finalScenario.lenderAndProduct}
@@ -470,16 +475,16 @@ function LockedFinalizedScenarioDesk({
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[760px] table-fixed text-sm">
               <thead className="bg-mafi-bg-light text-left text-xs font-bold uppercase text-mafi-text-mid">
                 <tr>
-                  <th className="px-4 py-3">Scenario</th>
-                  <th className="px-4 py-3">Lender & Product</th>
-                  <th className="px-4 py-3">Rate</th>
-                  <th className="px-4 py-3">Term</th>
-                  <th className="px-4 py-3">P&I</th>
-                  <th className="px-4 py-3">PITIA</th>
-                  <th className="px-4 py-3">MI</th>
+                  <th className="w-32 px-4 py-3">Scenario</th>
+                  <th className="w-72 px-4 py-3">Lender & Product</th>
+                  <th className="w-24 px-4 py-3 text-right">Rate</th>
+                  <th className="w-32 px-4 py-3">Term</th>
+                  <th className="w-28 px-4 py-3 text-right">P&I</th>
+                  <th className="w-28 px-4 py-3 text-right">PITIA</th>
+                  <th className="w-20 px-4 py-3">MI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-mafi-border">
@@ -488,22 +493,22 @@ function LockedFinalizedScenarioDesk({
                     <td className="px-4 py-3 font-semibold text-mafi-text-dark">
                       Scenario {scenario.scenarioNumber}
                     </td>
-                    <td className="px-4 py-3 text-mafi-text-mid">
+                    <td className="break-words px-4 py-3 text-mafi-text-mid">
                       {scenario.lenderAndProduct}
                     </td>
-                    <td className="px-4 py-3 text-mafi-text-mid">
+                    <td className="px-4 py-3 text-right tabular-nums text-mafi-text-mid">
                       {formatInterestRateDisplay(scenario.interestRate, EMPTY_VALUE)}
                     </td>
                     <td className="px-4 py-3 text-mafi-text-mid">
                       {getLoanTermMetadata(scenario.loanTermCode).label}
                     </td>
-                    <td className="px-4 py-3 text-mafi-text-mid">
+                    <td className="px-4 py-3 text-right tabular-nums text-mafi-text-mid">
                       {formatCurrencyDisplayWithCents(
                         scenario.principalAndInterest,
                         EMPTY_VALUE,
                       )}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-mafi-text-dark">
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-mafi-text-dark">
                       {formatCurrencyDisplayWithCents(scenario.pitia, EMPTY_VALUE)}
                     </td>
                     <td className="px-4 py-3 text-mafi-text-mid">
@@ -517,7 +522,7 @@ function LockedFinalizedScenarioDesk({
         </Card>
       ) : null}
 
-      <div className="scenario-desk-no-print flex flex-wrap gap-2">
+      <div className="scenario-desk-no-print flex flex-wrap items-center gap-2">
         <Link
           className="inline-flex h-10 items-center justify-center rounded-md bg-mafi-blue-primary px-4 text-sm font-semibold text-white hover:bg-mafi-blue-dark"
           href={`/phase4/${contactId}`}
@@ -531,7 +536,7 @@ function LockedFinalizedScenarioDesk({
         >
           Request amend / reopen
         </button>
-        <p className="basis-full text-xs text-mafi-text-mid">
+        <p className="basis-full text-xs leading-5 text-mafi-text-mid">
           Amend/reopen workflow has not been implemented yet. This control does
           not change the contact, Scenario Desk, Phase 4, or audit records.
         </p>
@@ -594,7 +599,7 @@ function AuditHistoryCard({
                 <p className="text-mafi-text-mid">
                   {formatTimestampForDisplay(log.timestamp)}
                 </p>
-                <pre className="max-h-28 overflow-auto rounded-md bg-mafi-bg-light p-2 text-xs text-mafi-text-dark">
+                <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-mafi-bg-light p-2 text-xs text-mafi-text-dark">
                   {auditDetailsText(log.fieldDiffs)}
                 </pre>
               </div>
@@ -626,13 +631,13 @@ function SummaryCard({
   title: string;
 }) {
   return (
-    <Card className="break-inside-avoid border-mafi-border bg-mafi-bg-white">
+    <Card className="h-full break-inside-avoid border-mafi-border bg-mafi-bg-white shadow-sm">
       <CardHeader className="border-b border-mafi-border bg-mafi-bg-light py-3">
         <CardTitle className="text-base text-mafi-blue-primary">
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 pt-4">{children}</CardContent>
+      <CardContent className="grid gap-3.5 pt-4">{children}</CardContent>
     </Card>
   );
 }
@@ -648,13 +653,15 @@ function SummaryItem({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase text-mafi-text-light">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-mafi-text-light">
         {label}
       </p>
       {valueNode ? (
         <div className="mt-1">{valueNode}</div>
       ) : (
-        <p className="truncate text-sm text-mafi-text-dark">{value}</p>
+        <p className="mt-0.5 break-words text-sm leading-5 text-mafi-text-dark">
+          {value}
+        </p>
       )}
     </div>
   );

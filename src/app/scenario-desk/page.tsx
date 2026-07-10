@@ -3,20 +3,19 @@ import { NavViewMarker } from "@/components/workstation/nav-view-marker";
 
 export default function ScenarioDeskPage() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-5">
       <NavViewMarker section="scenarioDesk" />
-      <div>
+      <div className="space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-mafi-blue-primary">
           Phase 3
         </p>
-        <h1 className="mt-2 text-3xl font-bold text-mafi-text-dark">
+        <h1 className="text-3xl font-bold text-mafi-text-dark">
           Scenario Desk
         </h1>
-        <p className="mt-2 max-w-3xl text-sm text-mafi-text-mid">
-          Review prospects marked ready for scenario review and finalize the
-          licensed loan scenario. Prospects arrive here from the Opportunity
-          creation interview once marked ready, and move forward into Borrower
-          creation once finalized.
+        <p className="max-w-3xl text-sm leading-6 text-mafi-text-mid">
+          Review prospects marked ready for licensed scenario review, choose
+          the final option, and move the file into Loan Estimate and
+          Pre-Approval.
         </p>
       </div>
       <ScenarioDeskList />

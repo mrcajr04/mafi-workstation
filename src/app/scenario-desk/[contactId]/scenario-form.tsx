@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -249,6 +249,7 @@ export function ScenarioForm({
   statedLtv = "",
 }: ScenarioFormProps) {
   const router = useRouter();
+  const formId = useId();
   const [isPending, startTransition] = useTransition();
   const calculationContext = {
     annualInsurance,
@@ -426,27 +427,42 @@ export function ScenarioForm({
   return (
     <section className="space-y-5">
       {missingAnnualInsurance ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+        <div
+          className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-900"
+          role="status"
+        >
           {missingInsuranceMessage}
         </div>
       ) : null}
 
       {ltvWarning ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div
+          className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          role="status"
+        >
           Loan amount does not match the stated LTV. Implied loan amount is{" "}
           {formatCurrencyDisplayWithCents(ltvWarning.impliedLoanAmount)}.
         </div>
       ) : null}
 
-      <Card className="border-mafi-border">
+      <Card className="border-mafi-border shadow-sm">
         <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
-          <CardTitle className="text-base text-mafi-blue-primary">
-            Opportunity Comments
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base text-mafi-blue-primary">
+              Opportunity Comments
+            </CardTitle>
+            <span className="text-xs font-medium text-mafi-text-light">
+              Saves with draft or finalize
+            </span>
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
+          <Label className="sr-only" htmlFor={`${formId}-comments`}>
+            Opportunity Comments
+          </Label>
           <textarea
-            className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-mafi-text-dark shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 text-mafi-text-dark shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+            id={`${formId}-comments`}
             onChange={(event) => setComments(event.target.value)}
             placeholder="Capture scenario notes, compensating factors, pricing assumptions, and follow-up items."
             readOnly={readOnly}
@@ -455,7 +471,7 @@ export function ScenarioForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-mafi-text-dark">
             Scenario Options
@@ -489,25 +505,31 @@ export function ScenarioForm({
 
             return (
               <Card
-                className={`border-mafi-border ${
-                  isSelected ? "ring-2 ring-mafi-blue-primary" : ""
+                className={`overflow-hidden border-mafi-border shadow-sm ${
+                  isSelected
+                    ? "border-mafi-blue-primary bg-mafi-blue-primary/5 ring-2 ring-mafi-blue-primary/30"
+                    : "bg-mafi-bg-white"
                 }`}
                 key={scenario.scenarioNumber}
               >
-                <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base text-mafi-blue-primary">
-                      Scenario {scenario.scenarioNumber}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
+                <CardHeader className="border-b border-mafi-border bg-mafi-bg-light px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-mafi-text-light">
+                        Option {scenario.scenarioNumber}
+                      </p>
+                      <CardTitle className="mt-1 text-base text-mafi-blue-primary">
+                        Scenario {scenario.scenarioNumber}
+                      </CardTitle>
+                    </div>
+                    <div className="scenario-desk-no-print flex flex-wrap items-center justify-end gap-2">
                       {readOnly ? (
-                        <span className="text-xs font-semibold text-mafi-text-mid">
+                        <span className="rounded-full bg-mafi-bg-lighter px-2.5 py-1 text-xs font-semibold text-mafi-text-mid">
                           {isSelected ? "Final selected" : "Not selected"}
                         </span>
                       ) : (
                         <>
                           <Button
-                            className="scenario-desk-no-print"
                             onClick={() =>
                               setSelectedScenario(scenario.scenarioNumber)
                             }
@@ -518,7 +540,6 @@ export function ScenarioForm({
                             {isSelected ? "Final" : "Select Final"}
                           </Button>
                           <Button
-                            className="scenario-desk-no-print"
                             onClick={() => removeScenario(scenario.scenarioNumber)}
                             size="sm"
                             type="button"
@@ -531,10 +552,12 @@ export function ScenarioForm({
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 pt-4">
+                <CardContent className="space-y-4 p-4">
                   <ScenarioGroup title="Loan Terms">
                     <Field className="sm:col-span-2" label="Lender & Product">
                       <Input
+                        aria-label={`Scenario ${scenario.scenarioNumber} lender and product`}
+                        id={`${formId}-scenario-${scenario.scenarioNumber}-lender`}
                         onChange={(event) =>
                           updateScenario(
                             scenario.scenarioNumber,
@@ -548,6 +571,8 @@ export function ScenarioForm({
                     </Field>
                     <Field label="Interest Rate">
                       <Input
+                        aria-label={`Scenario ${scenario.scenarioNumber} interest rate`}
+                        id={`${formId}-scenario-${scenario.scenarioNumber}-rate`}
                         inputMode="decimal"
                         onChange={(event) =>
                           updateScenario(
@@ -575,7 +600,10 @@ export function ScenarioForm({
                           scenario.program,
                         )}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          aria-label={`Scenario ${scenario.scenarioNumber} loan term`}
+                          id={`${formId}-scenario-${scenario.scenarioNumber}-term`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -592,13 +620,13 @@ export function ScenarioForm({
                   {(rateWarning || missingAnnualInsurance) && (
                     <div className="space-y-2">
                       {rateWarning ? (
-                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
                           Interest rate is outside the expected 2% to 12%
                           review range.
                         </p>
                       ) : null}
                       {missingAnnualInsurance ? (
-                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
                           {missingInsuranceMessage}
                         </p>
                       ) : null}
@@ -608,14 +636,18 @@ export function ScenarioForm({
                   <ScenarioGroup title="Payment Breakdown">
                     <Field label="Principal & Interest">
                       <Input
-                        className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
+                        aria-label={`Scenario ${scenario.scenarioNumber} principal and interest`}
+                        className="cursor-default bg-mafi-bg-light text-right font-semibold tabular-nums text-mafi-text-dark"
+                        id={`${formId}-scenario-${scenario.scenarioNumber}-pi`}
                         readOnly
                         value={scenario.principalAndInterest}
                       />
                     </Field>
                     <Field label="PITIA">
                       <Input
-                        className="cursor-default bg-mafi-bg-light text-mafi-text-mid"
+                        aria-label={`Scenario ${scenario.scenarioNumber} PITIA`}
+                        className="cursor-default bg-mafi-bg-light text-right font-bold tabular-nums text-mafi-blue-primary"
+                        id={`${formId}-scenario-${scenario.scenarioNumber}-pitia`}
                         readOnly
                         value={scenario.pitia}
                       />
@@ -632,7 +664,10 @@ export function ScenarioForm({
                         }
                         value={String(scenario.escrowed)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          aria-label={`Scenario ${scenario.scenarioNumber} escrowed`}
+                          id={`${formId}-scenario-${scenario.scenarioNumber}-escrowed`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -653,7 +688,10 @@ export function ScenarioForm({
                         }
                         value={String(scenario.mortgageInsurance ?? false)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          aria-label={`Scenario ${scenario.scenarioNumber} mortgage insurance premium`}
+                          id={`${formId}-scenario-${scenario.scenarioNumber}-mi`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -670,23 +708,23 @@ export function ScenarioForm({
       </div>
 
       {realScenarios.length >= 2 ? (
-        <Card className="border-mafi-border">
+        <Card className="border-mafi-border shadow-sm">
           <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
             <CardTitle className="text-base text-mafi-blue-primary">
               Scenario Comparison
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[760px] table-fixed text-sm">
               <thead className="bg-mafi-bg-light text-left text-xs font-bold uppercase text-mafi-text-mid">
                 <tr>
-                  <th className="px-4 py-3">Scenario</th>
-                  <th className="px-4 py-3">Lender & Product</th>
-                  <th className="px-4 py-3">Rate</th>
-                  <th className="px-4 py-3">Term</th>
-                  <th className="px-4 py-3">P&I</th>
-                  <th className="px-4 py-3">PITIA</th>
-                  <th className="px-4 py-3">MI</th>
+                  <th className="w-32 px-4 py-3">Scenario</th>
+                  <th className="w-72 px-4 py-3">Lender & Product</th>
+                  <th className="w-24 px-4 py-3 text-right">Rate</th>
+                  <th className="w-32 px-4 py-3">Term</th>
+                  <th className="w-28 px-4 py-3 text-right">P&I</th>
+                  <th className="w-28 px-4 py-3 text-right">PITIA</th>
+                  <th className="w-20 px-4 py-3">MI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-mafi-border">
@@ -695,17 +733,21 @@ export function ScenarioForm({
 
                   return (
                     <tr
-                      className={isSelected ? "bg-mafi-blue-primary/10" : ""}
+                      className={
+                        isSelected
+                          ? "border-l-4 border-mafi-blue-primary bg-mafi-blue-primary/10"
+                          : ""
+                      }
                       key={scenario.scenarioNumber}
                     >
                       <td className="px-4 py-3 font-semibold text-mafi-text-dark">
                         Scenario {scenario.scenarioNumber}
                         {isSelected ? " (Final)" : ""}
                       </td>
-                      <td className="px-4 py-3 text-mafi-text-mid">
+                      <td className="break-words px-4 py-3 text-mafi-text-mid">
                         {scenario.lenderAndProduct}
                       </td>
-                      <td className="px-4 py-3 text-mafi-text-mid">
+                      <td className="px-4 py-3 text-right tabular-nums text-mafi-text-mid">
                         {scenario.interestRate || "-"}
                       </td>
                       <td className="px-4 py-3 text-mafi-text-mid">
@@ -713,10 +755,10 @@ export function ScenarioForm({
                           normalizeLoanTerm(scenario.loanTerm, scenario.program),
                         ).label}
                       </td>
-                      <td className="px-4 py-3 text-mafi-text-mid">
+                      <td className="px-4 py-3 text-right tabular-nums text-mafi-text-mid">
                         {scenario.principalAndInterest || "-"}
                       </td>
-                      <td className="px-4 py-3 font-semibold text-mafi-text-dark">
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-mafi-text-dark">
                         {scenario.pitia || "-"}
                       </td>
                       <td className="px-4 py-3 text-mafi-text-mid">
@@ -733,7 +775,13 @@ export function ScenarioForm({
 
       {readOnly ? null : (
         <div className="scenario-desk-no-print sticky bottom-0 z-10 -mx-1 rounded-t-lg border border-mafi-border bg-mafi-bg-white/95 p-3 shadow-lg backdrop-blur">
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <p className="text-xs font-medium text-mafi-text-mid">
+              {selectedRealScenario
+                ? `Scenario ${selectedScenario} selected as final.`
+                : "Select a real scenario before sending to Phase 4."}
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button disabled={isPending} onClick={save} type="button" variant="outline">
               Save
             </Button>
@@ -782,6 +830,7 @@ export function ScenarioForm({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            </div>
           </div>
         </div>
       )}
@@ -817,7 +866,9 @@ function Field({
 }) {
   return (
     <div className={`space-y-1 ${className}`}>
-      <Label className="text-xs font-semibold">{label}</Label>
+      <Label className="text-xs font-semibold text-mafi-text-mid">
+        {label}
+      </Label>
       {children}
     </div>
   );
