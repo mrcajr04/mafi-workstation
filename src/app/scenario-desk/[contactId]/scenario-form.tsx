@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NewProspectModal } from "@/components/workstation/new-prospect-modal";
 import {
   Select,
   SelectContent,
@@ -70,10 +71,12 @@ type CommentDialogMode = "edit" | "read";
 type ScenarioFormProps = {
   annualInsurance?: string;
   annualPropertyTaxes: string;
+  canEditInsurance: boolean;
   contactId: string;
   contextRail: React.ReactNode;
   initialComments?: string;
   initialScenarios: ScenarioInput[];
+  insuranceDeterminationComplete: boolean;
   loanAmount: string;
   monthlyHoa: string;
   printContext: ProspectScenarioPrintContext;
@@ -248,10 +251,6 @@ function nextScenarioNumber(scenarios: ScenarioDraft[]) {
   return scenarios.length + 1;
 }
 
-function hasInsuranceValue(value: string) {
-  return value.trim() !== "";
-}
-
 function hasRealScenario(scenario: ScenarioDraft) {
   return scenario.lenderAndProduct.trim() !== "";
 }
@@ -332,10 +331,12 @@ function printAsPdf() {
 export function ScenarioForm({
   annualInsurance = "",
   annualPropertyTaxes,
+  canEditInsurance,
   contactId,
   contextRail,
   initialComments = "",
   initialScenarios,
+  insuranceDeterminationComplete,
   loanAmount,
   monthlyHoa,
   printContext,
@@ -358,6 +359,7 @@ export function ScenarioForm({
     useState<CommentDialogMode>(initialComments.trim() ? "read" : "edit");
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState(initialComments);
+  const [insuranceEditorOpen, setInsuranceEditorOpen] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>(() => {
@@ -370,7 +372,7 @@ export function ScenarioForm({
   const [selectedScenario, setSelectedScenario] = useState<number | null>(
     selectedScenarioNumber ?? null,
   );
-  const missingAnnualInsurance = !hasInsuranceValue(annualInsurance);
+  const missingAnnualInsurance = !insuranceDeterminationComplete;
   const hasComment = comments.trim() !== "";
   const hasReplaceableDraftData =
     comments.trim() !== "" || scenarios.some(hasEditableScenarioData);
@@ -594,6 +596,17 @@ export function ScenarioForm({
     });
   }
 
+  function openInsuranceEditor() {
+    if (!canEditInsurance) {
+      toast.error(
+        "An Owner or the assigned BDR must add the insurance determination in Prospect Intake.",
+      );
+      return;
+    }
+
+    setInsuranceEditorOpen(true);
+  }
+
   return (
     <>
       <section className="scenario-desk-screen-only pb-14">
@@ -813,33 +826,32 @@ export function ScenarioForm({
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        Finalize Scenario Desk?
+                        {missingAnnualInsurance
+                          ? "Annual insurance estimate required"
+                          : "Finalize Scenario Desk?"}
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will lock the selected scenario and move the
-                        contact to Phase 4 for Loan Estimate and Pre-Approval
-                        work.
-                        {missingAnnualInsurance ? (
-                          <span className="mt-2 block font-semibold text-amber-800">
-                            Add an annual insurance estimate before finalizing.
-                          </span>
-                        ) : null}
+                        {missingAnnualInsurance
+                          ? "PITIA cannot be finalized until homeowners insurance has been determined."
+                          : "This will lock the selected scenario and move the contact to Phase 4 for Loan Estimate and Pre-Approval work."}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel disabled={isPending}>
                         Cancel
                       </AlertDialogCancel>
-                      <AlertDialogAction
-                        disabled={
-                          isPending ||
-                          missingAnnualInsurance ||
-                          !selectedRealScenario
-                        }
-                        onClick={finalize}
-                      >
-                        Finalize and Move to Phase 4
-                      </AlertDialogAction>
+                      {missingAnnualInsurance ? (
+                        <AlertDialogAction onClick={openInsuranceEditor}>
+                          Add Insurance Estimate
+                        </AlertDialogAction>
+                      ) : (
+                        <AlertDialogAction
+                          disabled={isPending || !selectedRealScenario}
+                          onClick={finalize}
+                        >
+                          Finalize and Move to Phase 4
+                        </AlertDialogAction>
+                      )}
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -872,12 +884,19 @@ export function ScenarioForm({
                   monthly HOA.
                 </p>
                 {missingAnnualInsurance ? (
-                  <p
-                    className="mt-2 inline-flex max-w-full items-center rounded-md border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-xs font-medium leading-5 text-amber-900"
+                  <div
+                    className="mt-2 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-xs font-medium leading-5 text-amber-900"
                     role="status"
                   >
-                    {missingInsuranceWarning}
-                  </p>
+                    <span>{missingInsuranceWarning}</span>
+                    <button
+                      className="font-bold text-amber-950 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700/40"
+                      onClick={openInsuranceEditor}
+                      type="button"
+                    >
+                      Add estimate
+                    </button>
+                  </div>
                 ) : null}
               </div>
               {readOnly ? null : (
@@ -1354,6 +1373,15 @@ export function ScenarioForm({
           <div className="min-w-0">{contextRail}</div>
         </div>
       </section>
+      {canEditInsurance ? (
+        <NewProspectModal
+          contactId={contactId}
+          initialFocusField="estimatedInsuranceAnnual"
+          onOpenChange={setInsuranceEditorOpen}
+          open={insuranceEditorOpen}
+          trigger={() => null}
+        />
+      ) : null}
       <ProspectScenarioPrintDocument
         {...printContext}
         documentState="draft"

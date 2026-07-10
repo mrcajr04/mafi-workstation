@@ -7,6 +7,7 @@ import {
   CommandCenterTag,
   ContactStatus,
   FicoSource,
+  InsuranceCoverageBasis,
   InsuranceType,
   LoanPurpose,
   OpportunityStatus,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { validateInsuranceDetermination } from "@/lib/insurance-determination";
 
 type CoBorrowerInput = {
   name: string;
@@ -60,6 +62,8 @@ export type ProspectIntakeInput = {
   propertyTaxesLastYear?: string;
   propertyTaxesPresentYear?: string;
   estimatedInsuranceAnnual?: string;
+  insuranceCoverageBasis?: InsuranceCoverageBasis;
+  insuranceZeroConfirmed?: boolean;
   insuranceType?: InsuranceType;
   insuranceTypes?: InsuranceType[];
   hoaName?: string;
@@ -98,6 +102,8 @@ export type ProspectPropertyDetailsInput = {
   propertyTaxesLastYear?: string;
   propertyTaxesPresentYear?: string;
   estimatedInsuranceAnnual?: string;
+  insuranceCoverageBasis?: InsuranceCoverageBasis;
+  insuranceZeroConfirmed?: boolean;
   insuranceType?: InsuranceType;
   insuranceTypes?: InsuranceType[];
   hoaName?: string;
@@ -129,6 +135,8 @@ type DeleteContactResult = { success: true } | { success: false; error: string }
 type DevDataActionResult =
   | { success: true; count: number }
   | { success: false; error: string };
+
+class InsuranceDeterminationError extends Error {}
 
 type ProspectEditDataResult =
   | {
@@ -164,6 +172,8 @@ type ProspectEditDataResult =
         propertyTaxesLastYear: string;
         propertyTaxesPresentYear: string;
         estimatedInsuranceAnnual: string;
+        insuranceCoverageBasis: InsuranceCoverageBasis | "";
+        insuranceZeroConfirmed: boolean;
         insuranceTypes: InsuranceType[];
         hoaName: string;
         hoaManagementInfo: string;
@@ -301,6 +311,8 @@ export async function getProspectIntakeEditData(
           propertyTaxesLastYear: true,
           propertyTaxesPresentYear: true,
           estimatedInsuranceAnnual: true,
+          insuranceCoverageBasis: true,
+          insuranceZeroConfirmed: true,
           insuranceType: true,
           insuranceTypes: true,
           hoaName: true,
@@ -381,6 +393,10 @@ export async function getProspectIntakeEditData(
       estimatedInsuranceAnnual: formatCurrencyForForm(
         contact.propertyDetails?.estimatedInsuranceAnnual,
       ),
+      insuranceCoverageBasis:
+        contact.propertyDetails?.insuranceCoverageBasis ?? "",
+      insuranceZeroConfirmed:
+        contact.propertyDetails?.insuranceZeroConfirmed ?? false,
       insuranceTypes:
         contact.propertyDetails?.insuranceTypes.length
           ? contact.propertyDetails.insuranceTypes
@@ -907,6 +923,8 @@ export async function updateProspectPropertyDetails(
         propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
         propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
         estimatedInsuranceAnnual: optionalDecimal(input.estimatedInsuranceAnnual),
+        insuranceCoverageBasis: input.insuranceCoverageBasis || null,
+        insuranceZeroConfirmed: input.insuranceZeroConfirmed ?? false,
         insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
         insuranceTypes: input.insuranceTypes ?? [],
         hoaName: input.hoaName?.trim() || null,
@@ -919,6 +937,8 @@ export async function updateProspectPropertyDetails(
         propertyTaxesLastYear: optionalDecimal(input.propertyTaxesLastYear),
         propertyTaxesPresentYear: optionalDecimal(input.propertyTaxesPresentYear),
         estimatedInsuranceAnnual: optionalDecimal(input.estimatedInsuranceAnnual),
+        insuranceCoverageBasis: input.insuranceCoverageBasis || null,
+        insuranceZeroConfirmed: input.insuranceZeroConfirmed ?? false,
         insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
         insuranceTypes: input.insuranceTypes ?? [],
         hoaName: input.hoaName?.trim() || null,
@@ -940,6 +960,8 @@ export async function updateProspectPropertyDetails(
         "propertyTaxesLastYear",
         "propertyTaxesPresentYear",
         "estimatedInsuranceAnnual",
+        "insuranceCoverageBasis",
+        "insuranceZeroConfirmed",
         "insuranceTypes",
         "hoaName",
         "hoaManagementInfo",
@@ -1056,6 +1078,8 @@ export async function createProspectIntake(
             estimatedInsuranceAnnual: optionalDecimal(
               input.estimatedInsuranceAnnual,
             ),
+            insuranceCoverageBasis: input.insuranceCoverageBasis || null,
+            insuranceZeroConfirmed: input.insuranceZeroConfirmed ?? false,
             insuranceType: input.insuranceTypes?.[0] ?? input.insuranceType ?? null,
             insuranceTypes: input.insuranceTypes ?? [],
             hoaName: input.hoaName?.trim() || null,
@@ -1143,6 +1167,13 @@ export async function createOpportunityValue(
     select: {
       bdrId: true,
       id: true,
+      propertyDetails: {
+        select: {
+          estimatedInsuranceAnnual: true,
+          insuranceCoverageBasis: true,
+          insuranceZeroConfirmed: true,
+        },
+      },
     },
   });
 
@@ -1153,8 +1184,47 @@ export async function createOpportunityValue(
     };
   }
 
+  if (input.status === OpportunityStatus.READY_FOR_REVIEW) {
+    const insuranceDetermination = validateInsuranceDetermination({
+      annualInsurance: contact.propertyDetails?.estimatedInsuranceAnnual,
+      coverageBasis: contact.propertyDetails?.insuranceCoverageBasis,
+      zeroConfirmed: contact.propertyDetails?.insuranceZeroConfirmed,
+    });
+
+    if (!insuranceDetermination.complete) {
+      return {
+        success: false,
+        error: insuranceDetermination.message,
+      };
+    }
+  }
+
   try {
     await prisma.$transaction(async (tx) => {
+      if (input.status === OpportunityStatus.READY_FOR_REVIEW) {
+        const currentPropertyDetails = await tx.propertyDetails.findUnique({
+          where: {
+            contactId: contact.id,
+          },
+          select: {
+            estimatedInsuranceAnnual: true,
+            insuranceCoverageBasis: true,
+            insuranceZeroConfirmed: true,
+          },
+        });
+        const currentInsuranceDetermination = validateInsuranceDetermination({
+          annualInsurance: currentPropertyDetails?.estimatedInsuranceAnnual,
+          coverageBasis: currentPropertyDetails?.insuranceCoverageBasis,
+          zeroConfirmed: currentPropertyDetails?.insuranceZeroConfirmed,
+        });
+
+        if (!currentInsuranceDetermination.complete) {
+          throw new InsuranceDeterminationError(
+            currentInsuranceDetermination.message,
+          );
+        }
+      }
+
       await tx.contact.update({
         where: {
           id: contact.id,
@@ -1268,6 +1338,13 @@ export async function createOpportunityValue(
       }
     });
   } catch (error) {
+    if (error instanceof InsuranceDeterminationError) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
     console.error("Failed to save Opportunity Value.", error);
     return {
       success: false,

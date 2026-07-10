@@ -11,6 +11,7 @@ import {
 import { revalidatePath, updateTag } from "next/cache";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { normalizeCurrencyInput } from "@/lib/currency";
+import { validateInsuranceDetermination } from "@/lib/insurance-determination";
 import {
   calculatePitia,
   calculatePrincipalAndInterest,
@@ -185,6 +186,8 @@ export async function saveScenarioDesk(
         select: {
           additionalHoaFees: true,
           estimatedInsuranceAnnual: true,
+          insuranceCoverageBasis: true,
+          insuranceZeroConfirmed: true,
           propertyTaxesLastYear: true,
           propertyTaxesPresentYear: true,
         },
@@ -353,6 +356,8 @@ export async function finalizeScenarioDesk(
         select: {
           additionalHoaFees: true,
           estimatedInsuranceAnnual: true,
+          insuranceCoverageBasis: true,
+          insuranceZeroConfirmed: true,
           propertyTaxesLastYear: true,
           propertyTaxesPresentYear: true,
         },
@@ -367,23 +372,54 @@ export async function finalizeScenarioDesk(
     };
   }
 
-  if (contact.propertyDetails?.estimatedInsuranceAnnual == null) {
+  const insuranceDetermination = validateInsuranceDetermination({
+    annualInsurance: contact.propertyDetails?.estimatedInsuranceAnnual,
+    coverageBasis: contact.propertyDetails?.insuranceCoverageBasis,
+    zeroConfirmed: contact.propertyDetails?.insuranceZeroConfirmed,
+  });
+
+  if (!insuranceDetermination.complete) {
     return {
       success: false,
-      error: "Estimated insurance is missing. PITIA may be understated.",
+      error: insuranceDetermination.message,
     };
   }
 
-  const calculationContext = {
-    annualInsurance: numericValue(contact.propertyDetails?.estimatedInsuranceAnnual),
-    annualPropertyTaxes: numericValue(
-      contact.propertyDetails?.propertyTaxesPresentYear ??
-        contact.propertyDetails?.propertyTaxesLastYear,
-    ),
-    loanAmount: numericValue(contact.opportunityValue?.loanAmount),
-    monthlyHoa: numericValue(contact.propertyDetails?.additionalHoaFees),
-  };
-  await prisma.$transaction(async (tx) => {
+  const finalizeResult = await prisma.$transaction(async (tx) => {
+    const currentPropertyDetails = await tx.propertyDetails.findUnique({
+      where: {
+        contactId: contact.id,
+      },
+      select: {
+        additionalHoaFees: true,
+        estimatedInsuranceAnnual: true,
+        insuranceCoverageBasis: true,
+        insuranceZeroConfirmed: true,
+        propertyTaxesLastYear: true,
+        propertyTaxesPresentYear: true,
+      },
+    });
+    const currentInsuranceDetermination = validateInsuranceDetermination({
+      annualInsurance: currentPropertyDetails?.estimatedInsuranceAnnual,
+      coverageBasis: currentPropertyDetails?.insuranceCoverageBasis,
+      zeroConfirmed: currentPropertyDetails?.insuranceZeroConfirmed,
+    });
+
+    if (!currentInsuranceDetermination.complete) {
+      return currentInsuranceDetermination;
+    }
+
+    const calculationContext = {
+      annualInsurance: numericValue(
+        currentPropertyDetails?.estimatedInsuranceAnnual,
+      ),
+      annualPropertyTaxes: numericValue(
+        currentPropertyDetails?.propertyTaxesPresentYear ??
+          currentPropertyDetails?.propertyTaxesLastYear,
+      ),
+      loanAmount: numericValue(contact.opportunityValue?.loanAmount),
+      monthlyHoa: numericValue(currentPropertyDetails?.additionalHoaFees),
+    };
     const scenarioDesk = await tx.scenarioDesk.upsert({
       where: {
         contactId: contact.id,
@@ -466,8 +502,15 @@ export async function finalizeScenarioDesk(
       },
     });
 
-    return scenarioDesk;
+    return { complete: true } as const;
   });
+
+  if (!finalizeResult.complete) {
+    return {
+      success: false,
+      error: finalizeResult.message,
+    };
+  }
   revalidatePath("/scenario-desk");
   revalidatePath(`/scenario-desk/${contact.id}`);
   revalidatePath("/opportunities");

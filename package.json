@@ -11,7 +11,8 @@
     "backdate-test": "tsx scripts/backdate-test-record.ts",
     "create-test-phase4": "tsx scripts/create-test-phase4-record.ts",
     "test:loan-estimate-calc": "tsx scripts/test-loan-estimate-calc.ts",
-    "test:section-edit-state": "tsx scripts/test-section-edit-state-race.ts"
+    "test:section-edit-state": "tsx scripts/test-section-edit-state-race.ts",
+    "test:insurance-determination": "tsx scripts/test-insurance-determination.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

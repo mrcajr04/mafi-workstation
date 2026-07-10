@@ -52,6 +52,7 @@ import {
 import { formatUSPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
+import { validateInsuranceDetermination } from "@/lib/insurance-determination";
 
 const EMPTY_VALUE = "Not provided";
 
@@ -427,6 +428,11 @@ export default async function ScenarioDeskDetailPage({
     contact.propertyDetails?.propertyTaxesPresentYear ??
     contact.propertyDetails?.propertyTaxesLastYear ??
     null;
+  const insuranceDetermination = validateInsuranceDetermination({
+    annualInsurance: contact.propertyDetails?.estimatedInsuranceAnnual,
+    coverageBasis: contact.propertyDetails?.insuranceCoverageBasis,
+    zeroConfirmed: contact.propertyDetails?.insuranceZeroConfirmed,
+  });
   const initialScenarios =
     contact.scenarioDesk?.scenarios.map((scenario) => ({
       escrowed: scenario.escrowed,
@@ -637,9 +643,11 @@ export default async function ScenarioDeskDetailPage({
             "",
           )}
           annualPropertyTaxes={formatCurrencyDisplay(annualPropertyTaxes, "")}
+          canEditInsurance={access.data.role === RoleType.OWNER}
           contactId={contact.id}
           initialComments={contact.opportunityValue?.comments ?? ""}
           initialScenarios={initialScenarios}
+          insuranceDeterminationComplete={insuranceDetermination.complete}
           loanAmount={formatCurrencyDisplay(
             contact.opportunityValue?.loanAmount,
             "",

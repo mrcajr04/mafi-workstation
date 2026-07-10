@@ -2,7 +2,7 @@
 
 import { UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   ProspectIntakeForm,
@@ -13,24 +13,39 @@ import { cn } from "@/lib/utils";
 
 type NewProspectModalProps = {
   contactId?: string;
+  initialFocusField?: string;
   initialData?: ProspectIntakeInitialData;
+  onOpenChange?: (open: boolean) => void;
   onOptimisticSaved?: (form: ProspectIntakeInitialData) => void;
+  open?: boolean;
   trigger?: (open: () => void) => ReactNode;
 };
 
 export function NewProspectModal({
   contactId,
+  initialFocusField,
   initialData,
+  onOpenChange,
   onOptimisticSaved,
+  open: controlledOpen,
   trigger,
 }: NewProspectModalProps) {
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
   const [loadedData, setLoadedData] = useState(initialData);
   const [loadError, setLoadError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const modalRef = useRef<HTMLElement>(null);
   const isEditMode = Boolean(initialData || contactId);
+
+  const setIsOpen = useCallback(
+    (open: boolean) => {
+      setInternalOpen(open);
+      onOpenChange?.(open);
+    },
+    [onOpenChange],
+  );
 
   function openModal() {
     setIsLoading(Boolean(contactId && loadedData?.contactId !== contactId));
@@ -102,7 +117,7 @@ export function NewProspectModal({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleModalKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, setIsOpen]);
 
   useEffect(() => {
     if (!isOpen || !contactId || loadedData?.contactId === contactId) {
@@ -130,6 +145,10 @@ export function NewProspectModal({
       isCurrent = false;
     };
   }, [contactId, isOpen, loadedData?.contactId]);
+
+  const isAwaitingContactData = Boolean(
+    isOpen && contactId && loadedData?.contactId !== contactId,
+  );
 
   return (
     <>
@@ -182,7 +201,7 @@ export function NewProspectModal({
               </button>
             </header>
             <div className="overflow-y-auto p-3 pb-0 sm:p-4 sm:pb-0">
-              {isLoading ? (
+              {isLoading || isAwaitingContactData ? (
                 <div className="py-16 text-center text-sm text-mafi-text-mid">
                   Loading prospect details...
                 </div>
@@ -193,6 +212,7 @@ export function NewProspectModal({
               ) : (
                 <ProspectIntakeForm
                   dense
+                  initialFocusField={initialFocusField}
                   initialData={loadedData}
                   key={loadedData?.contactId ?? "new-prospect"}
                   onCancel={() => setIsOpen(false)}

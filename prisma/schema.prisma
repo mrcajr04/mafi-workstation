@@ -76,6 +76,12 @@ enum InsuranceType {
   OTHER
 }
 
+enum InsuranceCoverageBasis {
+  BORROWER_PAID_POLICY
+  HOA_CONDO_MASTER_POLICY
+  OTHER_CONFIRMED_COVERAGE
+}
+
 enum RealtorStatus {
   YES
   NO
@@ -279,6 +285,8 @@ model PropertyDetails {
   propertyTaxesLastYear    Decimal?       @db.Decimal(12, 2)
   propertyTaxesPresentYear Decimal?       @db.Decimal(12, 2)
   estimatedInsuranceAnnual Decimal?       @db.Decimal(12, 2)
+  insuranceCoverageBasis   InsuranceCoverageBasis?
+  insuranceZeroConfirmed   Boolean        @default(false)
   insuranceType            InsuranceType?
   insuranceTypes           InsuranceType[] @default([])
   hoaName                  String?

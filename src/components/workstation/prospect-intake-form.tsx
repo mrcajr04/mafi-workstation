@@ -5,6 +5,7 @@ import {
   BorrowerType,
   ContactStatus,
   FicoSource,
+  InsuranceCoverageBasis,
   InsuranceType,
   LoanPurpose,
   OpportunityStatus,
@@ -29,7 +30,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ import {
 } from "@/lib/currency";
 import type { DuplicatePropertyContact } from "@/lib/duplicate-property-contacts";
 import { isRefinanceLoanPurpose } from "@/lib/labels";
+import { validateInsuranceDetermination } from "@/lib/insurance-determination";
 import { formatUSPhone, isValidUSPhone, maskUSPhoneInput, US_PHONE_ERROR } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -99,6 +101,8 @@ type ProspectIntakeFormState = {
   propertyTaxesLastYear: string;
   propertyTaxesPresentYear: string;
   estimatedInsuranceAnnual: string;
+  insuranceCoverageBasis: InsuranceCoverageBasis | "";
+  insuranceZeroConfirmed: boolean;
   insuranceTypes: InsuranceType[];
   hoaName: string;
   hoaManagementInfo: string;
@@ -114,6 +118,9 @@ type ProspectIntakeFormState = {
 };
 
 type OpportunityValueFieldErrors = {
+  estimatedInsuranceAnnual?: string;
+  insuranceCoverageBasis?: string;
+  insuranceZeroConfirmed?: string;
   opportunityLoanAmount?: string;
   opportunityPropertyValue?: string;
 };
@@ -156,6 +163,8 @@ const initialForm: ProspectIntakeFormState = {
   propertyTaxesLastYear: "",
   propertyTaxesPresentYear: "",
   estimatedInsuranceAnnual: "",
+  insuranceCoverageBasis: "",
+  insuranceZeroConfirmed: false,
   insuranceTypes: [],
   hoaName: "",
   hoaManagementInfo: "",
@@ -194,6 +203,8 @@ type PropertyDetailsSnapshot = Pick<
   | "hoaName"
   | "insuranceTypes"
   | "estimatedInsuranceAnnual"
+  | "insuranceCoverageBasis"
+  | "insuranceZeroConfirmed"
   | "propertyAddress"
   | "propertyTaxesLastYear"
   | "propertyTaxesPresentYear"
@@ -240,6 +251,8 @@ function propertyDetailsSnapshot(
     hoaName: form.hoaName,
     insuranceTypes: form.insuranceTypes,
     estimatedInsuranceAnnual: form.estimatedInsuranceAnnual,
+    insuranceCoverageBasis: form.insuranceCoverageBasis,
+    insuranceZeroConfirmed: form.insuranceZeroConfirmed,
     propertyAddress: form.propertyAddress,
     propertyTaxesLastYear: form.propertyTaxesLastYear,
     propertyTaxesPresentYear: form.propertyTaxesPresentYear,
@@ -308,6 +321,14 @@ const insuranceLabels = {
   [InsuranceType.MASTER_FLOOD]: "Master Flood",
   [InsuranceType.MASTER_WINDSTORM]: "Master Windstorm",
   [InsuranceType.OTHER]: "Other",
+};
+
+const insuranceCoverageBasisLabels = {
+  [InsuranceCoverageBasis.BORROWER_PAID_POLICY]: "Borrower-Paid Policy",
+  [InsuranceCoverageBasis.HOA_CONDO_MASTER_POLICY]:
+    "HOA / Condominium Master Policy",
+  [InsuranceCoverageBasis.OTHER_CONFIRMED_COVERAGE]:
+    "Other Confirmed Coverage",
 };
 
 const selectableInsuranceTypes = Object.entries(insuranceLabels).filter(
@@ -383,6 +404,7 @@ type StepValidationResult =
 
 type ProspectIntakeFormProps = {
   dense?: boolean;
+  initialFocusField?: string;
   initialData?: ProspectIntakeInitialData;
   onCancel?: () => void;
   onOptimisticSaved?: (form: ProspectIntakeFormState) => void;
@@ -402,8 +424,13 @@ function formatInitialFormPhoneValues(form: ProspectIntakeFormState) {
   };
 }
 
+function isInsuranceFocusField(field?: string) {
+  return field === "estimatedInsuranceAnnual" || field?.startsWith("insurance");
+}
+
 export function ProspectIntakeForm({
   dense = false,
+  initialFocusField,
   initialData,
   onCancel,
   onOptimisticSaved,
@@ -442,6 +469,16 @@ export function ProspectIntakeForm({
   const [isGlobalSaving, setIsGlobalSaving] = useState(false);
   const [isOpportunitySaving, setIsOpportunitySaving] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const annualInsuranceRaw = currencyInputToRaw(
+    form.estimatedInsuranceAnnual,
+  );
+  const isZeroAnnualInsurance =
+    annualInsuranceRaw !== "" && Number(annualInsuranceRaw) === 0;
+  const supportsZeroAnnualInsurance =
+    form.insuranceCoverageBasis ===
+      InsuranceCoverageBasis.HOA_CONDO_MASTER_POLICY ||
+    form.insuranceCoverageBasis ===
+      InsuranceCoverageBasis.OTHER_CONFIRMED_COVERAGE;
   const contactCreatePromiseRef = useRef<Promise<string | null> | null>(null);
   const {
     formState: { errors },
@@ -496,7 +533,10 @@ export function ProspectIntakeForm({
     },
   });
   const propertySection = useSectionEditState<PropertyDetailsSnapshot>({
-    defaultEditing: !isEditMode || !initialData?.hasPropertyDetails,
+    defaultEditing:
+      !isEditMode ||
+      !initialData?.hasPropertyDetails ||
+      Boolean(isInsuranceFocusField(initialFocusField)),
     initialSnapshot: propertyDetailsSnapshot(savedInitialForm),
     restoreSnapshot: (snapshot) => {
       setForm((currentForm) => ({
@@ -520,6 +560,14 @@ export function ProspectIntakeForm({
     isFinancialSaving ||
     isPropertySaving ||
     isOpportunitySaving;
+
+  useEffect(() => {
+    if (!initialFocusField) {
+      return;
+    }
+
+    focusField(initialFocusField);
+  }, [initialFocusField]);
 
   function updateField<T extends keyof typeof form>(
     field: T,
@@ -552,10 +600,26 @@ export function ProspectIntakeForm({
       field === "opportunityPropertyValue" ||
       field === "opportunityLoanAmount" ||
       field === "opportunityLtv" ||
-      field === "opportunityStatus"
+      field === "opportunityStatus" ||
+      field === "estimatedInsuranceAnnual" ||
+      field === "insuranceCoverageBasis" ||
+      field === "insuranceZeroConfirmed"
     ) {
       setOpportunityErrors({});
     }
+  }
+
+  function updateAnnualInsurance(value: string) {
+    const formattedValue = formatCurrencyInput(value);
+    const rawValue = currencyInputToRaw(formattedValue);
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      estimatedInsuranceAnnual: formattedValue,
+      insuranceZeroConfirmed:
+        rawValue === "0" ? currentForm.insuranceZeroConfirmed : false,
+    }));
+    setOpportunityErrors({});
   }
 
   function updateCoBorrower(
@@ -675,7 +739,12 @@ export function ProspectIntakeForm({
       coBorrowersSection.enterEdit();
     }
 
-    if (field === "propertyAddress") {
+    if (
+      field === "propertyAddress" ||
+      field === "estimatedInsuranceAnnual" ||
+      field === "insuranceCoverageBasis" ||
+      field === "insuranceZeroConfirmed"
+    ) {
       propertySection.enterEdit();
       if (!isEditMode) {
         setStep(3);
@@ -1016,6 +1085,8 @@ export function ProspectIntakeForm({
         estimatedInsuranceAnnual: currencyInputToRaw(
           form.estimatedInsuranceAnnual,
         ),
+        insuranceCoverageBasis: form.insuranceCoverageBasis || undefined,
+        insuranceZeroConfirmed: form.insuranceZeroConfirmed,
         insuranceTypes: form.insuranceTypes,
         hoaName: form.hoaName,
         hoaManagementInfo: form.hoaManagementInfo,
@@ -1104,6 +1175,8 @@ export function ProspectIntakeForm({
           estimatedInsuranceAnnual: currencyInputToRaw(
             form.estimatedInsuranceAnnual,
           ),
+          insuranceCoverageBasis: form.insuranceCoverageBasis || undefined,
+          insuranceZeroConfirmed: form.insuranceZeroConfirmed,
           insuranceTypes: form.insuranceTypes,
           hoaName: form.hoaName,
           hoaManagementInfo: form.hoaManagementInfo,
@@ -1202,6 +1275,9 @@ export function ProspectIntakeForm({
                 estimatedInsuranceAnnual: currencyInputToRaw(
                   form.estimatedInsuranceAnnual,
                 ),
+                insuranceCoverageBasis:
+                  form.insuranceCoverageBasis || undefined,
+                insuranceZeroConfirmed: form.insuranceZeroConfirmed,
                 insuranceTypes: form.insuranceTypes,
                 hoaName: form.hoaName,
                 hoaManagementInfo: form.hoaManagementInfo,
@@ -1263,6 +1339,24 @@ export function ProspectIntakeForm({
       );
       prepareFieldForFocus(firstMissingField);
       return false;
+    }
+
+    if (form.opportunityStatus === OpportunityStatus.READY_FOR_REVIEW) {
+      const insuranceDetermination = validateInsuranceDetermination({
+        annualInsurance: currencyInputToRaw(form.estimatedInsuranceAnnual),
+        coverageBasis: form.insuranceCoverageBasis || null,
+        zeroConfirmed: form.insuranceZeroConfirmed,
+      });
+
+      if (!insuranceDetermination.complete) {
+        setOpportunityErrors({
+          [insuranceDetermination.field]: insuranceDetermination.message,
+        });
+        setError(insuranceDetermination.message);
+        toast.error(insuranceDetermination.message);
+        prepareFieldForFocus(insuranceDetermination.field);
+        return false;
+      }
     }
 
     setOpportunityErrors({});
@@ -1473,6 +1567,8 @@ export function ProspectIntakeForm({
       borrowerType: form.borrowerType || undefined,
       loanPurpose: form.loanPurpose as LoanPurpose,
       estimatedInsuranceAnnual: currencyInputToRaw(form.estimatedInsuranceAnnual),
+      insuranceCoverageBasis: form.insuranceCoverageBasis || undefined,
+      insuranceZeroConfirmed: form.insuranceZeroConfirmed,
       insuranceTypes: form.insuranceTypes,
     };
 
@@ -2415,6 +2511,14 @@ export function ProspectIntakeForm({
                       form.estimatedInsuranceAnnual
                         ? `${form.estimatedInsuranceAnnual} annual estimate`
                         : "",
+                      form.insuranceCoverageBasis
+                        ? insuranceCoverageBasisLabels[
+                            form.insuranceCoverageBasis
+                          ]
+                        : "",
+                      form.insuranceZeroConfirmed
+                        ? "$0 estimate confirmed"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" / ")}
@@ -2537,20 +2641,108 @@ export function ProspectIntakeForm({
                   value={form.propertyTaxesPresentYear}
                 />
               </Field>
-              <Field label="Estimated insurance annual">
+              <Field label="Estimated Annual Homeowners Insurance">
                 <Input
+                  aria-describedby="insurance-estimate-helper"
+                  aria-label="Estimated Annual Homeowners Insurance"
+                  aria-invalid={Boolean(
+                    opportunityErrors.estimatedInsuranceAnnual,
+                  )}
+                  className={cn(
+                    opportunityErrors.estimatedInsuranceAnnual &&
+                      "border-destructive",
+                  )}
+                  data-focus-field="estimatedInsuranceAnnual"
                   disabled={isPropertySaving}
                   inputMode="decimal"
-                  onChange={(event) =>
-                    updateField(
-                      "estimatedInsuranceAnnual",
-                      formatCurrencyInput(event.target.value),
-                    )
-                  }
+                  onChange={(event) => updateAnnualInsurance(event.target.value)}
                   type="text"
                   value={form.estimatedInsuranceAnnual}
                 />
+                <p
+                  className="text-xs leading-5 text-mafi-text-mid"
+                  id="insurance-estimate-helper"
+                >
+                  Required before Scenario Review because it is included in
+                  PITIA.
+                </p>
+                {opportunityErrors.estimatedInsuranceAnnual ? (
+                  <p className="text-xs font-medium text-destructive">
+                    {opportunityErrors.estimatedInsuranceAnnual}
+                  </p>
+                ) : null}
               </Field>
+              <Field label="Insurance Coverage Basis">
+                <Select
+                  disabled={isPropertySaving}
+                  onValueChange={(value) => {
+                    updateField(
+                      "insuranceCoverageBasis",
+                      value as InsuranceCoverageBasis,
+                    );
+                    updateField("insuranceZeroConfirmed", false);
+                  }}
+                  value={form.insuranceCoverageBasis}
+                >
+                  <SelectTrigger
+                    aria-label="Insurance Coverage Basis"
+                    aria-invalid={Boolean(
+                      opportunityErrors.insuranceCoverageBasis,
+                    )}
+                    className={cn(
+                      opportunityErrors.insuranceCoverageBasis &&
+                        "border-destructive",
+                    )}
+                    data-focus-field="insuranceCoverageBasis"
+                  >
+                    <SelectValue placeholder="Select coverage basis" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(insuranceCoverageBasisLabels).map(
+                      ([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+                {opportunityErrors.insuranceCoverageBasis ? (
+                  <p className="text-xs font-medium text-destructive">
+                    {opportunityErrors.insuranceCoverageBasis}
+                  </p>
+                ) : null}
+              </Field>
+              {isZeroAnnualInsurance && supportsZeroAnnualInsurance ? (
+                <div className="sm:col-span-2">
+                  <label className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm leading-5 text-amber-950">
+                    <input
+                      aria-describedby="insurance-zero-confirmation-helper"
+                      checked={form.insuranceZeroConfirmed}
+                      className="mt-0.5 size-4 shrink-0 rounded border-amber-500 accent-mafi-blue-primary"
+                      data-focus-field="insuranceZeroConfirmed"
+                      disabled={isPropertySaving}
+                      onChange={(event) =>
+                        updateField(
+                          "insuranceZeroConfirmed",
+                          event.target.checked,
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    <span id="insurance-zero-confirmation-helper">
+                      I confirm that the $0 annual borrower-paid insurance
+                      estimate is intentional based on the selected coverage
+                      arrangement.
+                    </span>
+                  </label>
+                  {opportunityErrors.insuranceZeroConfirmed ? (
+                    <p className="mt-1 text-xs font-medium text-destructive">
+                      {opportunityErrors.insuranceZeroConfirmed}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <Field label="HOA name">
                 <Input
                   disabled={isPropertySaving}
