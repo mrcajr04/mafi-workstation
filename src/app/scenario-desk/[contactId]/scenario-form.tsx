@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useId, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Plus, Printer, Save, Send, Trash2 } from "lucide-react";
+import { Beaker, Check, Plus, Printer, Save, Send, Trash2 } from "lucide-react";
 import {
   ProspectScenarioPrintDocument,
   type ProspectScenarioPrintContext,
@@ -91,6 +91,48 @@ const emptyScenario = (number: number): ScenarioDraft => ({
   program: ScenarioProgram.FIXED_30,
   scenarioNumber: number,
 });
+
+const developmentSeedComments =
+  "QA seed: Compare the long-term fixed option, lower initial ARM payment, and accelerated 15-year payoff. Review payment differences, escrow treatment, and mortgage-insurance status before selecting a final scenario.";
+
+const developmentSeedScenarios = [
+  {
+    escrowed: true,
+    interestRate: "6.125%",
+    lenderAndProduct:
+      "Summit Home Lending \u2014 30-Year Fixed Conventional",
+    loanTerm: ScenarioLoanTerm.FIXED_30,
+    mortgageInsurance: false,
+    scenarioNumber: 1,
+  },
+  {
+    escrowed: true,
+    interestRate: "5.875%",
+    lenderAndProduct: "Coastal Capital \u2014 5/1 ARM Conventional",
+    loanTerm: ScenarioLoanTerm.ARM_5_1,
+    mortgageInsurance: false,
+    scenarioNumber: 2,
+  },
+  {
+    escrowed: false,
+    interestRate: "5.625%",
+    lenderAndProduct:
+      "Pinnacle Mortgage \u2014 15-Year Fixed Conventional",
+    loanTerm: ScenarioLoanTerm.FIXED_15,
+    mortgageInsurance: true,
+    scenarioNumber: 3,
+  },
+] satisfies Array<
+  Pick<
+    ScenarioDraft,
+    | "escrowed"
+    | "interestRate"
+    | "lenderAndProduct"
+    | "loanTerm"
+    | "mortgageInsurance"
+    | "scenarioNumber"
+  >
+>;
 
 function normalizeLoanTerm(value: string, program?: ScenarioProgram) {
   if (value in ScenarioLoanTerm) {
@@ -202,6 +244,21 @@ function hasRealScenario(scenario: ScenarioDraft) {
   return scenario.lenderAndProduct.trim() !== "";
 }
 
+function hasEditableScenarioData(scenario: ScenarioDraft) {
+  return (
+    (scenario.comments?.trim() ?? "") !== "" ||
+    scenario.escrowed ||
+    scenario.interestRate.trim() !== "" ||
+    scenario.lenderAndProduct.trim() !== "" ||
+    normalizeLoanTerm(scenario.loanTerm, scenario.program) !==
+      ScenarioLoanTerm.FIXED_30 ||
+    (scenario.mortgageInsurance ?? false) ||
+    (scenario.monthlyInsurance?.trim() ?? "") !== "" ||
+    scenario.originationPay.trim() !== "" ||
+    scenario.processingFee.trim() !== ""
+  );
+}
+
 function withCalculatedPayments(
   scenario: ScenarioDraft,
   context: {
@@ -286,6 +343,7 @@ export function ScenarioForm({
   };
   const [comments, setComments] = useState(initialComments);
   const [isDirty, setIsDirty] = useState(false);
+  const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>(() => {
     const initial = sortedInitialScenarios(initialScenarios);
     const normalized = initial.length ? initial : [emptyScenario(1)];
@@ -297,6 +355,8 @@ export function ScenarioForm({
     selectedScenarioNumber ?? null,
   );
   const missingAnnualInsurance = !hasInsuranceValue(annualInsurance);
+  const hasReplaceableDraftData =
+    comments.trim() !== "" || scenarios.some(hasEditableScenarioData);
   const realScenarios = useMemo(
     () =>
       scenarios
@@ -422,6 +482,24 @@ export function ScenarioForm({
     }));
   }
 
+  function seedTestData() {
+    setScenarios(
+      developmentSeedScenarios.map((seedScenario) =>
+        withCalculatedPayments(
+          {
+            ...emptyScenario(seedScenario.scenarioNumber),
+            ...seedScenario,
+            program: programFromLoanTerm(seedScenario.loanTerm),
+          },
+          calculationContext,
+        ),
+      ),
+    );
+    setComments(developmentSeedComments);
+    setSelectedScenario(null);
+    setIsDirty(true);
+  }
+
   function save() {
     startTransition(async () => {
       const result = await saveScenarioDesk({
@@ -496,6 +574,50 @@ export function ScenarioForm({
                 ) : null}
               </p>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                {process.env.NODE_ENV === "development" ? (
+                  <AlertDialog
+                    onOpenChange={(open) => {
+                      if (open && !hasReplaceableDraftData) {
+                        seedTestData();
+                        return;
+                      }
+
+                      setSeedDialogOpen(open);
+                    }}
+                    open={seedDialogOpen}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        aria-label="Seed Scenario Desk test data"
+                        className="scenario-desk-no-print"
+                        disabled={isPending}
+                        type="button"
+                        variant="outline"
+                      >
+                        <Beaker aria-hidden="true" />
+                        Seed Test Data
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Replace current scenario draft?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Seeding test data will replace the current unsaved
+                          scenario options and Overall Comments. Nothing will
+                          be saved until you click Save.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={seedTestData}>
+                          Replace with Test Data
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : null}
                 <Button
                   disabled={isPending}
                   onClick={save}
@@ -506,6 +628,7 @@ export function ScenarioForm({
                   {isPending ? "Saving..." : "Save"}
                 </Button>
                 <Button
+                  className="col-span-2 sm:col-auto"
                   disabled={isPending}
                   onClick={printAsPdf}
                   type="button"
