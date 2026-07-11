@@ -7,29 +7,29 @@ import {
   BriefcaseBusiness,
   Calculator,
   ChartNoAxesCombined,
+  Check,
   FileText,
   Home,
   Landmark,
   LockKeyhole,
+  Pencil,
   PiggyBank,
   Printer,
   RefreshCcw,
+  Save,
   ShieldCheck,
   Signature,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Bar,
-  BarChart,
   Cell,
   Pie,
   PieChart,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
 } from "recharts";
 import { Badge } from "@/components/loan-estimate-design/ui/badge";
 import { Button } from "@/components/loan-estimate-design/ui/button";
@@ -121,7 +121,11 @@ const chartColors = {
   hoa: "#be6a16",
 };
 
-const numericInputClassName = "numeric text-right tabular-nums";
+const spinnerlessNumberInputClassName = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+const loanEstimateInputTextClassName = "text-[13px] font-bold leading-normal text-[var(--le-navy)]";
+const numericInputClassName = cn("numeric text-right tabular-nums", loanEstimateInputTextClassName, spinnerlessNumberInputClassName);
+const nonManualControlClassName = "loan-estimate-non-manual-control h-9 w-full rounded-[5px] border border-dashed border-[var(--le-line)] bg-slate-50 px-2 text-left text-[13px] font-bold leading-normal text-[var(--le-navy)] shadow-none sm:h-8";
+const loanDetailLabelClassName = "loan-estimate-detail-label mb-0.5 block min-h-[14px] truncate text-[10px] font-bold normal-case leading-tight tracking-normal text-[var(--le-muted)] opacity-100";
 
 const loanPrograms: Array<{ value: LoanProgram; label: string }> = [
   { value: "30 YR FIXED", label: "30 Yr Fixed" },
@@ -133,6 +137,41 @@ const loanPrograms: Array<{ value: LoanProgram; label: string }> = [
   { value: "10/1 ARM", label: "10/1 ARM" },
   { value: "IO", label: "Interest Only (IO)" },
 ];
+
+const propertyClassOptions = [
+  { value: "condo", label: "Condo" },
+  { value: "sfr", label: "SFR (Single Family)" },
+] as const;
+const propertyTypeOptions = [
+  { value: "CONDO", label: "Condo" },
+  { value: "CONDO-HOTEL", label: "Condo-Hotel" },
+  { value: "SINGLE FAMILY", label: "Single Family" },
+  { value: "COMMERCIAL", label: "Commercial" },
+] as const;
+const occupancyOptions = [
+  { value: "PRIMARY", label: "Primary" },
+  { value: "SECONDARY", label: "Secondary" },
+  { value: "INVESTMENT", label: "Investment" },
+  { value: "OTHER", label: "Other" },
+] as const;
+const loanCategoryOptions = [
+  { value: "F", label: "Foreign National Loan" },
+  { value: "D", label: "Domestic Loan" },
+] as const;
+const propertyConditionOptions = [
+  { value: "New", label: "New" },
+  { value: "Used", label: "Existing / Resale" },
+] as const;
+
+function choiceLabel<T extends string>(options: ReadonlyArray<{ value: T; label: string }>, value: T) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function loanTermDisplay(program: LoanProgram) {
+  if (program === "15 YR FIXED") return "15 years / 180 months";
+  if (program === "IO") return "Interest only";
+  return "30 years / 360 months";
+}
 
 function formulaInsights(state: LoanState, results: LoanResults): FieldInsight[] {
   const basisLabel = valueBasisLabel(state);
@@ -305,13 +344,20 @@ export function LoanEstimateRedesign({
   }
 
   return (
-    <main className="loan-estimate-design print-root -m-6 min-h-[calc(100vh-4rem)] bg-[var(--le-page)] px-6 py-5">
-      <div className="mx-auto max-w-[1380px]">
+    <main className="loan-estimate-design print-root -m-6 min-h-[calc(100vh-4rem)] bg-[var(--le-page)] px-3 py-3 sm:px-[18px] sm:py-3.5 pb-24 print:pb-5">
+      <div className="mx-auto max-w-[1680px]">
       <span className="sr-only" role="status" aria-live="polite">
         {liveMessage}
       </span>
 
-      <header className="mb-5 overflow-hidden rounded-md bg-[var(--le-navy)] shadow-[var(--shadow-soft)] print-panel">
+      <LoanEstimateIdentityBand
+        state={state}
+        results={results}
+        traceability={traceability}
+        generatedAt={generatedAt}
+      />
+
+      <header className="mb-5 hidden overflow-hidden rounded-md bg-[var(--le-navy)] shadow-[var(--shadow-soft)] print-panel print:block">
         <div className="grid gap-0 print:grid-cols-[1.1fr_0.9fr]">
           <div className="bg-[linear-gradient(135deg,#102f50_0%,#071d36_100%)] px-5 py-5 text-white sm:px-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center">
@@ -371,22 +417,9 @@ export function LoanEstimateRedesign({
         </div>
       </header>
 
-      <div
-        data-loan-summary="top"
-        className="no-print sticky top-16 z-30 mb-2.5 grid gap-2 rounded-md border border-slate-200 bg-white/95 p-2 shadow-[var(--shadow-soft)] backdrop-blur md:grid-cols-3"
-      >
-        <CompactSummaryValue
-          label="Total Assets Required"
-          value={results.totalAssetsRequired}
-          emphasis
-        />
-        <CompactSummaryValue label="Total Monthly Payment" value={results.totalMonthlyPayment} />
-        <CompactSummaryValue label="Total Cash to Close" value={results.totalCashToClose} />
-      </div>
-
       <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
-        <div className="no-print sticky top-[132px] z-20 mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--le-line)] bg-white/92 p-2 shadow-[var(--shadow-soft)] backdrop-blur">
-          <Tabs.List className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="no-print sticky top-16 z-20 mb-3 flex flex-wrap items-center justify-between gap-1 rounded-[5px] border border-[var(--le-line)] bg-white/95 p-1 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] backdrop-blur">
+          <Tabs.List className="flex min-w-0 flex-wrap items-center gap-1">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
@@ -395,19 +428,19 @@ export function LoanEstimateRedesign({
                   key={tab.id}
                   value={tab.id}
                   className={cn(
-                    "relative flex h-9 items-center gap-2 rounded-md px-3 text-[length:var(--type-sm)] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
+                    "relative flex h-8 items-center gap-1.5 rounded-[4px] px-2.5 text-[12px] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
                     selected && "text-[var(--le-navy)]",
                   )}
                 >
                   {selected ? (
                     <motion.span
                       layoutId="tab-active-bg"
-                      className="absolute inset-0 rounded-md bg-[var(--le-navy-soft)]"
+                      className="absolute inset-0 rounded-[4px] bg-[var(--le-navy-soft)]"
                       transition={{ type: "spring", stiffness: 420, damping: 34 }}
                     />
                   ) : null}
                   <span className="relative flex items-center gap-2">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                     {tab.label}
                     {tab.audience === "client" ? <Badge tone="teal" className="px-2 py-0.5">Client</Badge> : null}
                   </span>
@@ -415,54 +448,12 @@ export function LoanEstimateRedesign({
               );
             })}
           </Tabs.List>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden text-[length:var(--type-xs)] text-[var(--le-muted)] lg:inline">
-              {generatedAt ? (
-                <>
-                  Last generated {generatedAt}
-                  {downloadUrl ? (
-                    <>
-                      {" · "}
-                      <a
-                        className="font-bold text-[var(--le-blue)] underline underline-offset-2"
-                        href={downloadUrl}
-                        rel="noopener"
-                        target="_blank"
-                      >
-                        View stored PDF
-                      </a>
-                    </>
-                  ) : null}
-                </>
-              ) : (
-                "No stored PDF yet"
-              )}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={isGenerating}
-              onClick={() => onGenerate(state)}
-            >
-              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
-              {isGenerating ? "Saving PDF..." : "Print / Save as PDF"}
-            </Button>
-            <Button
-              aria-label="Reset to pulled-forward values"
-              title="Reset to pulled-forward values"
-              variant="secondary"
-              size="icon"
-              onClick={resetToPulledForwardValues}
-            >
-              <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            </Button>
-          </div>
         </div>
 
         <div
           className={cn(
-            "items-start gap-4",
-            activeTab !== "marketing" && "loan-estimate-sidebar-layout",
+            "items-start gap-3.5",
+            activeTab !== "marketing" && "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_318px]",
           )}
         >
           <AnimatePresence mode="wait">
@@ -479,7 +470,6 @@ export function LoanEstimateRedesign({
                   state={state}
                   results={results}
                   insights={insights}
-                  assetSegments={assetSegments}
                   updateNumber={updateNumber}
                   updateChoice={updateChoice}
                   matchComputedDownPayment={matchComputedDownPayment}
@@ -490,7 +480,6 @@ export function LoanEstimateRedesign({
                 <SummaryMarketingTab
                   state={state}
                   results={results}
-                  insights={insights}
                   assetSegments={assetSegments}
                   traceability={traceability}
                 />
@@ -505,12 +494,20 @@ export function LoanEstimateRedesign({
             <LoanSummarySidebar
               state={state}
               results={results}
-              insights={insights}
               traceability={traceability}
+              generatedAt={generatedAt}
             />
           ) : null}
         </div>
       </Tabs.Root>
+
+      <LoanEstimateActionBar
+        downloadUrl={downloadUrl}
+        generatedAt={generatedAt}
+        isGenerating={isGenerating}
+        onGenerate={() => onGenerate(state)}
+        onReset={resetToPulledForwardValues}
+      />
 
       <footer className="mt-8 text-center text-[length:var(--type-xs)] text-[var(--le-muted)] print:hidden">
         <p className="font-bold text-[var(--le-navy)]">MLG Home Financial</p>
@@ -521,11 +518,264 @@ export function LoanEstimateRedesign({
   );
 }
 
+function LoanEstimateIdentityBand({
+  state,
+  results,
+  traceability,
+  generatedAt,
+}: {
+  state: LoanState;
+  results: LoanResults;
+  traceability: LoanEstimateTraceability;
+  generatedAt?: string;
+}) {
+  const coBorrowerName = traceability.contact.coBorrowers[0]?.split(" - ")[0]?.trim();
+  const initials = state.applicantName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "LE";
+
+  return (
+    <section className="no-print mb-2.5 grid gap-2 rounded-[5px] border border-[var(--le-line)] bg-white px-3 py-2 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] lg:min-h-[69px] lg:grid-cols-[minmax(260px,1.55fr)_repeat(3,minmax(0,0.75fr))] lg:items-center">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[5px] bg-[var(--le-navy)] text-[length:var(--type-sm)] font-black text-white">
+          {initials}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[length:var(--type-md)] font-black text-[var(--le-navy)]">
+            {state.applicantName}
+            {coBorrowerName ? <span className="font-semibold text-[var(--le-muted)]"> + {coBorrowerName}</span> : null}
+          </p>
+          <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">
+            Loan {state.loanNumber} · {state.propertyAddress || "Property address unavailable"}
+          </p>
+          <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">
+            Loan Officer: {state.presentedBy}{state.nmlsId ? ` · NMLS ${state.nmlsId}` : ""}
+          </p>
+        </div>
+      </div>
+      <IdentityMetric
+        label="Proposed loan"
+        value={formatCurrency(results.loanAmount)}
+        note={`${state.program} · ${state.loanPurpose}`}
+      />
+      <IdentityMetric
+        label="Interest / LTV"
+        value={`${formatPercent(state.rate)} · ${formatPercent(results.ltv)}`}
+        note="Rate input · LTV calculated"
+      />
+      <IdentityMetric
+        label="Estimate status"
+        value={generatedAt ? "Generated" : "Draft"}
+        note={generatedAt ? `Updated ${generatedAt}` : "Not generated yet"}
+      />
+    </section>
+  );
+}
+
+function IdentityMetric({ label, value, note }: { label: string; value: string; note: string }) {
+  return (
+    <div className="min-w-0 border-t border-slate-100 pt-2 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
+      <p className="text-[10px] font-bold uppercase text-slate-400">{label}</p>
+      <p className="mt-0.5 truncate text-[length:var(--type-md)] font-black text-[var(--le-navy)]" title={value}>{value}</p>
+      <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]" title={note}>{note}</p>
+    </div>
+  );
+}
+
+function LoanDetailField({
+  source,
+  children,
+}: {
+  source: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-[59px] min-w-0 border-b border-r border-slate-200 bg-white px-2.5 py-1.5">
+      {children}
+      <div className="mt-1 flex items-center gap-2">
+        <span className="truncate text-[9px] leading-none text-slate-400">{source}</span>
+      </div>
+    </div>
+  );
+}
+
+function StaticLoanField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className={loanDetailLabelClassName} title={label}>{label}</p>
+      <div className={cn(nonManualControlClassName, "flex items-center")}>
+        <span className="truncate" title={value}>{value || "Not provided"}</span>
+      </div>
+    </div>
+  );
+}
+
+function PrepaidLedgerRow({
+  label,
+  basis,
+  input,
+  amount,
+  insight,
+}: {
+  label: string;
+  basis: string;
+  input?: React.ReactNode;
+  amount: number;
+  insight?: FieldInsight;
+}) {
+  return (
+    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-200 px-2.5 py-1.5 text-[13px] sm:grid-cols-[minmax(130px,1fr)_minmax(130px,0.9fr)_minmax(170px,1fr)_auto]">
+      <span className="min-w-0 truncate text-[12px] font-bold text-[var(--le-navy)]" title={label}>{label}</span>
+      <span className="order-3 min-w-0 truncate text-[calc(var(--type-xs)+1px)] text-[var(--le-muted)] sm:order-none" title={basis}>{basis}</span>
+      <div className="order-4 min-w-0 sm:order-none">{input}</div>
+      <ReadOnlyInsight insight={insight} className="rounded-sm">
+        <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+      </ReadOnlyInsight>
+    </div>
+  );
+}
+
+function CompactLedgerInput({
+  label,
+  ariaLabel,
+  field,
+  value,
+  step,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  field: NumericField;
+  value: number;
+  step: string;
+  onChange: (field: NumericField, value: string) => void;
+}) {
+  const inputId = `ledger-${field}`;
+  return (
+    <label className="flex items-center justify-end gap-1.5" htmlFor={inputId}>
+      <span className="text-[10px] text-slate-400">{label}</span>
+      <Input
+        id={inputId}
+        aria-label={ariaLabel}
+        className={cn(numericInputClassName, "h-7 w-[76px] rounded-[5px] px-1.5")}
+        type="number"
+        inputMode="decimal"
+        step={step}
+        value={numberInputValue(value)}
+        onFocus={selectInputText}
+        onChange={(event) => onChange(field, event.target.value)}
+      />
+    </label>
+  );
+}
+
+function LedgerTotalRow({
+  label,
+  amount,
+  insight,
+  secondary = false,
+}: {
+  label: string;
+  amount: number;
+  insight?: FieldInsight;
+  secondary?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-center justify-between gap-3 border-b border-slate-200 px-2.5 py-1.5 last:border-b-0", secondary ? "bg-slate-50" : "bg-[var(--le-gold-soft)]")}>
+      <span className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">{label}</span>
+      <ReadOnlyInsight insight={insight} className="rounded-sm">
+        <AnimatedValue value={amount} format="currency" className="numeric text-[calc(var(--type-md)+1px)] font-black text-[var(--le-navy)]" />
+      </ReadOnlyInsight>
+    </div>
+  );
+}
+
+function PaymentRow({
+  label,
+  amount,
+  input,
+}: {
+  label: string;
+  amount: number;
+  input?: React.ReactNode;
+}) {
+  return (
+    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_minmax(100px,0.8fr)_auto] items-center gap-3 border-b border-slate-200 px-2.5 py-1 last:border-b-0">
+      <span className="truncate text-[12px] font-bold text-[var(--le-navy)]">{label}</span>
+      <span className="min-w-0">{input}</span>
+      <AnimatedValue value={amount} format="currency" className="numeric text-[12px] font-black text-[var(--le-navy)]" />
+    </div>
+  );
+}
+
+function EquationRow({ sign, label, amount }: { sign: string; label: string; amount: number }) {
+  return (
+    <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-2.5 py-0.5 text-[length:var(--type-xs)]">
+      <span className="text-center font-black text-slate-400" aria-hidden="true">{sign}</span>
+      {sign ? <span className="sr-only">{sign === "−" ? "Subtract" : "Add"}</span> : null}
+      <span className="truncate text-[var(--le-muted)]">{label}</span>
+      <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+    </div>
+  );
+}
+
+function CashControlCell({ children }: { children: React.ReactNode }) {
+  return <div className="border-b border-r border-slate-200 px-2.5 py-1.5">{children}</div>;
+}
+
+function LoanEstimateActionBar({
+  downloadUrl,
+  generatedAt,
+  isGenerating,
+  onGenerate,
+  onReset,
+}: {
+  downloadUrl?: string;
+  generatedAt?: string;
+  isGenerating: boolean;
+  onGenerate: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="no-print sticky bottom-2 z-40 mt-3 flex min-h-[52px] items-center gap-2 rounded-[5px] border border-slate-200 bg-white/97 px-2 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.14)] backdrop-blur sm:px-3">
+      <div className="hidden min-w-0 md:block">
+        <p className="text-[length:var(--type-xs)] font-black text-[var(--le-navy)]">Loan Estimate workspace</p>
+        <p className="truncate text-[9px] text-[var(--le-muted)]">
+          {generatedAt ? `Last generated ${generatedAt}` : "Changes remain in this workspace until the PDF is generated."}
+        </p>
+      </div>
+      <div className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto md:flex-initial">
+        {downloadUrl ? (
+          <a
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border border-[var(--le-line)] bg-white px-2.5 text-[length:var(--type-xs)] font-bold text-[var(--le-navy)] transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]"
+            href={downloadUrl}
+            rel="noopener"
+            target="_blank"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            View Saved PDF
+          </a>
+        ) : null}
+        <Button className="h-8 shrink-0 px-2.5 text-[length:var(--type-xs)]" variant="secondary" size="sm" onClick={onReset}>
+          <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          Reset values
+        </Button>
+        <Button className="h-8 shrink-0 px-2.5 text-[length:var(--type-xs)]" variant="primary" size="sm" disabled={isGenerating} onClick={onGenerate}>
+          <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+          {isGenerating ? "Generating PDF..." : "Generate PDF"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function MainTab({
   state,
   results,
   insights,
-  assetSegments,
   updateNumber,
   updateChoice,
   matchComputedDownPayment,
@@ -533,12 +783,12 @@ function MainTab({
   state: LoanState;
   results: LoanResults;
   insights: Record<string, FieldInsight>;
-  assetSegments: Array<{ name: string; value: number; color: string }>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
   matchComputedDownPayment: () => void;
 }) {
   const [closingCostsOpen, setClosingCostsOpen] = useState(false);
+  const [loanDetailsEditing, setLoanDetailsEditing] = useState(false);
   const closingCostsSnapshotRef = useRef<ClosingCostSnapshot | null>(null);
   const closingCostsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closingCostsDialogRef = useRef<HTMLDivElement | null>(null);
@@ -640,116 +890,147 @@ function MainTab({
   }, [closingCostsOpen]);
 
   return (
-    <div className="space-y-2.5">
-      <Panel title="Purchase & Loan Details" icon={Home}>
-        <div className="space-y-2.5">
-          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-            <NumberField label={borrowerEquityLabel} field="downPaymentPct" value={state.downPaymentPct} step="0.5" onChange={updateNumber} />
-            <ChoiceField
-              label="Property Class"
-              value={state.sfrOrCondo}
-              options={[
-                { value: "condo", label: "Condo" },
-                { value: "sfr", label: "SFR (Single Family)" },
-              ]}
-              onValueChange={(value) => updateChoice("sfrOrCondo", value)}
-            />
-            <ChoiceField
-              label="Property Type"
-              value={state.propertyType}
-              options={[
-                { value: "CONDO", label: "Condo" },
-                { value: "CONDO-HOTEL", label: "Condo-Hotel" },
-                { value: "SINGLE FAMILY", label: "Single Family" },
-                { value: "COMMERCIAL", label: "Commercial" },
-              ]}
-              onValueChange={(value) => updateChoice("propertyType", value)}
-            />
-            <ChoiceField
-              label="Occupancy"
-              value={state.occupancy}
-              options={[
-                { value: "PRIMARY", label: "Primary" },
-                { value: "SECONDARY", label: "Secondary" },
-                { value: "INVESTMENT", label: "Investment" },
-                { value: "OTHER", label: "Other" },
-              ]}
-              onValueChange={(value) => updateChoice("occupancy", value)}
-            />
-            <ChoiceField
-              label="Loan Category"
-              value={state.foreignOrDomestic}
-              options={[
-                { value: "F", label: "Foreign National Loan" },
-                { value: "D", label: "Domestic Loan" },
-              ]}
-              onValueChange={(value) => updateChoice("foreignOrDomestic", value)}
-            />
-            <ChoiceField
-              label="New / Used"
-              value={state.newOrUsed}
-              options={[
-                { value: "New", label: "New" },
-                { value: "Used", label: "Used" },
-              ]}
-              onValueChange={(value) => updateChoice("newOrUsed", value)}
-            />
-            <ChoiceField
-              label="Developer Fee Applies"
-              value={state.developFee}
-              options={[
-                { value: "Yes", label: "Yes" },
-                { value: "No", label: "No" },
-              ]}
-              onValueChange={(value) => updateChoice("developFee", value)}
-            />
-            <ChoiceField
-              label="Loan Program"
-              value={state.program}
-              options={loanPrograms}
-              onValueChange={(value) => updateChoice("program", value)}
-            />
-          </div>
-
-          <div className="grid gap-2.5 rounded-md border border-slate-100 bg-[var(--le-gold-soft)] px-3 py-2 md:grid-cols-2 xl:grid-cols-5">
-            <Readout label={basisLabel} value={state.purchasePrice} align="left" insight={sourceInsight(basisLabel, "Scenario Desk")} />
-            <Readout label={borrowerEquityLabel} value={results.downPayment} align="left" insight={insights[borrowerEquityLabel]} />
-            <Readout label="Loan Amount" value={results.loanAmount} align="left" insight={insights["Loan Amount"]} />
-            <Readout label="Loan-to-Value (LTV)" value={results.ltv} format="percent" align="left" insight={insights.LTV} />
-            <Readout label="Interest Rate" value={state.rate} format="percent" align="left" insight={sourceInsight("Interest Rate", "Scenario Desk")} />
-          </div>
+    <div className="space-y-3">
+      <Panel
+        title="Purchase & Loan Details"
+        description=""
+        icon={Home}
+        showComputedBadge={false}
+        titleAction={(
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-[var(--le-muted)] transition hover:bg-slate-100 hover:text-[var(--le-navy)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]"
+            aria-label={loanDetailsEditing ? "Save Purchase and Loan Details" : "Edit Purchase and Loan Details"}
+            title={loanDetailsEditing ? "Save Purchase and Loan Details" : "Edit Purchase and Loan Details"}
+            onClick={() => setLoanDetailsEditing((editing) => !editing)}
+          >
+            {loanDetailsEditing ? <Save className="h-3.5 w-3.5" aria-hidden="true" /> : <Pencil className="h-3.5 w-3.5" aria-hidden="true" />}
+          </button>
+        )}
+        flush
+      >
+        <div className="grid border-l border-t border-slate-200 md:grid-cols-2 xl:grid-cols-3">
+          <LoanDetailField source="Stage 2 · Property">
+            <Readout label={basisLabel} value={state.purchasePrice} align="left" appearance="non-manual" insight={sourceInsight(basisLabel, "Stage 2 property")} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            {loanDetailsEditing ? (
+              <NumberField label={`${borrowerEquityLabel} %`} field="downPaymentPct" value={state.downPaymentPct} step="0.5" suffix="%" loanDetail onChange={updateNumber} />
+            ) : (
+              <StaticLoanField label={`${borrowerEquityLabel} %`} value={formatPercent(state.downPaymentPct)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            <Readout label={`${borrowerEquityLabel} Amount`} value={results.downPayment} align="left" appearance="non-manual" insight={insights[borrowerEquityLabel]} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            <Readout label="Loan Amount" value={results.loanAmount} align="left" appearance="non-manual" insight={insights["Loan Amount"]} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            <Readout label="Loan-to-Value (LTV)" value={results.ltv} format="percent" align="left" appearance="non-manual" insight={insights.LTV} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Loan Program" value={state.program} options={loanPrograms} onValueChange={(value) => updateChoice("program", value)} />
+            ) : (
+              <StaticLoanField label="Loan Program" value={choiceLabel(loanPrograms, state.program)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            <Readout label="Interest Rate" value={state.rate} format="percent" align="left" appearance="non-manual" insight={sourceInsight("Interest Rate", "Stage 3 scenario")} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            <StaticLoanField label="Loan Term" value={loanTermDisplay(state.program)} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 1 · Intake">
+            <StaticLoanField label="Loan Purpose" value={state.loanPurpose} />
+          </LoanDetailField>
+          <LoanDetailField source="Stage 2 · Property">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Property Class" value={state.sfrOrCondo} options={propertyClassOptions} onValueChange={(value) => updateChoice("sfrOrCondo", value)} />
+            ) : (
+              <StaticLoanField label="Property Class" value={choiceLabel(propertyClassOptions, state.sfrOrCondo)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 2 · Property">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Property Type" value={state.propertyType} options={propertyTypeOptions} onValueChange={(value) => updateChoice("propertyType", value)} />
+            ) : (
+              <StaticLoanField label="Property Type" value={choiceLabel(propertyTypeOptions, state.propertyType)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 1 · Intake">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Occupancy" value={state.occupancy} options={occupancyOptions} onValueChange={(value) => updateChoice("occupancy", value)} />
+            ) : (
+              <StaticLoanField label="Occupancy" value={choiceLabel(occupancyOptions, state.occupancy)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 3 · Scenario">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Loan Category" value={state.foreignOrDomestic} options={loanCategoryOptions} onValueChange={(value) => updateChoice("foreignOrDomestic", value)} />
+            ) : (
+              <StaticLoanField label="Loan Category" value={choiceLabel(loanCategoryOptions, state.foreignOrDomestic)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Stage 2 · Property">
+            {loanDetailsEditing ? (
+              <ChoiceField label="Property Condition" value={state.newOrUsed} options={propertyConditionOptions} onValueChange={(value) => updateChoice("newOrUsed", value)} />
+            ) : (
+              <StaticLoanField label="Property Condition" value={choiceLabel(propertyConditionOptions, state.newOrUsed)} />
+            )}
+          </LoanDetailField>
+          <LoanDetailField source="Manual review">
+            {loanDetailsEditing ? (
+              <ChoiceField
+                label="Developer Fee Applies"
+                value={state.developFee}
+                options={[
+                  { value: "Yes", label: "Yes" },
+                  { value: "No", label: "No" },
+                ]}
+                onValueChange={(value) => updateChoice("developFee", value)}
+              />
+            ) : (
+              <StaticLoanField label="Developer Fee Applies" value={state.developFee} />
+            )}
+          </LoanDetailField>
         </div>
       </Panel>
 
-      <Panel title="Closing Costs" icon={Calculator}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[length:var(--type-sm)] text-[var(--le-muted)]">
-              Review and adjust lender, title, government, and third-party fees.
-            </p>
-            <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Closing Costs</p>
+      <Panel title="Closing Costs" description="Detailed fees remain out of the primary workspace until review is needed." icon={Calculator} showComputedBadge={false} flush>
+        <div className="grid sm:grid-cols-[minmax(0,1fr)_170px_130px_auto]">
+          <div className="flex items-center gap-2.5 px-3 py-3">
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[6px] bg-blue-50 text-sm font-black text-[var(--le-blue)]">$</span>
+            <div>
+              <p className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Closing-cost worksheet</p>
+              <p className="mt-0.5 text-[length:var(--type-xs)] text-[var(--le-muted)]">Loan, title, government, and third-party fees</p>
+            </div>
+          </div>
+          <div className="border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
                 <AnimatedValue
                   value={results.totalClosingCosts}
                   format="currency"
-                  className="numeric mt-0.5 block text-[length:var(--type-2xl)] font-black text-[var(--le-navy)]"
+                  className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]"
                 />
-              </div>
-              <Badge tone="gold">Preliminary estimate</Badge>
-            </div>
           </div>
-          <Button ref={closingCostsTriggerRef} type="button" variant="primary" onClick={openClosingCosts}>
+          <div className="flex items-center border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
+            <Badge tone="gold">Preliminary</Badge>
+          </div>
+          <div className="flex items-center border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
+          <Button ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
             <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
             Review / Edit Closing Costs
           </Button>
+          </div>
         </div>
       </Panel>
 
       {closingCostsOpen && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-[2px] sm:p-6"
+              className="loan-estimate-closing-costs-dialog no-print fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-[2px] sm:p-6"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) cancelClosingCosts();
               }}
@@ -760,15 +1041,15 @@ function MainTab({
                 aria-modal="true"
                 aria-labelledby="closing-costs-dialog-title"
                 aria-describedby="closing-costs-dialog-description"
-                className="grid max-h-[calc(100vh-1.5rem)] w-full max-w-[1100px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:max-h-[calc(100vh-3rem)]"
+                className="grid max-h-[calc(100vh-1.5rem)] w-full max-w-[1050px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[7px] border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:max-h-[91vh]"
               >
-                <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/60 px-3.5 py-2.5">
                   <div>
-                    <h2 id="closing-costs-dialog-title" className="text-[length:var(--type-xl)] font-black text-[var(--le-navy)]">
+                    <h2 id="closing-costs-dialog-title" className="text-[length:var(--type-lg)] font-black text-[var(--le-navy)]">
                       Closing Costs
                     </h2>
-                    <p id="closing-costs-dialog-description" className="mt-1 text-[length:var(--type-sm)] text-[var(--le-muted)]">
-                      Review and adjust estimated loan, title, government, and third-party fees.
+                    <p id="closing-costs-dialog-description" className="mt-0.5 text-[length:var(--type-xs)] text-[var(--le-muted)]">
+                      Review estimated loan, title, government, and third-party fees. Cancel, close, or click outside to discard changes made since opening.
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
@@ -776,13 +1057,13 @@ function MainTab({
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
                       <AnimatedValue value={results.totalClosingCosts} format="currency" className="font-black text-[var(--le-navy)]" />
                     </div>
-                    <Button type="button" size="icon" aria-label="Cancel and close closing costs" onClick={cancelClosingCosts}>
+                    <Button type="button" size="icon" aria-label="Discard changes and close closing costs" title="Discard changes and close" onClick={cancelClosingCosts}>
                       <X className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </div>
                 </header>
 
-                <div className="min-h-0 overflow-y-auto px-3 py-3 sm:px-5">
+                <div className="min-h-0 overflow-y-auto px-3 py-2">
                   <ClosingCostsEditor
                     state={state}
                     results={results}
@@ -792,7 +1073,7 @@ function MainTab({
                   />
                 </div>
 
-                <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <footer className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-3.5 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-baseline justify-between gap-4 sm:justify-start">
                     <span className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Total Closing Costs</span>
                     <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
@@ -808,74 +1089,161 @@ function MainTab({
           )
         : null}
 
-      <Panel title="Pre-Paid Items" icon={PiggyBank}>
-        <div className="space-y-2.5">
-          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-            <NumberField label="Property Tax Escrow (Months)" field="taxMonths" value={state.taxMonths} step="1" onChange={updateNumber} />
-            <NumberField label="Annual Property Tax Rate" field="propertyTaxRatePct" value={state.propertyTaxRatePct} step="0.1" onChange={updateNumber} />
-            <NumberField label="Hazard Insurance Escrow" field="hazardInsEscrow" value={state.hazardInsEscrow} step="10" onChange={updateNumber} />
-            <NumberField label="Developer Fee - % of Price" field="developFeeContractPct" value={state.developFeeContractPct} step="0.05" onChange={updateNumber} />
-            <NumberField label="Flood / HO6 Insurance - Annual" field="floodHO6Annual" value={state.floodHO6Annual} step="10" onChange={updateNumber} />
-          </div>
+      <Panel title="Pre-Paid Items" description="Escrows, insurance, interest, and property-specific contributions." icon={PiggyBank} showComputedBadge={false} flush>
+        <div className="overflow-hidden">
+            <div className="hidden grid-cols-[minmax(130px,1fr)_minmax(130px,0.9fr)_minmax(170px,1fr)_auto] border-b border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 sm:grid">
+              <span>Item</span><span>Basis</span><span>Input</span><span className="text-right">Amount</span>
+            </div>
+            <PrepaidLedgerRow
+              label="Taxes Escrowed"
+              basis="Monthly taxes × escrow months"
+              input={(
+                <div className="flex justify-end gap-2">
+                  <CompactLedgerInput label="Months" ariaLabel="Property tax escrow months" field="taxMonths" value={state.taxMonths} step="1" onChange={updateNumber} />
+                  <CompactLedgerInput label="Tax %" ariaLabel="Annual property tax rate" field="propertyTaxRatePct" value={state.propertyTaxRatePct} step="0.1" onChange={updateNumber} />
+                </div>
+              )}
+              amount={results.taxesEscrow}
+              insight={insights["Taxes Escrowed"]}
+            />
+            <PrepaidLedgerRow
+              label="Hazard Insurance Escrow"
+              basis="Escrow amount"
+              input={<CompactLedgerInput label="Amount" ariaLabel="Hazard insurance escrow" field="hazardInsEscrow" value={state.hazardInsEscrow} step="10" onChange={updateNumber} />}
+              amount={results.hazardInsEscrow}
+            />
+            <PrepaidLedgerRow
+              label="Developer Fee"
+              basis={state.developFee === "Yes" ? "Price × developer fee" : "Does not apply"}
+              input={<CompactLedgerInput label="Fee %" ariaLabel="Developer fee percent of price" field="developFeeContractPct" value={state.developFeeContractPct} step="0.05" onChange={updateNumber} />}
+              amount={results.developFeeContract}
+              insight={insights["Developer Fee (Per Contract)"]}
+            />
+            <PrepaidLedgerRow
+              label="Capital Contribution"
+              basis={state.newOrUsed === "New" ? "2 × monthly HOA" : "Existing / resale"}
+              amount={results.capitalContribution}
+              insight={insights["Capital Contribution"]}
+            />
+            <PrepaidLedgerRow
+              label="Flood / HO6 Insurance"
+              basis="Annual policy premium"
+              input={<CompactLedgerInput label="Annual" ariaLabel="Flood or HO6 insurance annual" field="floodHO6Annual" value={state.floodHO6Annual} step="10" onChange={updateNumber} />}
+              amount={results.floodHO6Escrow}
+            />
+            <PrepaidLedgerRow
+              label="Per-Diem Interest"
+              basis="Loan × rate ÷ 365 × days"
+              input={<CompactLedgerInput label="Days" ariaLabel="Per-diem interest days" field="interestDays" value={state.interestDays} step="1" onChange={updateNumber} />}
+              amount={results.interestPerDiem}
+              insight={insights["Per-Diem Interest"]}
+            />
+            <LedgerTotalRow label="Total Pre-Paid Items" amount={results.totalPrepaid} insight={insights["Total Pre-Paid Items"]} />
+            <LedgerTotalRow label="Closing Costs + Pre-Paid Items" amount={results.totalClosingAndPrepaid} secondary insight={insights["Closing + Pre-Paid"]} />
+        </div>
+      </Panel>
 
-          <div className="grid gap-2.5 rounded-md border border-slate-100 bg-[var(--le-gold-soft)] px-3 py-2 md:grid-cols-2 xl:grid-cols-5">
-            <Readout label="Taxes Escrowed" value={results.taxesEscrow} align="left" insight={insights["Taxes Escrowed"]} />
-            <Readout label="Developer Fee (Per Contract)" value={results.developFeeContract} align="left" insight={insights["Developer Fee (Per Contract)"]} />
-            <Readout label="Capital Contribution" value={results.capitalContribution} sublabel="2x HOA if New" align="left" insight={insights["Capital Contribution"]} />
-            <Readout label="Total Pre-Paid Items" value={results.totalPrepaid} align="left" insight={insights["Total Pre-Paid Items"]} />
-            <Readout label="Closing + Pre-Paid" value={results.totalClosingAndPrepaid} align="left" insight={insights["Closing + Pre-Paid"]} />
+      <Panel title="Monthly Payment" description="Estimated recurring housing payment." icon={BadgeDollarSign} showComputedBadge={false} flush>
+        <div className="grid md:grid-cols-[minmax(0,1fr)_245px]">
+          <div className="overflow-hidden">
+            <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
+            <PaymentRow label="Property Taxes" amount={results.monthlyPropertyTax} />
+            <PaymentRow
+              label="Hazard Insurance"
+              amount={results.monthlyHazard}
+              input={<CompactLedgerInput label="Annual" ariaLabel="Hazard insurance annual" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />}
+            />
+            <PaymentRow label="Flood / HO6" amount={results.monthlyFlood} />
+            <PaymentRow
+              label="HOA / Condo Fee"
+              amount={results.monthlyHOA}
+              input={<CompactLedgerInput label="Monthly" ariaLabel="HOA or condo fee monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />}
+            />
+          </div>
+          <div className="flex flex-col justify-center border-t border-[var(--le-line)] bg-[var(--le-navy)] px-3.5 py-3 text-white md:border-l md:border-t-0">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-white/65">Estimated monthly payment</p>
+              <p className="text-[length:var(--type-sm)] text-white/75">Principal, taxes, insurance, and association dues</p>
+            </div>
+            <ReadOnlyInsight insight={insights["Total Monthly Payment"]} className="rounded-sm">
+              <AnimatedValue value={results.totalMonthlyPayment} format="currency" className="numeric mt-1 block text-[length:var(--type-2xl)] font-black text-white" />
+            </ReadOnlyInsight>
+            <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
+              {monthlyBars.map((entry) => (
+                <span
+                  key={entry.name}
+                  className="h-full"
+                  style={{ width: `${results.totalMonthlyPayment > 0 ? Math.max(0, (entry.value / results.totalMonthlyPayment) * 100) : 0}%`, backgroundColor: entry.fill }}
+                />
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-white/70">
+              {monthlyBars.map((entry) => (
+                <span key={entry.name} className="flex min-w-0 items-center gap-1">
+                  <i className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: entry.fill }} aria-hidden="true" />
+                  <span className="truncate">{entry.name}</span>
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </Panel>
 
-      <Panel title="Monthly Payment" icon={BadgeDollarSign}>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Hazard Insurance - Annual (SFR)" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />
-          <NumberField label="HOA / Condo Fee - Monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />
-          <Readout label="Principal & Interest" value={results.principalInterest} insight={insights["Principal & Interest"]} />
-          <Readout label="Property Taxes / Month" value={results.monthlyPropertyTax} insight={sourceInsight("Property Taxes / Month", "Scenario Desk property tax inputs")} />
-        </div>
-        <div className="mt-3 h-52 rounded-md border border-[var(--le-line)] bg-[var(--le-panel)] p-2.5">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyBars} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 18 }} barCategoryGap={10}>
-              <XAxis type="number" domain={[0, "dataMax"]} hide />
-              <YAxis dataKey="name" type="category" width={142} tick={{ fill: "#667085", fontSize: 11 }} />
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} cursor={{ fill: "rgba(16,42,67,0.05)" }} />
-              <Bar dataKey="value" minPointSize={3} barSize={22} radius={[0, 6, 6, 0]} isAnimationActive={false}>
-                {monthlyBars.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-2.5">
-          <StatCard label="Total Monthly Payment" value={results.totalMonthlyPayment} emphasis insight={insights["Total Monthly Payment"]} />
-        </div>
-      </Panel>
-
-      <Panel title="Cash to Close & Reserves" icon={ShieldCheck} showComputedBadge={false}>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-          <NumberField label="Seller Credit" field="sellerCredit" value={state.sellerCredit} step="100" onChange={updateNumber} />
-          <NumberField label="Other Credits" field="otherCredits" value={state.otherCredits} step="100" onChange={updateNumber} />
-          <CurrencyField
-            label={equityApplied}
-            field="downPaymentGivenToSeller"
-            value={state.downPaymentGivenToSeller}
-            onChange={updateNumber}
-            action={{
-              label: `Match computed ${borrowerEquityLabel.toLowerCase()}`,
-              onClick: matchComputedDownPayment,
-            }}
-          />
-          <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" onChange={updateNumber} />
-        </div>
-        <div className="cash-assets-row mt-4 grid items-center gap-4 xl:grid-cols-[minmax(420px,0.95fr)_minmax(420px,1.05fr)]">
-          <AssetsPieChart data={assetSegments} />
-          <div className="cash-stat-grid grid auto-rows-fr items-stretch gap-3 md:grid-cols-3">
-            <StatCard label="Total Cash to Close" value={results.totalCashToClose} tight insight={insights["Total Cash to Close"]} />
-            <StatCard label={`Reserves (${formatNumber(results.reserveMonths)} mo.)`} value={results.reserves} tight insight={insights.Reserves} />
-            <StatCard label="Total Assets Required" value={results.totalAssetsRequired} tight insight={insights["Total Assets Required"]} />
+      <Panel title="Cash to Close & Asset Requirements" description="Credits reduce cash due; reserves determine required assets." icon={ShieldCheck} showComputedBadge={false} flush>
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_252px]">
+          <div className="grid content-start border-l border-t border-slate-200 sm:grid-cols-2">
+            <CashControlCell>
+              <NumberField label="Seller Credit" field="sellerCredit" value={state.sellerCredit} step="100" onChange={updateNumber} />
+            </CashControlCell>
+            <CashControlCell>
+              <NumberField label="Other Credits" field="otherCredits" value={state.otherCredits} step="100" onChange={updateNumber} />
+            </CashControlCell>
+            <CashControlCell>
+              <CurrencyField
+                label={equityApplied}
+                field="downPaymentGivenToSeller"
+                value={state.downPaymentGivenToSeller}
+                onChange={updateNumber}
+                action={{
+                  label: `Match computed ${borrowerEquityLabel.toLowerCase()}`,
+                  onClick: matchComputedDownPayment,
+                }}
+              />
+            </CashControlCell>
+            <CashControlCell>
+              <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" onChange={updateNumber} />
+            </CashControlCell>
+          </div>
+          <div className="border-t border-[var(--le-line)] bg-slate-50/60 xl:border-l xl:border-t-0">
+            <EquationRow sign="" label={borrowerEquityLabel} amount={results.downPayment} />
+            <EquationRow sign="+" label="Closing Costs" amount={results.totalClosingCosts} />
+            <EquationRow sign="+" label="Pre-Paid Items" amount={results.totalPrepaid} />
+            <EquationRow sign="−" label="Seller Credit" amount={results.sellerCredit} />
+            <EquationRow sign="−" label="Other Credits" amount={results.otherCredits} />
+            <EquationRow sign="−" label={equityApplied} amount={state.downPaymentGivenToSeller} />
+            <div className="flex items-end justify-between gap-4 bg-[var(--le-navy)] px-3 py-2 text-white">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-white/65">Borrower funds due</p>
+                <p className="text-[length:var(--type-md)] font-black">Total Cash to Close</p>
+              </div>
+              <ReadOnlyInsight insight={insights["Total Cash to Close"]} className="rounded-sm">
+                <AnimatedValue value={results.totalCashToClose} format="currency" className="numeric text-[length:var(--type-xl)] font-black text-white" />
+              </ReadOnlyInsight>
+            </div>
+            <div className="grid content-start gap-1 border-t border-[var(--le-line)] bg-white p-2">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-1.5">
+              <span className="text-[length:var(--type-sm)] text-[var(--le-muted)]">Reserves ({formatNumber(results.reserveMonths)} mo.)</span>
+              <ReadOnlyInsight insight={insights.Reserves} className="rounded-sm">
+                <AnimatedValue value={results.reserves} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+              </ReadOnlyInsight>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Funds Required for Approval</p>
+              <ReadOnlyInsight insight={insights["Total Assets Required"]} className="mt-1 rounded-sm">
+                <AnimatedValue value={results.totalAssetsRequired} format="currency" className="numeric text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
+              </ReadOnlyInsight>
+            </div>
+          </div>
           </div>
         </div>
         <Disclaimer compact>
@@ -1068,13 +1436,11 @@ function SummaryCostsTab({
 function SummaryMarketingTab({
   state,
   results,
-  insights,
   assetSegments,
   traceability,
 }: {
   state: LoanState;
   results: ReturnType<typeof calculateLoanEstimate>;
-  insights: Record<string, FieldInsight>;
   assetSegments: Array<{ name: string; value: number; color: string }>;
   traceability: LoanEstimateTraceability;
 }) {
@@ -1177,7 +1543,6 @@ function SummaryMarketingTab({
         <LoanSummarySidebar
           state={state}
           results={results}
-          insights={insights}
           traceability={traceability}
         />
 
@@ -1429,31 +1794,34 @@ function BannerMeta({ label, value }: { label: string; value: string }) {
 
 function Panel({
   title,
+  description,
+  titleAction,
   icon: Icon,
   children,
   dense = false,
   showComputedBadge = true,
+  flush = false,
 }: {
   title: string;
+  description?: string;
+  titleAction?: React.ReactNode;
   icon: typeof Calculator;
   children: React.ReactNode;
   dense?: boolean;
   showComputedBadge?: boolean;
+  flush?: boolean;
 }) {
   return (
     <motion.section
-      whileHover={{ y: -2, boxShadow: "var(--shadow-lift)" }}
-      transition={{ duration: 0.18 }}
-      className={cn(
-        "print-panel rounded-md border border-slate-100 bg-white shadow-[var(--shadow-soft)]",
-        dense ? "p-2" : "p-2.5",
-      )}
+      className="print-panel overflow-hidden rounded-[5px] border border-[var(--le-line)] bg-white shadow-[0_1px_2px_rgb(15_31_56_/_0.03)]"
     >
-      <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-        <h2 className="flex items-center gap-1.5 text-base font-extrabold text-slate-900">
-          <Icon className="h-4 w-4 text-[var(--le-gold)]" aria-hidden="true" />
-          {title}
-        </h2>
+      <div className="flex min-h-[43px] items-center justify-between gap-2 border-b border-[var(--le-line)] bg-slate-50/50 px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {description !== undefined ? <span className="h-[18px] w-1 shrink-0 rounded-full bg-[var(--le-blue)]" aria-hidden="true" /> : <Icon className="h-4 w-4 text-[var(--le-gold)]" aria-hidden="true" />}
+          <h2 className="shrink-0 text-[length:var(--type-md)] font-extrabold text-slate-900">{title}</h2>
+          {titleAction}
+          {description ? <p className="hidden truncate text-[10px] text-[var(--le-muted)] sm:block">{description}</p> : null}
+        </div>
         {showComputedBadge ? (
           <Badge tone="navy">
             <LockKeyhole className="h-2.5 w-2.5" aria-hidden="true" />
@@ -1461,158 +1829,154 @@ function Panel({
           </Badge>
         ) : null}
       </div>
-      {children}
+      <div className={cn(!flush && (dense ? "p-2" : "p-2.5"))}>{children}</div>
     </motion.section>
-  );
-}
-
-function CompactSummaryValue({
-  label,
-  value,
-  action,
-  emphasis = false,
-}: {
-  label: string;
-  value: number;
-  action?: React.ReactNode;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className={cn("rounded-md border px-3 py-2", emphasis ? "border-[var(--le-blue)] bg-blue-50/60" : "border-slate-100 bg-gray-50")}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-        {action}
-      </div>
-      <AnimatedValue
-        value={value}
-        format="currency"
-        className={cn(
-          "mt-0.5 block text-right font-black",
-          emphasis ? "text-[length:var(--type-xl)] text-[var(--le-blue)]" : "text-[length:var(--type-md)] text-[var(--le-navy)]",
-        )}
-      />
-    </div>
   );
 }
 
 function LoanSummarySidebar({
   state,
   results,
-  insights,
   traceability,
+  generatedAt,
 }: {
   state: LoanState;
   results: LoanResults;
-  insights: Record<string, FieldInsight>;
   traceability: LoanEstimateTraceability;
+  generatedAt?: string;
 }) {
+  const missingItems = [
+    !Number.isFinite(state.purchasePrice) ? valueBasisLabel(state) : null,
+    !Number.isFinite(state.downPaymentPct) ? `${equityLabel(state)} percentage` : null,
+    !Number.isFinite(state.rate) ? "Interest rate" : null,
+    !state.program.trim() ? "Loan program" : null,
+  ].filter((item): item is string => Boolean(item));
+  const missingPropertyItems = [
+    !state.propertyType ? "property type" : null,
+    !state.occupancy ? "occupancy" : null,
+    !state.sfrOrCondo ? "property class" : null,
+  ].filter((item): item is string => Boolean(item));
+  const developerFeeConfirmed = state.developFee === "Yes" || state.developFee === "No";
+  const closingCostsAvailable = Number.isFinite(results.totalClosingCosts) && results.totalClosingCosts > 0;
+  const readinessChecks = [
+    {
+      ready: missingItems.length === 0,
+      label: missingItems.length === 0
+        ? "Required loan terms are available."
+        : `Missing loan terms: ${missingItems.join(", ")}.`,
+    },
+    {
+      ready: missingPropertyItems.length === 0,
+      label: missingPropertyItems.length === 0
+        ? "Property details are available."
+        : `Missing property details: ${missingPropertyItems.join(", ")}.`,
+    },
+    {
+      ready: developerFeeConfirmed,
+      label: developerFeeConfirmed
+        ? "Developer fee applicability is confirmed."
+        : "Developer fee applicability needs review.",
+    },
+    {
+      ready: closingCostsAvailable,
+      label: closingCostsAvailable
+        ? "Closing-cost estimate is available."
+        : "Closing-cost estimate is missing.",
+    },
+  ];
+  const unresolvedCount = readinessChecks.filter((check) => !check.ready).length;
+  const readinessScore = Math.round(((readinessChecks.length - unresolvedCount) / readinessChecks.length) * 100);
+
   return (
     <aside
       data-loan-summary="sidebar"
-      className="no-print w-full rounded-md border border-slate-100 bg-white p-3 shadow-[var(--shadow-soft)] sm:max-w-[282px] xl:sticky xl:top-[196px] xl:max-w-none"
+      className="no-print w-full space-y-2 rounded-[5px] border border-[var(--le-line)] bg-white p-2 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:sticky xl:top-[112px]"
     >
-      <div className="mb-3 border-b border-slate-100 pb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Live Summary</p>
-        <p className="text-sm font-extrabold text-slate-900">Loan Identity</p>
+      <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loan Estimate</p>
+          <p className="truncate text-[15px] font-extrabold text-slate-900">{state.applicantName}</p>
+        </div>
+        <TraceabilityTrigger data={traceability} />
       </div>
-      <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5">
-        <div className="space-y-2">
-          <SidebarTextValue
-            label="Applicant"
-            value={state.applicantName}
-            action={<TraceabilityTrigger data={traceability} />}
-          />
-          <SidebarTextValue label="Loan Number" value={state.loanNumber} />
-          <SidebarTextValue label="Cell Phone" value={formatUSPhone(state.cellPhone)} />
-          <SidebarTextValue label="Office Phone" value={formatUSPhone(state.officePhone)} />
-          <SidebarTextValue label="Email" value={state.email} />
+
+      <section className="overflow-hidden rounded-[6px] border border-[#173451] bg-[var(--le-navy)] text-white shadow-[0_1px_2px_rgb(15_31_56_/_0.08)]">
+        <div className="flex items-center justify-between gap-3 border-b border-white/12 px-2.5 py-2">
+          <p className="text-[11px] font-black">Loan Estimate Readiness</p>
+          <Badge tone={unresolvedCount ? "gold" : "teal"} className="text-[calc(var(--type-xs)+1px)]">
+            {unresolvedCount ? `${unresolvedCount} Review` : "Ready"}
+          </Badge>
+        </div>
+
+        <div className="px-2.5 py-2.5">
+          <div className="flex items-center gap-3">
+            <div
+              className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full"
+              style={{ background: `conic-gradient(#f7b84b ${readinessScore * 3.6}deg, #304a66 0deg)` }}
+              aria-label={`${readinessScore}% ready`}
+              role="img"
+            >
+              <div className="grid h-[42px] w-[42px] place-items-center rounded-full bg-[var(--le-navy)] text-[13px] font-black text-white">
+                {readinessScore}%
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-black">{unresolvedCount ? "Needs review" : "Ready for review"}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-white/70">
+                {unresolvedCount
+                  ? `${unresolvedCount} ${unresolvedCount === 1 ? "item requires" : "items require"} attention before export.`
+                  : "Required estimate inputs are available."}
+              </p>
+              <span className="mt-1.5 inline-flex rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[var(--le-blue)]">
+                {generatedAt ? "Generated estimate" : "Preliminary estimate"}
+              </span>
+            </div>
+          </div>
+
+          <ul className="mt-2.5 space-y-1.5 border-t border-white/12 pt-2.5">
+            {readinessChecks.map((check) => (
+              <li key={check.label} className="flex items-start gap-2 text-[10px] leading-4 text-white/82">
+                <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full", check.ready ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400/20 text-amber-300")}>
+                  {check.ready ? <Check className="h-2.5 w-2.5" aria-hidden="true" /> : <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />}
+                </span>
+                <span>{check.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
-      <div className="mb-3 border-b border-slate-100 pb-2">
-        <p className="text-sm font-extrabold text-slate-900">Payment &amp; Cash to Close</p>
-      </div>
-      <SidebarBreakdown
-        title="Total Monthly Payment"
-        total={results.totalMonthlyPayment}
-        insight={insights["Total Monthly Payment"]}
-        rows={[
-          ["Principal & Interest", results.principalInterest],
-          ["Property Taxes", results.monthlyPropertyTax],
-          ["Hazard Insurance", results.monthlyHazard],
-          ["Flood / HO6", results.monthlyFlood],
-          ["HOA / Condo Fee", results.monthlyHOA],
-        ]}
-      />
-      <SidebarBreakdown
-        title="Total Cash to Close"
-        total={results.totalCashToClose}
-        insight={insights["Total Cash to Close"]}
-        rows={[
-          [equityLabel(state), results.downPayment],
-          ["Closing Costs", results.totalClosingCosts],
-          ["Pre-Paid Items", results.totalPrepaid],
-          ["Seller Credit", -results.sellerCredit],
-          ["Other Credits", -results.otherCredits],
-        ]}
-      />
+
+      <section className="overflow-hidden rounded-[5px] border border-slate-100">
+        <div className="border-b border-slate-100 bg-slate-50 px-2.5 py-2">
+          <p className="text-[11px] font-bold uppercase text-slate-400">Live Summary</p>
+        </div>
+        <SummaryRailRow label={valueBasisLabel(state)} amount={results.purchasePrice} />
+        <SummaryRailRow label="Loan Amount" amount={results.loanAmount} />
+        <SummaryRailRow label="Closing Costs" amount={results.totalClosingCosts} />
+        <SummaryRailRow label="Pre-Paid Items" amount={results.totalPrepaid} />
+        <SummaryRailRow label="Monthly Payment" amount={results.totalMonthlyPayment} />
+        <SummaryRailRow label="Cash to Close" amount={results.totalCashToClose} emphasis />
+        <SummaryRailRow label="Total Assets Required" amount={results.totalAssetsRequired} />
+      </section>
+
+      {missingItems.length ? (
+        <section className="rounded-[5px] border border-amber-200 bg-amber-50/70 p-2" role="status">
+          <p className="text-[11px] font-bold uppercase text-amber-800">Attention Required</p>
+          <ul className="mt-1.5 space-y-1 text-[calc(var(--type-xs)+1px)] text-amber-900">
+            {missingItems.map((item) => <li key={item}>Missing {item}</li>)}
+          </ul>
+        </section>
+      ) : null}
     </aside>
   );
 }
 
-function SidebarTextValue({
-  label,
-  value,
-  action,
-}: {
-  label: string;
-  value: string;
-  action?: React.ReactNode;
-}) {
+function SummaryRailRow({ label, amount, emphasis = false }: { label: string; amount: number; emphasis?: boolean }) {
   return (
-    <div className="block min-w-0 rounded-sm text-left">
-      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400">{label}</p>
-      <span className="flex items-center">
-        <p className="truncate text-left text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]" title={value}>
-          {value}
-        </p>
-        {action}
-      </span>
+    <div className={cn("flex items-center justify-between gap-2 border-b border-slate-100 px-2 py-1 last:border-b-0", emphasis && "bg-[var(--le-navy-soft)]")}>
+      <span className="truncate text-[calc(var(--type-xs)+1px)] text-[var(--le-muted)]">{label}</span>
+      <AnimatedValue value={amount} format="currency" className={cn("numeric text-[calc(var(--type-sm)+1px)] font-black text-[var(--le-navy)]", emphasis && "text-[var(--le-blue)]")} />
     </div>
-  );
-}
-
-function SidebarBreakdown({
-  title,
-  total,
-  insight,
-  rows,
-}: {
-  title: string;
-  total: number;
-  insight?: FieldInsight;
-  rows: Array<[string, number]>;
-}) {
-  return (
-    <section className="mb-3 rounded-md border border-slate-100 bg-gray-50 p-2.5 last:mb-0">
-      <div className="mb-2 flex items-end justify-between gap-2">
-        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{title}</h3>
-        <ReadOnlyInsight insight={insight} className="rounded-sm">
-          <AnimatedValue
-            value={total}
-            format="currency"
-            className="text-right text-[length:var(--type-lg)] font-black text-[var(--le-navy)] transition-colors group-hover:text-[var(--le-blue)]"
-          />
-        </ReadOnlyInsight>
-      </div>
-      <dl className="space-y-1">
-        {rows.map(([label, amount]) => (
-          <div key={label} className="flex items-center justify-between gap-2 text-[length:var(--type-sm)]">
-            <dt className="truncate text-slate-500">{label}</dt>
-            <dd className="numeric font-mono font-bold tabular-nums text-slate-800">{formatCurrency(amount)}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
   );
 }
 
@@ -1621,27 +1985,34 @@ function NumberField({
   field,
   value,
   step,
+  suffix,
+  loanDetail = false,
   onChange,
 }: {
   label: string;
   field: NumericField;
   value: number;
   step: string;
+  suffix?: string;
+  loanDetail?: boolean;
   onChange: (field: NumericField, value: string) => void;
 }) {
   return (
-    <div className="min-w-0 space-y-1">
-      <Label className="flex min-h-[22px] items-end leading-tight" htmlFor={field}>{label}</Label>
-      <Input
-        id={field}
-        className={numericInputClassName}
-        type="number"
-        inputMode="decimal"
-        step={step}
-        value={numberInputValue(value)}
-        onFocus={selectInputText}
-        onChange={(event) => onChange(field, event.target.value)}
-      />
+    <div className="min-w-0 space-y-0.5">
+      <Label className={loanDetail ? loanDetailLabelClassName : "flex min-h-[14px] items-end text-[10px] leading-tight"} htmlFor={field} title={label}>{label}</Label>
+      <div className="relative">
+        <Input
+          id={field}
+          className={loanDetail ? cn("h-9 rounded-[5px] px-2 text-left sm:h-8", loanEstimateInputTextClassName, suffix && "pr-7", spinnerlessNumberInputClassName) : cn(numericInputClassName, "h-9 rounded-[5px] px-2 sm:h-8", suffix && "pr-7")}
+          type="number"
+          inputMode="decimal"
+          step={step}
+          value={numberInputValue(value)}
+          onFocus={selectInputText}
+          onChange={(event) => onChange(field, event.target.value)}
+        />
+        {suffix ? <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[var(--le-muted)]">{suffix}</span> : null}
+      </div>
     </div>
   );
 }
@@ -1663,14 +2034,14 @@ function CurrencyField({
   };
 }) {
   return (
-    <div className="min-w-0 space-y-1">
-      <Label htmlFor={field}>{label}</Label>
+    <div className="min-w-0 space-y-0.5">
+      <Label className="block text-[10px] leading-none" htmlFor={field}>{label}</Label>
       <div className="relative">
         <Input
           id={field}
           inputMode="decimal"
           value={formatCurrency(value)}
-          className={cn(numericInputClassName, action && "pr-9")}
+          className={cn(numericInputClassName, "h-9 rounded-[5px] px-2 sm:h-8", action && "pr-9")}
           onFocus={selectInputText}
           onChange={(event) => onChange(field, event.target.value.replace(/[^\d.-]/g, ""))}
         />
@@ -1700,19 +2071,19 @@ function ChoiceField<T extends string>({
 }: {
   label: string;
   value: T;
-  options: Array<{ value: T; label: string }>;
+  options: ReadonlyArray<{ value: T; label: string }>;
   onValueChange: (value: T) => void;
 }) {
   return (
-    <div className="min-w-0 space-y-1">
-      <Label>{label}</Label>
+    <div className="min-w-0 space-y-0.5">
+      <Label className={loanDetailLabelClassName} title={label}>{label}</Label>
       <Select value={value} onValueChange={(nextValue) => onValueChange(nextValue as T)}>
-        <SelectTrigger>
+      <SelectTrigger className={cn("h-9 rounded-[5px] px-2 sm:h-8", loanEstimateInputTextClassName)}>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)]">
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value} className="min-h-8 py-1.5 text-[13px] leading-5">
               {option.label}
             </SelectItem>
           ))}
@@ -1726,10 +2097,12 @@ function ReadOnlyInsight({
   insight,
   children,
   className,
+  buttonClassName,
 }: {
   insight?: FieldInsight;
   children: React.ReactNode;
   className?: string;
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1789,7 +2162,7 @@ function ReadOnlyInsight({
     <div className={cn("relative", className)}>
       <button
         type="button"
-        className="group block w-full cursor-pointer rounded-sm text-inherit outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]"
+        className={cn("group block w-full cursor-pointer rounded-sm text-inherit outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]", buttonClassName)}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
@@ -1829,6 +2202,7 @@ function Readout({
   sublabel,
   emphasis = false,
   align = "right",
+  appearance = "default",
   insight,
 }: {
   label: string;
@@ -1837,17 +2211,32 @@ function Readout({
   sublabel?: string;
   emphasis?: boolean;
   align?: "left" | "right";
+  appearance?: "default" | "non-manual";
   insight?: FieldInsight;
 }) {
+  if (appearance === "non-manual") {
+    return (
+      <div className="min-w-0">
+        <Label className={loanDetailLabelClassName} title={label}>{label}</Label>
+        <ReadOnlyInsight insight={insight} buttonClassName={cn(nonManualControlClassName, "flex items-center truncate")}>
+          <AnimatedValue
+            value={value}
+            format={format}
+            className="block truncate text-left text-[13px] font-bold leading-normal text-[var(--le-navy)]"
+          />
+        </ReadOnlyInsight>
+      </div>
+    );
+  }
+
   return (
-    <ReadOnlyInsight
-      insight={insight}
-      className="flex min-h-[50px] flex-col justify-start gap-1 rounded-sm py-0.5 text-left"
-    >
-      <span className="flex items-center gap-1">
-        <Label>{label}</Label>
-      </span>
-      <span className="block">
+    <div className="min-w-0">
+      <Label className={loanDetailLabelClassName} title={label}>{label}</Label>
+      <ReadOnlyInsight
+        insight={insight}
+        className="min-h-8 rounded-sm text-left"
+        buttonClassName="flex min-h-8 flex-col justify-center"
+      >
         <AnimatedValue
           value={value}
           format={format}
@@ -1864,8 +2253,8 @@ function Readout({
             {sublabel}
           </p>
         ) : null}
-      </span>
-    </ReadOnlyInsight>
+      </ReadOnlyInsight>
+    </div>
   );
 }
 
@@ -1878,14 +2267,20 @@ function AnimatedValue({
   format: "currency" | "percent";
   className?: string;
 }) {
-  const displayValue = format === "currency" ? formatCurrency(value) : formatPercent(value);
+  const missing = !Number.isFinite(value);
+  const displayValue = missing
+    ? "Not provided"
+    : format === "currency"
+      ? formatCurrency(value)
+      : formatPercent(value);
   return (
     <motion.span
       key={displayValue}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className={cn("numeric", className)}
+      className={cn("numeric", className, missing && "!font-semibold !text-[var(--le-muted)]")}
+      data-value-state={missing ? "missing" : "available"}
     >
       {displayValue}
     </motion.span>
@@ -2338,7 +2733,7 @@ function Disclaimer({ children, compact = false }: { children: React.ReactNode; 
     <p
       className={cn(
         "mt-4 border-l-4 border-[var(--le-gold)] bg-[var(--le-gold-soft)] text-[length:var(--type-sm)] font-semibold leading-6 text-[var(--le-ink)]",
-        compact ? "px-3 py-2" : "px-4 py-3",
+        compact ? "mt-0 px-3 py-1 text-[length:var(--type-xs)] leading-4" : "px-4 py-3",
       )}
     >
       {children}

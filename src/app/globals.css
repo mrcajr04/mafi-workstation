@@ -227,15 +227,9 @@
   background: var(--le-paper);
 }
 
-.loan-estimate-sidebar-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
 @media (min-width: 80rem) {
-  .loan-estimate-sidebar-layout,
   .loan-estimate-marketing-layout {
-    grid-template-columns: minmax(0, 1fr) 282px;
+    grid-template-columns: minmax(0, 1fr) 304px;
   }
 }
 
@@ -245,7 +239,8 @@
 
 @media print {
   .loan-estimate-traceability-dialog,
-  .loan-estimate-traceability-overlay {
+  .loan-estimate-traceability-overlay,
+  .loan-estimate-closing-costs-dialog {
     display: none !important;
   }
 

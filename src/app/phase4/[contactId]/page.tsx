@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import {
   BorrowerType,
   PropertyType,
@@ -347,11 +348,12 @@ export default async function Phase4DetailPage({
   };
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-3">
+    <div className="mx-auto max-w-[1800px] space-y-3">
       <Link
-        className="inline-flex text-sm font-semibold text-mafi-blue-primary hover:text-mafi-blue-dark"
+        className="inline-flex min-h-8 items-center gap-1.5 text-xs font-bold text-mafi-text-mid transition hover:text-mafi-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30"
         href="/phase4"
       >
+        <ArrowLeft className="size-3.5" aria-hidden="true" />
         Back to Pipeline
       </Link>
       <LoanEstimateBuilder
