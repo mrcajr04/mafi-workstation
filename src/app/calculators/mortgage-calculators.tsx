@@ -1,470 +1,103 @@
-"use client";
-
-import type { ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  currencyInputToNumber,
-  formatCurrencyDisplay,
-  formatCurrencyDisplayWithCents,
-  formatCurrencyInput,
-  formatRatioPercentDisplay,
-} from "@/lib/currency";
-import { cn } from "@/lib/utils";
+  ArrowRight,
+  Calculator,
+  ChartNoAxesColumnIncreasing,
+  House,
+  Landmark,
+  RefreshCw,
+  Scale,
+} from "lucide-react";
 
-type CalculatorTab = "standard" | "amortization" | "ltv" | "dti";
-
-type SharedMortgageInputProps = {
-  interestRate: string;
-  loanAmount: string;
-  loanTerm: string;
-  setInterestRate: (value: string) => void;
-  setLoanAmount: (value: string) => void;
-  setLoanTerm: (value: string) => void;
+type CalculatorOption = {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  accent: string;
+  iconStyle: string;
+  href?: string;
 };
 
-const tabs: { id: CalculatorTab; label: string }[] = [
-  { id: "standard", label: "Standard" },
-  { id: "amortization", label: "Amortization" },
-  { id: "ltv", label: "LTV" },
-  { id: "dti", label: "DTI" },
+const calculatorOptions: CalculatorOption[] = [
+  {
+    title: "Payment Calculator",
+    description: "Estimate principal, interest, taxes, insurance, and monthly housing costs.",
+    icon: Calculator,
+    accent: "group-hover:border-t-mafi-blue-primary",
+    iconStyle: "bg-blue-50 text-mafi-blue-primary ring-blue-100",
+    href: "/calculators/payment",
+  },
+  {
+    title: "Refinance Calculator",
+    description: "Compare current loan terms with a potential refinance scenario.",
+    icon: RefreshCw,
+    accent: "group-hover:border-t-teal-700",
+    iconStyle: "bg-teal-50 text-teal-700 ring-teal-100",
+    href: "/calculators/refinance",
+  },
+  {
+    title: "How Much Can I Afford?",
+    description: "Explore a practical purchase range based on income, debts, and funds.",
+    icon: House,
+    accent: "group-hover:border-t-mafi-gold-dark",
+    iconStyle: "bg-amber-50 text-mafi-gold-dark ring-amber-100",
+  },
+  {
+    title: "Rent Or Buy?",
+    description: "Compare the longer-term financial impact of renting versus buying.",
+    icon: Scale,
+    accent: "group-hover:border-t-slate-600",
+    iconStyle: "bg-slate-100 text-slate-700 ring-slate-200",
+  },
+  {
+    title: "Amortization Calculator",
+    description: "Review how principal, interest, and loan balance change over time.",
+    icon: ChartNoAxesColumnIncreasing,
+    accent: "group-hover:border-t-cyan-700",
+    iconStyle: "bg-cyan-50 text-cyan-800 ring-cyan-100",
+  },
+  {
+    title: "Debt-To-Income Calculator",
+    description: "Estimate front-end and back-end ratios from income and obligations.",
+    icon: Landmark,
+    accent: "group-hover:border-t-emerald-700",
+    iconStyle: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  },
 ];
 
-function parseNumber(value: string) {
-  const parsed = Number(value.replace(/[$,%\s,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatInterestRateInput(value: string) {
-  const parsed = parseNumber(value);
-
-  return parsed ? parsed.toFixed(3) : "";
-}
-
-function monthlyPrincipalAndInterest(
-  loanAmount: number,
-  annualRate: number,
-  termYears: number,
-) {
-  if (!loanAmount || !termYears) {
-    return 0;
-  }
-
-  const monthlyRate = annualRate / 100 / 12;
-  const totalPayments = termYears * 12;
-
-  if (!monthlyRate) {
-    return loanAmount / totalPayments;
-  }
-
-  return (
-    loanAmount *
-    ((monthlyRate * (1 + monthlyRate) ** totalPayments) /
-      ((1 + monthlyRate) ** totalPayments - 1))
-  );
-}
-
 export function MortgageCalculators() {
-  const [activeTab, setActiveTab] = useState<CalculatorTab>("standard");
-  const [loanAmount, setLoanAmount] = useState("");
-  const [interestRate, setInterestRate] = useState("");
-  const [loanTerm, setLoanTerm] = useState("30");
-  const sharedMortgageInputs = {
-    interestRate,
-    loanAmount,
-    loanTerm,
-    setInterestRate,
-    setLoanAmount,
-    setLoanTerm,
-  };
-
   return (
-    <Card className="border-mafi-border bg-mafi-bg-white">
-      <CardHeader className="border-b border-mafi-border bg-mafi-bg-light">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {tabs.map((tab) => (
-            <button
-              className={cn(
-                "min-h-10 shrink-0 rounded-md px-4 text-sm font-semibold transition",
-                activeTab === tab.id
-                  ? "bg-mafi-blue-primary text-white"
-                  : "bg-white text-mafi-text-dark hover:bg-mafi-bg-lighter hover:text-mafi-blue-primary",
-              )}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              type="button"
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 sm:p-6">
-        <CalculatorPanel active={activeTab === "standard"}>
-          <StandardCalculator {...sharedMortgageInputs} />
-        </CalculatorPanel>
-        <CalculatorPanel active={activeTab === "amortization"}>
-          <AmortizationCalculator {...sharedMortgageInputs} />
-        </CalculatorPanel>
-        <CalculatorPanel active={activeTab === "ltv"}>
-          <LtvCalculator />
-        </CalculatorPanel>
-        <CalculatorPanel active={activeTab === "dti"}>
-          <DtiCalculator />
-        </CalculatorPanel>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CalculatorPanel({
-  active,
-  children,
-}: {
-  active: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn(!active && "hidden")} hidden={!active}>
-      {children}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {calculatorOptions.map((calculator) => (
+        <CalculatorTile calculator={calculator} key={calculator.title} />
+      ))}
     </div>
   );
 }
 
-function StandardCalculator({
-  interestRate,
-  loanAmount,
-  loanTerm,
-  setInterestRate,
-  setLoanAmount,
-  setLoanTerm,
-}: SharedMortgageInputProps) {
-  const [propertyTax, setPropertyTax] = useState("");
-  const [insurance, setInsurance] = useState("");
-  const [hoa, setHoa] = useState("");
-  const principalAndInterest = monthlyPrincipalAndInterest(
-    currencyInputToNumber(loanAmount),
-    parseNumber(interestRate),
-    parseNumber(loanTerm),
+function CalculatorTile({ calculator }: { calculator: CalculatorOption }) {
+  const Icon = calculator.icon;
+  const content = (
+    <>
+      <span className={`inline-flex h-11 w-11 items-center justify-center rounded-md ring-1 transition duration-200 group-hover:-translate-y-0.5 group-hover:scale-105 ${calculator.iconStyle}`}><Icon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} /></span>
+      <span className="mt-5 block text-lg font-bold text-mafi-text-dark transition-colors group-hover:text-mafi-blue-primary">{calculator.title}</span>
+      <span className="mt-2 block text-sm leading-6 text-mafi-text-mid">{calculator.description}</span>
+      <span className="mt-auto flex items-center justify-between pt-5 text-xs font-bold uppercase tracking-[0.12em] text-mafi-blue-primary">Open calculator<ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" /></span>
+    </>
   );
-  const totalMonthly =
-    principalAndInterest +
-    currencyInputToNumber(propertyTax) / 12 +
-    currencyInputToNumber(insurance) / 12 +
-    currencyInputToNumber(hoa);
+  const className = `group relative flex min-h-52 w-full flex-col overflow-hidden rounded-md border border-mafi-border border-t-2 border-t-transparent bg-white p-5 text-left shadow-sm transition duration-200 ease-out hover:-translate-y-1 hover:border-mafi-blue-primary/30 hover:shadow-[0_14px_34px_rgba(16,45,75,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary focus-visible:ring-offset-2 ${calculator.accent}`;
 
-  return (
-    <CalculatorShell
-      description="Estimate principal, interest, and total monthly payment."
-      title="Standard Calculator"
+  return calculator.href ? (
+    <Link aria-label={`Open ${calculator.title}`} className={className} href={calculator.href}>{content}</Link>
+  ) : (
+    <button
+      aria-label={`${calculator.title}. Calculator coming soon.`}
+      className={className}
+      title="Calculator coming soon"
+      type="button"
     >
-      <MortgageInputGrid>
-        <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
-        </Field>
-        <Field label="Interest Rate (%)">
-          <Input
-            value={interestRate}
-            onBlur={(event) => setInterestRate(formatInterestRateInput(event.target.value))}
-            onChange={(event) => setInterestRate(event.target.value)}
-          />
-        </Field>
-        <Field label="Loan Term (years)">
-          <Input value={loanTerm} onChange={(event) => setLoanTerm(event.target.value)} />
-        </Field>
-        <Field label="Property Tax (annual)">
-          <Input value={propertyTax} onChange={(event) => setPropertyTax(formatCurrencyInput(event.target.value))} />
-        </Field>
-        <Field label="Home Insurance (annual)">
-          <Input value={insurance} onChange={(event) => setInsurance(formatCurrencyInput(event.target.value))} />
-        </Field>
-        <Field label="HOA (monthly)">
-          <Input value={hoa} onChange={(event) => setHoa(formatCurrencyInput(event.target.value))} />
-        </Field>
-      </MortgageInputGrid>
-      <OutputGrid>
-        <Output label="Monthly Principal & Interest" value={formatCurrencyDisplayWithCents(principalAndInterest)} />
-        <Output label="Estimated PITIA-style Payment" value={formatCurrencyDisplayWithCents(totalMonthly)} />
-      </OutputGrid>
-    </CalculatorShell>
-  );
-}
-
-function AmortizationCalculator({
-  interestRate,
-  loanAmount,
-  loanTerm,
-  setInterestRate,
-  setLoanAmount,
-  setLoanTerm,
-}: SharedMortgageInputProps) {
-  const [showFullSchedule, setShowFullSchedule] = useState(false);
-  const schedule = useMemo(
-    () =>
-      buildAmortizationSchedule(
-        currencyInputToNumber(loanAmount),
-        parseNumber(interestRate),
-        parseNumber(loanTerm),
-      ),
-    [interestRate, loanAmount, loanTerm],
-  );
-  const visibleSchedule = showFullSchedule ? schedule : schedule.slice(0, 12);
-
-  return (
-    <CalculatorShell
-      description="Review principal, interest, and balance by payment."
-      title="Amortization Calculator"
-    >
-      <MortgageInputGrid>
-        <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
-        </Field>
-        <Field label="Interest Rate (%)">
-          <Input
-            value={interestRate}
-            onBlur={(event) => setInterestRate(formatInterestRateInput(event.target.value))}
-            onChange={(event) => setInterestRate(event.target.value)}
-          />
-        </Field>
-        <Field label="Loan Term (years)">
-          <Input value={loanTerm} onChange={(event) => setLoanTerm(event.target.value)} />
-        </Field>
-      </MortgageInputGrid>
-      <div className="overflow-x-auto rounded-md border border-mafi-border">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-mafi-bg-lighter text-mafi-text-dark">
-            <tr>
-              <th className="px-3 py-2">Payment</th>
-              <th className="px-3 py-2">Principal</th>
-              <th className="px-3 py-2">Interest</th>
-              <th className="px-3 py-2">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleSchedule.length ? (
-              visibleSchedule.map((row) => (
-                <tr className="border-t border-mafi-border" key={row.paymentNumber}>
-                  <td className="px-3 py-2">{row.paymentNumber}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.principalPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.interestPaid)}</td>
-                  <td className="px-3 py-2">{formatCurrencyDisplayWithCents(row.remainingBalance)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="px-3 py-8 text-center text-mafi-text-light" colSpan={4}>
-                  Enter loan details to view the schedule.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      {schedule.length > 12 ? (
-        <Button
-          onClick={() => setShowFullSchedule((current) => !current)}
-          type="button"
-          variant="outline"
-        >
-          {showFullSchedule ? "Show first 12 months" : "Show full schedule"}
-        </Button>
-      ) : null}
-    </CalculatorShell>
-  );
-}
-
-function LtvCalculator() {
-  const [propertyValue, setPropertyValue] = useState("");
-  const [loanAmount, setLoanAmount] = useState("");
-  const parsedPropertyValue = currencyInputToNumber(propertyValue);
-  const parsedLoanAmount = currencyInputToNumber(loanAmount);
-  const ltv =
-    parsedPropertyValue && parsedLoanAmount
-      ? (parsedLoanAmount / parsedPropertyValue) * 100
-      : 0;
-
-  return (
-    <CalculatorShell
-      description="Calculate loan-to-value based on property value and loan amount."
-      title="LTV Calculator"
-    >
-      <MortgageInputGrid>
-        <Field label="Property Value">
-          <Input value={propertyValue} onChange={(event) => setPropertyValue(formatCurrencyInput(event.target.value))} />
-        </Field>
-        <Field label="Loan Amount">
-          <Input value={loanAmount} onChange={(event) => setLoanAmount(formatCurrencyInput(event.target.value))} />
-        </Field>
-      </MortgageInputGrid>
-      <OutputGrid>
-        <Output label="LTV" value={parsedPropertyValue ? formatRatioPercentDisplay(ltv) : "—"} />
-      </OutputGrid>
-    </CalculatorShell>
-  );
-}
-
-function DtiCalculator() {
-  const [grossIncome, setGrossIncome] = useState("");
-  const [debts, setDebts] = useState([""]);
-  const totalDebts = debts.reduce((sum, debt) => sum + currencyInputToNumber(debt), 0);
-  const income = currencyInputToNumber(grossIncome);
-  const dti = income ? (totalDebts / income) * 100 : 0;
-
-  return (
-    <CalculatorShell
-      description="Calculate debt-to-income from monthly income and monthly debts."
-      title="DTI Calculator"
-    >
-      <MortgageInputGrid>
-        <Field label="Monthly Gross Income">
-          <Input value={grossIncome} onChange={(event) => setGrossIncome(formatCurrencyInput(event.target.value))} />
-        </Field>
-      </MortgageInputGrid>
-      <div className="rounded-md border border-mafi-border bg-mafi-bg-off p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-mafi-text-dark">
-            Monthly Debt Payments
-          </h3>
-          <Button
-            onClick={() =>
-              setDebts((current) => [...current, ""])
-            }
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Plus className="mr-1 size-4" />
-            Add debt
-          </Button>
-        </div>
-        <div className="mt-4 space-y-3">
-          {debts.map((debt, index) => (
-            <div className="flex gap-2" key={`debt-${index}`}>
-              <Input
-                aria-label="Monthly debt payment"
-                value={debt}
-                onChange={(event) =>
-                  setDebts((current) =>
-                    current.map((currentDebt, currentIndex) =>
-                      currentIndex === index ? formatCurrencyInput(event.target.value) : currentDebt,
-                    ),
-                  )
-                }
-              />
-              <Button
-                aria-label="Remove debt"
-                onClick={() =>
-                  setDebts((current) =>
-                    current.filter((_, currentIndex) => currentIndex !== index),
-                  )
-                }
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-      <OutputGrid>
-        <Output label="Total Monthly Debts" value={formatCurrencyDisplay(totalDebts)} />
-        <Output label="DTI" value={income ? formatRatioPercentDisplay(dti) : "—"} />
-      </OutputGrid>
-    </CalculatorShell>
-  );
-}
-
-function buildAmortizationSchedule(
-  loanAmount: number,
-  annualRate: number,
-  termYears: number,
-) {
-  if (!loanAmount || !termYears) {
-    return [];
-  }
-
-  const monthlyPayment = monthlyPrincipalAndInterest(
-    loanAmount,
-    annualRate,
-    termYears,
-  );
-  const monthlyRate = annualRate / 100 / 12;
-  let balance = loanAmount;
-
-  return Array.from({ length: termYears * 12 }, (_, index) => {
-    const interestPaid = balance * monthlyRate;
-    const principalPaid = Math.min(monthlyPayment - interestPaid, balance);
-    balance = Math.max(balance - principalPaid, 0);
-
-    return {
-      interestPaid,
-      paymentNumber: index + 1,
-      principalPaid,
-      remainingBalance: balance,
-    };
-  });
-}
-
-function CalculatorShell({
-  children,
-  description,
-  title,
-}: {
-  children: React.ReactNode;
-  description: string;
-  title: string;
-}) {
-  return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-mafi-blue-primary">{title}</h2>
-        <p className="mt-1 text-sm text-mafi-text-mid">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function MortgageInputGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-4 md:grid-cols-3">{children}</div>;
-}
-
-function Field({
-  children,
-  label,
-}: {
-  children: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function OutputGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-4 md:grid-cols-2">{children}</div>;
-}
-
-function Output({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-mafi-border bg-mafi-bg-light p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-mafi-text-mid">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-bold text-mafi-blue-primary">{value}</p>
-    </div>
+      {content}
+    </button>
   );
 }

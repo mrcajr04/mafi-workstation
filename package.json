@@ -13,7 +13,9 @@
     "test:loan-estimate-calc": "tsx scripts/test-loan-estimate-calc.ts",
     "test:loan-estimate-init": "tsx scripts/test-loan-estimate-initialization.ts",
     "test:section-edit-state": "tsx scripts/test-section-edit-state-race.ts",
-    "test:insurance-determination": "tsx scripts/test-insurance-determination.ts"
+    "test:insurance-determination": "tsx scripts/test-insurance-determination.ts",
+    "test:payment-calculator": "tsx scripts/test-payment-calculator.ts",
+    "test:refinance-calculator": "tsx scripts/test-refinance-calculator.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
