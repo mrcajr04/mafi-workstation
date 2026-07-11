@@ -67,6 +67,11 @@ type StringField = {
   [K in keyof LoanState]: LoanState[K] extends string ? K : never;
 }[keyof LoanState];
 type LoanResults = ReturnType<typeof calculateLoanEstimate>;
+type ReadinessIssue = {
+  label: string;
+  targetId: string;
+  editLoanDetails?: boolean;
+};
 type FieldInsight = {
   title: string;
   body: string;
@@ -304,6 +309,7 @@ export function LoanEstimateRedesign({
 }: LoanEstimateRedesignProps) {
   const [state, setState] = useState<LoanState>(initialState);
   const [activeTab, setActiveTab] = useState<TabId>("main");
+  const [loanDetailsEditing, setLoanDetailsEditing] = useState(false);
   const [liveMessage, setLiveMessage] = useState("");
   const results = useMemo(() => calculateLoanEstimate(state), [state]);
   const insights = useMemo(() => formulaInsightMap(state, results), [state, results]);
@@ -354,6 +360,20 @@ export function LoanEstimateRedesign({
 
   function updateChoice<K extends StringField>(field: K, value: LoanState[K]) {
     setState((current) => ({ ...current, [field]: value }));
+  }
+
+  function navigateToReadinessIssue(issue: ReadinessIssue) {
+    setActiveTab("main");
+    if (issue.editLoanDetails) setLoanDetailsEditing(true);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(issue.targetId);
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.focus({ preventScroll: true });
+      });
+    });
   }
 
   function resetToPulledForwardValues() {
@@ -487,7 +507,7 @@ export function LoanEstimateRedesign({
         <div
           className={cn(
             "items-start gap-3.5",
-            activeTab !== "marketing" && activeTab !== "legal" && "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_318px]",
+            activeTab !== "marketing" && activeTab !== "legal" && "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_370px]",
           )}
         >
           <AnimatePresence mode="wait">
@@ -506,6 +526,8 @@ export function LoanEstimateRedesign({
                   insights={insights}
                   updateNumber={updateNumber}
                   updateChoice={updateChoice}
+                  loanDetailsEditing={loanDetailsEditing}
+                  setLoanDetailsEditing={setLoanDetailsEditing}
                 />
               ) : null}
               {activeTab === "costs" ? <SummaryCostsTab state={state} results={results} /> : null}
@@ -527,8 +549,8 @@ export function LoanEstimateRedesign({
               state={state}
               results={results}
               traceability={traceability}
-              generatedAt={generatedAt}
               stickyOffset={stickyHeaderHeight}
+              onNavigateToIssue={navigateToReadinessIssue}
             />
           ) : null}
         </div>
@@ -608,12 +630,14 @@ function IdentityMetric({ label, value, note }: { label: string; value: string; 
 function LoanDetailField({
   source,
   children,
+  id,
 }: {
   source: string;
   children: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <div className="min-h-[59px] min-w-0 border-b border-r border-slate-200 bg-white px-2.5 py-1.5">
+    <div id={id} tabIndex={id ? -1 : undefined} className="min-h-[59px] min-w-0 border-b border-r border-slate-200 bg-white px-2.5 py-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--le-blue)]">
       {children}
       <div className="mt-1 flex items-center gap-2">
         <span className="truncate text-[9px] leading-none text-slate-500">{source}</span>
@@ -696,22 +720,20 @@ function CompactLedgerInput({
   );
 }
 
-function LedgerTotalRow({
+function LedgerTotalCard({
   label,
   amount,
   insight,
-  secondary = false,
 }: {
   label: string;
   amount: number;
   insight?: FieldInsight;
-  secondary?: boolean;
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 border-b border-slate-200 px-2.5 py-1.5 last:border-b-0", secondary ? "bg-slate-50" : "bg-[var(--le-gold-soft)]")}>
-      <span className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">{label}</span>
-      <ReadOnlyInsight insight={insight} className="rounded-sm">
-        <AnimatedValue value={amount} format="currency" className="numeric text-[calc(var(--type-md)+1px)] font-black text-[var(--le-navy)]" />
+    <div className="flex h-[88px] flex-col justify-center rounded-[8px] border border-slate-200 bg-[var(--le-navy-soft)] px-4 py-3">
+      <span className="text-[10px] font-black uppercase tracking-wide text-[var(--le-navy)]">{label}</span>
+      <ReadOnlyInsight insight={insight} className="w-full rounded-sm" buttonClassName="text-center">
+        <AnimatedValue value={amount} format="currency" className="numeric mt-1 block text-[length:var(--type-xl)] font-black text-[var(--le-navy)]" />
       </ReadOnlyInsight>
     </div>
   );
@@ -727,10 +749,10 @@ function PaymentRow({
   input?: React.ReactNode;
 }) {
   return (
-    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_minmax(100px,0.8fr)_auto] items-center gap-3 border-b border-slate-200 px-2.5 py-1 last:border-b-0">
+    <div className="grid min-h-[55px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 px-2.5 py-2.5 last:border-b-0 sm:grid-cols-[minmax(130px,1fr)_minmax(170px,220px)_minmax(72px,92px)] xl:min-h-0">
       <span className="truncate text-[12px] font-bold text-[var(--le-navy)]">{label}</span>
-      <span className="min-w-0">{input}</span>
-      <AnimatedValue value={amount} format="currency" className="numeric text-[12px] font-black text-[var(--le-navy)]" />
+      <span className={cn("order-3 col-span-2 min-w-0 sm:order-none sm:col-span-1", !input && "hidden sm:block")}>{input}</span>
+      <AnimatedValue value={amount} format="currency" className="numeric w-full text-right text-[12px] font-black text-[var(--le-navy)]" />
     </div>
   );
 }
@@ -805,15 +827,18 @@ function MainTab({
   insights,
   updateNumber,
   updateChoice,
+  loanDetailsEditing,
+  setLoanDetailsEditing,
 }: {
   state: LoanState;
   results: LoanResults;
   insights: Record<string, FieldInsight>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
+  loanDetailsEditing: boolean;
+  setLoanDetailsEditing: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const [closingCostsOpen, setClosingCostsOpen] = useState(false);
-  const [loanDetailsEditing, setLoanDetailsEditing] = useState(false);
   const closingCostsSnapshotRef = useRef<ClosingCostSnapshot | null>(null);
   const closingCostsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closingCostsDialogRef = useRef<HTMLDivElement | null>(null);
@@ -927,7 +952,7 @@ function MainTab({
         flush
       >
         <div className="grid border-l border-t border-slate-200 md:grid-cols-2 xl:grid-cols-3">
-          <LoanDetailField source="Stage 2 · Property">
+          <LoanDetailField id="purchasePrice-readiness" source="Stage 2 · Property">
             <Readout label={basisLabel} value={state.purchasePrice} align="left" appearance="non-manual" insight={sourceInsight(basisLabel, "Stage 2 property")} />
           </LoanDetailField>
           <LoanDetailField source="Stage 3 · Scenario">
@@ -948,12 +973,12 @@ function MainTab({
           </LoanDetailField>
           <LoanDetailField source="Stage 3 · Scenario">
             {loanDetailsEditing ? (
-              <ChoiceField label="Loan Program" value={state.program} options={loanPrograms} onValueChange={(value) => updateChoice("program", value)} />
+              <ChoiceField id="program" label="Loan Program" value={state.program} options={loanPrograms} onValueChange={(value) => updateChoice("program", value)} />
             ) : (
               <StaticLoanField label="Loan Program" value={choiceLabel(loanPrograms, state.program)} />
             )}
           </LoanDetailField>
-          <LoanDetailField source="Stage 3 · Scenario">
+          <LoanDetailField id="rate-readiness" source="Stage 3 · Scenario">
             <Readout label="Interest Rate" value={state.rate} format="percent" align="left" appearance="non-manual" insight={sourceInsight("Interest Rate", "Stage 3 scenario")} />
           </LoanDetailField>
           <LoanDetailField source="Stage 3 · Scenario">
@@ -964,35 +989,35 @@ function MainTab({
           </LoanDetailField>
           <LoanDetailField source="Stage 2 · Property">
             {loanDetailsEditing ? (
-              <ChoiceField label="Property Class" value={state.sfrOrCondo} options={propertyClassOptions} onValueChange={(value) => updateChoice("sfrOrCondo", value)} />
+              <ChoiceField id="sfrOrCondo" label="Property Class" value={state.sfrOrCondo} options={propertyClassOptions} onValueChange={(value) => updateChoice("sfrOrCondo", value)} />
             ) : (
               <StaticLoanField label="Property Class" value={choiceLabel(propertyClassOptions, state.sfrOrCondo)} />
             )}
           </LoanDetailField>
           <LoanDetailField source="Stage 2 · Property">
             {loanDetailsEditing ? (
-              <ChoiceField label="Property Type" value={state.propertyType} options={propertyTypeOptions} onValueChange={(value) => updateChoice("propertyType", value)} />
+              <ChoiceField id="propertyType" label="Property Type" value={state.propertyType} options={propertyTypeOptions} onValueChange={(value) => updateChoice("propertyType", value)} />
             ) : (
               <StaticLoanField label="Property Type" value={choiceLabel(propertyTypeOptions, state.propertyType)} />
             )}
           </LoanDetailField>
           <LoanDetailField source="Stage 1 · Intake">
             {loanDetailsEditing ? (
-              <ChoiceField label="Occupancy" value={state.occupancy} options={occupancyOptions} onValueChange={(value) => updateChoice("occupancy", value)} />
+              <ChoiceField id="occupancy" label="Occupancy" value={state.occupancy} options={occupancyOptions} onValueChange={(value) => updateChoice("occupancy", value)} />
             ) : (
               <StaticLoanField label="Occupancy" value={choiceLabel(occupancyOptions, state.occupancy)} />
             )}
           </LoanDetailField>
           <LoanDetailField source="Stage 3 · Scenario">
             {loanDetailsEditing ? (
-              <ChoiceField label="Loan Category" value={state.foreignOrDomestic} options={loanCategoryOptions} onValueChange={(value) => updateChoice("foreignOrDomestic", value)} />
+              <ChoiceField id="foreignOrDomestic" label="Loan Category" value={state.foreignOrDomestic} options={loanCategoryOptions} onValueChange={(value) => updateChoice("foreignOrDomestic", value)} />
             ) : (
               <StaticLoanField label="Loan Category" value={choiceLabel(loanCategoryOptions, state.foreignOrDomestic)} />
             )}
           </LoanDetailField>
           <LoanDetailField source="Stage 2 · Property">
             {loanDetailsEditing ? (
-              <ChoiceField label="Property Condition" value={state.newOrUsed} options={propertyConditionOptions} onValueChange={(value) => updateChoice("newOrUsed", value)} />
+              <ChoiceField id="newOrUsed" label="Property Condition" value={state.newOrUsed} options={propertyConditionOptions} onValueChange={(value) => updateChoice("newOrUsed", value)} />
             ) : (
               <StaticLoanField label="Property Condition" value={choiceLabel(propertyConditionOptions, state.newOrUsed)} />
             )}
@@ -1000,6 +1025,7 @@ function MainTab({
           <LoanDetailField source="Manual review">
             {loanDetailsEditing ? (
               <ChoiceField
+                id="developFee"
                 label="Developer Fee Applies"
                 value={state.developFee}
                 options={[
@@ -1076,8 +1102,8 @@ function MainTab({
           )
         : null}
 
-      <div className="grid items-stretch overflow-hidden rounded-[5px] border border-[var(--le-line)] bg-white shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:grid-cols-2">
-        <Panel title="Pre-Paid Items" icon={PiggyBank} showComputedBadge={false} flush bare className="border-b border-[var(--le-line)] xl:border-b-0 xl:border-r">
+      <div className="grid items-stretch gap-3.5 xl:grid-cols-2">
+        <Panel title="Pre-Paid Items" icon={PiggyBank} showComputedBadge={false} flush className="h-full">
           <div className="overflow-hidden">
             <PrepaidLedgerRow
               label="Taxes Escrowed"
@@ -1123,33 +1149,37 @@ function MainTab({
               amount={results.capitalContribution}
               insight={insights["Capital Contribution"]}
             />
-            <LedgerTotalRow label="Total Pre-Paid Items" amount={results.totalPrepaid} insight={insights["Total Pre-Paid Items"]} />
-            <LedgerTotalRow label="Closing Costs + Pre-Paid Items" amount={results.totalClosingAndPrepaid} secondary insight={insights["Closing + Pre-Paid"]} />
+            <div className="grid gap-3 bg-white p-2.5 sm:grid-cols-2 xl:h-[108px]">
+              <LedgerTotalCard label="Total Pre-Paid Items" amount={results.totalPrepaid} insight={insights["Total Pre-Paid Items"]} />
+              <LedgerTotalCard label="Closing + Pre-Paid" amount={results.totalClosingAndPrepaid} insight={insights["Closing + Pre-Paid"]} />
+            </div>
           </div>
         </Panel>
 
-        <Panel title="Monthly Payment" icon={BadgeDollarSign} showComputedBadge={false} flush bare>
-          <div>
-            <div className="overflow-hidden">
-              <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
-              <PaymentRow label="Property Taxes" amount={results.monthlyPropertyTax} />
+        <Panel title="Monthly Payment" icon={BadgeDollarSign} showComputedBadge={false} flush className="flex h-full flex-col" contentClassName="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col">
+            <div className="overflow-hidden xl:grid xl:flex-1 xl:grid-rows-5">
               <PaymentRow
                 label="Hazard Insurance"
                 amount={results.monthlyHazard}
                 input={<CompactLedgerInput label="Annual" ariaLabel="Hazard insurance annual" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />}
               />
-              <PaymentRow label="Flood / HO6" amount={results.monthlyFlood} />
               <PaymentRow
                 label="HOA / Condo Fee"
                 amount={results.monthlyHOA}
                 input={<CompactLedgerInput label="Monthly" ariaLabel="HOA or condo fee monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />}
               />
+              <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
+              <PaymentRow label="Property Taxes" amount={results.monthlyPropertyTax} />
+              <PaymentRow label="Flood / HO6" amount={results.monthlyFlood} />
             </div>
-            <div className="m-2.5 rounded-[5px] border border-slate-200 bg-slate-50 px-3 py-3.5">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Total Monthly Payment</p>
-              <ReadOnlyInsight insight={insights["Total Monthly Payment"]} className="rounded-sm">
-                <AnimatedValue value={results.totalMonthlyPayment} format="currency" className="numeric mt-1 block text-[length:var(--type-2xl)] font-black text-[var(--le-navy)]" />
-              </ReadOnlyInsight>
+            <div className="bg-white p-2.5 xl:h-[108px]">
+              <div className="flex h-[88px] flex-col justify-center rounded-[8px] border border-slate-200 bg-[var(--le-navy-soft)] px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-[var(--le-navy)]">Total Monthly Payment</p>
+                <ReadOnlyInsight insight={insights["Total Monthly Payment"]} className="w-full rounded-sm" buttonClassName="text-center">
+                  <AnimatedValue value={results.totalMonthlyPayment} format="currency" className="numeric mt-1 block text-[length:var(--type-xl)] font-black text-[var(--le-navy)]" />
+                </ReadOnlyInsight>
+              </div>
             </div>
           </div>
         </Panel>
@@ -1196,7 +1226,7 @@ function MainTab({
                     <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
                     <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
                   </div>
-                  <Button ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
+                  <Button id="closing-costs-review-button" ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
                     <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
                     Review / Edit
                   </Button>
@@ -1777,6 +1807,7 @@ function Panel({
   flush = false,
   bare = false,
   className,
+  contentClassName,
 }: {
   title: string;
   description?: string;
@@ -1788,6 +1819,7 @@ function Panel({
   flush?: boolean;
   bare?: boolean;
   className?: string;
+  contentClassName?: string;
 }) {
   return (
     <motion.section
@@ -1811,7 +1843,7 @@ function Panel({
           </Badge>
         ) : null}
       </div>
-      <div className={cn(!flush && (dense ? "p-2" : "p-2.5"))}>{children}</div>
+      <div className={cn(!flush && (dense ? "p-2" : "p-2.5"), contentClassName)}>{children}</div>
     </motion.section>
   );
 }
@@ -1820,57 +1852,46 @@ function LoanSummarySidebar({
   state,
   results,
   traceability,
-  generatedAt,
   stickyOffset = 112,
+  onNavigateToIssue,
 }: {
   state: LoanState;
   results: LoanResults;
   traceability: LoanEstimateTraceability;
-  generatedAt?: string;
   stickyOffset?: number;
+  onNavigateToIssue: (issue: ReadinessIssue) => void;
 }) {
-  const missingItems = [
-    !Number.isFinite(state.purchasePrice) ? valueBasisLabel(state) : null,
-    !Number.isFinite(state.downPaymentPct) ? `${equityLabel(state)} percentage` : null,
-    !Number.isFinite(state.rate) ? "Interest rate" : null,
-    !state.program.trim() ? "Loan program" : null,
-  ].filter((item): item is string => Boolean(item));
-  const missingPropertyItems = [
-    !state.propertyType ? "property type" : null,
-    !state.occupancy ? "occupancy" : null,
-    !state.sfrOrCondo ? "property class" : null,
-  ].filter((item): item is string => Boolean(item));
   const developerFeeConfirmed = state.developFee === "Yes" || state.developFee === "No";
   const closingCostsAvailable = Number.isFinite(results.totalClosingCosts) && results.totalClosingCosts > 0;
-  const readinessChecks = [
-    {
-      ready: missingItems.length === 0,
-      label: missingItems.length === 0
-        ? "Required loan terms are available."
-        : `Missing loan terms: ${missingItems.join(", ")}.`,
-    },
-    {
-      ready: missingPropertyItems.length === 0,
-      label: missingPropertyItems.length === 0
-        ? "Property details are available."
-        : `Missing property details: ${missingPropertyItems.join(", ")}.`,
-    },
-    {
-      ready: developerFeeConfirmed,
-      label: developerFeeConfirmed
-        ? "Developer fee applicability is confirmed."
-        : "Developer fee applicability needs review.",
-    },
-    {
-      ready: closingCostsAvailable,
-      label: closingCostsAvailable
-        ? "Closing-cost estimate is available."
-        : "Closing-cost estimate is missing.",
-    },
-  ];
-  const unresolvedCount = readinessChecks.filter((check) => !check.ready).length;
-  const readinessScore = Math.round(((readinessChecks.length - unresolvedCount) / readinessChecks.length) * 100);
-  const readinessComplete = unresolvedCount === 0;
+  const requiredLoanInputsPresent = Number.isFinite(state.purchasePrice) && Number.isFinite(state.downPaymentPct);
+  const blockingIssues = [
+    !Number.isFinite(state.purchasePrice) || state.purchasePrice <= 0 ? { label: `${valueBasisLabel(state)} is missing.`, targetId: "purchasePrice-readiness" } : null,
+    !Number.isFinite(state.downPaymentPct) ? { label: `${equityLabel(state)} percentage is missing.`, targetId: "downPaymentPct", editLoanDetails: true } : null,
+    requiredLoanInputsPresent && (!Number.isFinite(results.loanAmount) || results.loanAmount <= 0) ? { label: "Loan amount must be greater than zero.", targetId: "downPaymentPct", editLoanDetails: true } : null,
+    !Number.isFinite(state.rate) || state.rate <= 0 ? { label: "Interest rate is missing.", targetId: "rate-readiness" } : null,
+    !state.program.trim() ? { label: "Loan program is missing.", targetId: "program", editLoanDetails: true } : null,
+    !state.propertyType ? { label: "Property type is missing.", targetId: "propertyType", editLoanDetails: true } : null,
+    !state.occupancy ? { label: "Occupancy is missing.", targetId: "occupancy", editLoanDetails: true } : null,
+    !state.sfrOrCondo ? { label: "Property class is missing.", targetId: "sfrOrCondo", editLoanDetails: true } : null,
+    !closingCostsAvailable ? { label: "Required closing-cost values are missing.", targetId: "closing-costs-review-button" } : null,
+  ].filter((item): item is ReadinessIssue => Boolean(item));
+  const warningIssues = [
+    !developerFeeConfirmed ? { label: "Developer fee applicability is not confirmed.", targetId: "developFee", editLoanDetails: true } : null,
+    !Number.isFinite(state.reserveMonths) ? { label: "Reserve months are not determined.", targetId: "reserveMonths" } : null,
+    !Number.isFinite(state.sellerCredit) ? { label: "Seller credit has not been reviewed.", targetId: "sellerCredit" } : null,
+    !Number.isFinite(state.otherCredits) ? { label: "Other credits have not been reviewed.", targetId: "otherCredits" } : null,
+    !Number.isFinite(state.hazardInsAnnual) ? { label: "Hazard insurance annual premium is missing.", targetId: "ledger-hazardInsAnnual" } : null,
+    !Number.isFinite(state.floodHO6Annual) ? { label: "Flood / HO6 annual premium is missing.", targetId: "ledger-floodHO6Annual" } : null,
+    !Number.isFinite(state.hazardInsEscrow) ? { label: "Hazard insurance escrow has not been reviewed.", targetId: "ledger-hazardInsEscrow" } : null,
+    !Number.isFinite(state.taxMonths) ? { label: "Property-tax escrow months are not determined.", targetId: "ledger-taxMonths" } : null,
+    !Number.isFinite(state.propertyTaxRatePct) ? { label: "Annual property-tax rate is missing.", targetId: "ledger-propertyTaxRatePct" } : null,
+    !Number.isFinite(state.interestDays) ? { label: "Per-diem interest days are not determined.", targetId: "ledger-interestDays" } : null,
+  ].filter((item): item is ReadinessIssue => Boolean(item));
+  const readinessStatus = blockingIssues.length
+    ? "Needs Review"
+    : warningIssues.length
+      ? "Ready for Review"
+      : "Ready to Generate";
 
   return (
     <aside
@@ -1888,54 +1909,82 @@ function LoanSummarySidebar({
 
       <section
         className={cn(
-          "overflow-hidden rounded-[6px] border shadow-[0_1px_2px_rgb(15_31_56_/_0.08)]",
-          readinessComplete
-            ? "border-emerald-200 bg-emerald-50/50 text-[var(--le-navy)]"
-            : "border-[#173451] bg-[var(--le-navy)] text-white",
+          "overflow-hidden rounded-[6px] border shadow-[0_1px_2px_rgb(15_31_56_/_0.05)]",
+          blockingIssues.length
+            ? "border-rose-200 bg-rose-50/40"
+            : warningIssues.length
+              ? "border-amber-200 bg-amber-50/40"
+              : "border-emerald-200 bg-emerald-50/40",
         )}
+        aria-live="polite"
       >
-        <div className={cn("flex items-center justify-between gap-3 border-b px-2.5 py-2", readinessComplete ? "border-emerald-200" : "border-white/12")}>
-          <p className="text-[11px] font-black">Loan Estimate Readiness</p>
-          <Badge tone={unresolvedCount ? "gold" : "teal"} className="text-[calc(var(--type-xs)+1px)]">
-            {unresolvedCount ? `${unresolvedCount} Review` : "Ready"}
-          </Badge>
+        <div className="flex items-center justify-between gap-3 border-b border-current/10 px-2.5 py-2">
+          <div>
+            <p className="text-[11px] font-black text-[var(--le-navy)]">Loan Estimate Readiness</p>
+            <p className={cn("mt-0.5 text-[10px] font-semibold", blockingIssues.length ? "text-rose-700" : warningIssues.length ? "text-amber-700" : "text-emerald-700")}>
+              {readinessStatus}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] font-bold">
+            {blockingIssues.length ? <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-800">{blockingIssues.length} blocking</span> : null}
+            {warningIssues.length ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">{warningIssues.length} warning{warningIssues.length === 1 ? "" : "s"}</span> : null}
+          </div>
         </div>
 
-        <div className="px-2.5 py-2.5">
-          <div className="flex items-center gap-3">
-            <div
-              className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full"
-              style={{ background: readinessComplete ? "conic-gradient(#2f8f68 360deg, #dce9e3 0deg)" : `conic-gradient(#f7b84b ${readinessScore * 3.6}deg, #304a66 0deg)` }}
-              aria-label={`${readinessScore}% ready`}
-              role="img"
-            >
-              <div className={cn("grid h-[42px] w-[42px] place-items-center rounded-full text-[13px] font-black", readinessComplete ? "bg-white text-[var(--le-navy)]" : "bg-[var(--le-navy)] text-white")}>
-                {readinessScore}%
-              </div>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[13px] font-black">{unresolvedCount ? "Needs review" : "Ready for review"}</p>
-              <p className={cn("mt-0.5 text-[10px] leading-4", readinessComplete ? "text-slate-600" : "text-white/70")}>
-                {unresolvedCount
-                  ? `${unresolvedCount} ${unresolvedCount === 1 ? "item requires" : "items require"} attention before export.`
-                  : "Required estimate inputs are available."}
-              </p>
-              <span className={cn("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold", readinessComplete ? "border border-emerald-200 bg-white text-emerald-800" : "bg-white text-[var(--le-blue)]")}>
-                {generatedAt ? "Generated estimate" : "Preliminary estimate"}
+        <div className="space-y-2 px-2.5 py-2.5">
+          {!blockingIssues.length && !warningIssues.length ? (
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-800">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100">
+                <Check className="h-3 w-3" aria-hidden="true" />
               </span>
+              No unresolved issues
             </div>
-          </div>
+          ) : null}
 
-          <ul className={cn("mt-2.5 space-y-1.5 border-t pt-2.5", readinessComplete ? "border-emerald-200" : "border-white/12")}>
-            {readinessChecks.map((check) => (
-              <li key={check.label} className={cn("flex items-start gap-2 text-[10px] leading-4", readinessComplete ? "text-slate-700" : "text-white/82")}>
-                <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full", check.ready ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400/20 text-amber-300")}>
-                  {check.ready ? <Check className="h-2.5 w-2.5" aria-hidden="true" /> : <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />}
-                </span>
-                <span>{check.label}</span>
-              </li>
-            ))}
-          </ul>
+          {blockingIssues.length ? (
+            <section aria-labelledby="readiness-blocking-heading">
+              <h3 id="readiness-blocking-heading" className="text-[10px] font-black uppercase tracking-wide text-rose-800">
+                {blockingIssues.length} blocking issue{blockingIssues.length === 1 ? "" : "s"}
+              </h3>
+              <ul className="mt-1 space-y-1">
+                {blockingIssues.map((issue) => (
+                  <li key={issue.label}>
+                    <button
+                      type="button"
+                      className="group flex w-full items-start gap-1.5 rounded-[4px] px-1 py-0.5 text-left text-[10px] leading-4 text-rose-900 transition hover:bg-rose-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-rose-500"
+                      onClick={() => onNavigateToIssue(issue)}
+                    >
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-600" aria-hidden="true" />
+                      <span className="group-hover:underline">{issue.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {warningIssues.length ? (
+            <section className={cn(blockingIssues.length && "border-t border-amber-200 pt-2")} aria-labelledby="readiness-warning-heading">
+              <h3 id="readiness-warning-heading" className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-amber-800">
+                <TriangleAlert className="h-3 w-3" aria-hidden="true" />
+                {warningIssues.length} warning{warningIssues.length === 1 ? "" : "s"}
+              </h3>
+              <ul className="mt-1 space-y-1">
+                {warningIssues.map((issue) => (
+                  <li key={issue.label}>
+                    <button
+                      type="button"
+                      className="group flex w-full items-start gap-1.5 rounded-[4px] px-1 py-0.5 text-left text-[10px] leading-4 text-amber-900 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-500"
+                      onClick={() => onNavigateToIssue(issue)}
+                    >
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                      <span className="group-hover:underline">{issue.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
       </section>
 
@@ -1952,14 +2001,6 @@ function LoanSummarySidebar({
         <SummaryRailRow label="Total Assets Required" amount={results.totalAssetsRequired} />
       </section>
 
-      {missingItems.length ? (
-        <section className="rounded-[5px] border border-amber-200 bg-amber-50/70 p-2" role="status">
-          <p className="text-[11px] font-bold uppercase text-amber-800">Attention Required</p>
-          <ul className="mt-1.5 space-y-1 text-[calc(var(--type-xs)+1px)] text-amber-900">
-            {missingItems.map((item) => <li key={item}>Missing {item}</li>)}
-          </ul>
-        </section>
-      ) : null}
     </aside>
   );
 }
@@ -2047,11 +2088,13 @@ function NumberField({
 }
 
 function ChoiceField<T extends string>({
+  id,
   label,
   value,
   options,
   onValueChange,
 }: {
+  id: string;
   label: string;
   value: T;
   options: ReadonlyArray<{ value: T; label: string }>;
@@ -2059,9 +2102,9 @@ function ChoiceField<T extends string>({
 }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <Label className={loanDetailLabelClassName} title={label}>{label}</Label>
+      <Label className={loanDetailLabelClassName} htmlFor={id} title={label}>{label}</Label>
       <Select value={value} onValueChange={(nextValue) => onValueChange(nextValue as T)}>
-      <SelectTrigger className={cn("h-9 rounded-[5px] px-2 sm:h-8", loanEstimateInputTextClassName)}>
+      <SelectTrigger id={id} className={cn("h-9 rounded-[5px] px-2 sm:h-8", loanEstimateInputTextClassName)}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[var(--radix-select-trigger-width)]">
