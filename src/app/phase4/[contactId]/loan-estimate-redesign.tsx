@@ -3,6 +3,7 @@
 import * as Tabs from "@radix-ui/react-tabs";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
   BadgeDollarSign,
   BriefcaseBusiness,
   Calculator,
@@ -22,6 +23,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -259,6 +261,10 @@ function valueBasisLabel(state: Pick<LoanState, "loanPurpose">) {
   return isRefinanceLoan(state.loanPurpose) ? "Property Value" : "Purchase Price";
 }
 
+function titleCase(text: string) {
+  return text.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
 function equityLabel(state: Pick<LoanState, "loanPurpose">) {
   return isRefinanceLoan(state.loanPurpose) ? "Equity Position" : "Down Payment";
 }
@@ -302,6 +308,21 @@ export function LoanEstimateRedesign({
   const results = useMemo(() => calculateLoanEstimate(state), [state]);
   const insights = useMemo(() => formulaInsightMap(state, results), [state, results]);
 
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
+  const [stickyHeaderHeight, setStickyHeaderHeight] = useState(112);
+
+  useEffect(() => {
+    const node = stickyHeaderRef.current;
+    if (!node) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const nextHeight = entries[0]?.contentRect.height;
+      if (nextHeight) setStickyHeaderHeight(Math.ceil(nextHeight) + 64 + 16);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const assetSegments = useMemo(
     () => [
       { name: equityLabel(state), value: results.downPayment, color: chartColors.downPayment },
@@ -339,10 +360,6 @@ export function LoanEstimateRedesign({
     setState(initialState);
   }
 
-  function matchComputedDownPayment() {
-    setState((current) => ({ ...current, downPaymentGivenToSeller: results.downPayment }));
-  }
-
   return (
     <main className="loan-estimate-design print-root -m-6 min-h-[calc(100vh-4rem)] bg-[var(--le-page)] px-3 py-3 sm:px-[18px] sm:py-3.5 pb-24 print:pb-5">
       <div className="mx-auto max-w-[1680px]">
@@ -350,12 +367,62 @@ export function LoanEstimateRedesign({
         {liveMessage}
       </span>
 
-      <LoanEstimateIdentityBand
-        state={state}
-        results={results}
-        traceability={traceability}
-        generatedAt={generatedAt}
-      />
+      <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
+      <div ref={stickyHeaderRef} className="no-print sticky top-16 z-30 -mx-3 space-y-2.5 bg-[var(--le-page)] px-3 pb-3 pt-3 sm:-mx-[18px] sm:px-[18px] sm:pt-3.5">
+        <Link
+          className="inline-flex min-h-8 items-center gap-1.5 text-xs font-bold text-mafi-text-mid transition hover:text-mafi-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mafi-blue-primary/30"
+          href="/phase4"
+        >
+          <ArrowLeft className="size-3.5" aria-hidden="true" />
+          Back to Pipeline
+        </Link>
+
+        <LoanEstimateIdentityBand
+          state={state}
+          results={results}
+          traceability={traceability}
+          generatedAt={generatedAt}
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-1 rounded-[5px] border border-[var(--le-line)] bg-white/95 p-1 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] backdrop-blur">
+          <Tabs.List className="flex min-w-0 flex-wrap items-center gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const selected = activeTab === tab.id;
+              return (
+                <Tabs.Trigger
+                  key={tab.id}
+                  value={tab.id}
+                  className={cn(
+                    "relative flex h-8 items-center gap-1.5 rounded-[4px] px-2.5 text-[12px] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
+                    selected && "text-[var(--le-navy)]",
+                  )}
+                >
+                  {selected ? (
+                    <motion.span
+                      layoutId="tab-active-bg"
+                      className="absolute inset-0 rounded-[4px] bg-[var(--le-navy-soft)]"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    />
+                  ) : null}
+                  <span className="relative flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    {tab.label}
+                    {tab.audience === "client" ? <Badge tone="teal" className="px-2 py-0.5">Client</Badge> : null}
+                  </span>
+                </Tabs.Trigger>
+              );
+            })}
+          </Tabs.List>
+          <LoanEstimateActionBar
+            downloadUrl={downloadUrl}
+            generatedAt={generatedAt}
+            isGenerating={isGenerating}
+            onGenerate={() => onGenerate(state)}
+            onReset={resetToPulledForwardValues}
+          />
+        </div>
+      </div>
 
       <header className="mb-5 hidden overflow-hidden rounded-md bg-[var(--le-navy)] shadow-[var(--shadow-soft)] print-panel print:block">
         <div className="grid gap-0 print:grid-cols-[1.1fr_0.9fr]">
@@ -368,8 +435,8 @@ export function LoanEstimateRedesign({
                 <div className="min-w-0">
                   <p className="text-[length:var(--type-sm)] font-extrabold uppercase tracking-wide text-sky-200/80">MLG Home Financial</p>
                   <h1 className="mt-1 truncate text-[length:var(--type-2xl)] font-black text-white">Fee Sheet & Loan Estimate</h1>
-                  <p className="mt-1 truncate text-[length:var(--type-md)] text-white/80" title={`Prepared by ${state.presentedBy} · NMLS ID ${state.nmlsId} · MLO ID ${state.mloId}`}>
-                    Prepared by {state.presentedBy} · NMLS ID {state.nmlsId} · MLO ID {state.mloId}
+                  <p className="mt-1 truncate text-[length:var(--type-md)] text-white/80" title={`Prepared by ${titleCase(state.presentedBy)} · NMLS ID ${state.nmlsId} · MLO ID ${state.mloId}`}>
+                    Prepared by {titleCase(state.presentedBy)} · NMLS ID {state.nmlsId} · MLO ID {state.mloId}
                   </p>
                 </div>
               </div>
@@ -405,7 +472,7 @@ export function LoanEstimateRedesign({
                 </div>
               </div>
               <div className="text-right text-[length:var(--type-sm)] text-[var(--le-muted)]">
-                <p className="font-bold text-[var(--le-navy)]">{state.applicantName}</p>
+                <p className="font-bold text-[var(--le-navy)]">{titleCase(state.applicantName)}</p>
                 <p>Loan #{state.loanNumber}</p>
                 <p>{state.loanPurpose}</p>
                 <p>{state.lenderAndProduct}</p>
@@ -416,39 +483,6 @@ export function LoanEstimateRedesign({
           </div>
         </div>
       </header>
-
-      <Tabs.Root value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
-        <div className="no-print sticky top-16 z-20 mb-3 flex flex-wrap items-center justify-between gap-1 rounded-[5px] border border-[var(--le-line)] bg-white/95 p-1 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] backdrop-blur">
-          <Tabs.List className="flex min-w-0 flex-wrap items-center gap-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const selected = activeTab === tab.id;
-              return (
-                <Tabs.Trigger
-                  key={tab.id}
-                  value={tab.id}
-                  className={cn(
-                    "relative flex h-8 items-center gap-1.5 rounded-[4px] px-2.5 text-[12px] font-bold text-[var(--le-muted)] transition hover:bg-[var(--le-panel)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]",
-                    selected && "text-[var(--le-navy)]",
-                  )}
-                >
-                  {selected ? (
-                    <motion.span
-                      layoutId="tab-active-bg"
-                      className="absolute inset-0 rounded-[4px] bg-[var(--le-navy-soft)]"
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    />
-                  ) : null}
-                  <span className="relative flex items-center gap-2">
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    {tab.label}
-                    {tab.audience === "client" ? <Badge tone="teal" className="px-2 py-0.5">Client</Badge> : null}
-                  </span>
-                </Tabs.Trigger>
-              );
-            })}
-          </Tabs.List>
-        </div>
 
         <div
           className={cn(
@@ -472,7 +506,6 @@ export function LoanEstimateRedesign({
                   insights={insights}
                   updateNumber={updateNumber}
                   updateChoice={updateChoice}
-                  matchComputedDownPayment={matchComputedDownPayment}
                 />
               ) : null}
               {activeTab === "costs" ? <SummaryCostsTab state={state} results={results} /> : null}
@@ -496,23 +529,11 @@ export function LoanEstimateRedesign({
               results={results}
               traceability={traceability}
               generatedAt={generatedAt}
+              stickyOffset={stickyHeaderHeight}
             />
           ) : null}
         </div>
       </Tabs.Root>
-
-      <LoanEstimateActionBar
-        downloadUrl={downloadUrl}
-        generatedAt={generatedAt}
-        isGenerating={isGenerating}
-        onGenerate={() => onGenerate(state)}
-        onReset={resetToPulledForwardValues}
-      />
-
-      <footer className="mt-8 text-center text-[length:var(--type-xs)] text-[var(--le-muted)] print:hidden">
-        <p className="font-bold text-[var(--le-navy)]">MLG Home Financial</p>
-        <p>3570 NW 87th Avenue, Suite 700, Doral, FL 33178 · (786) 689-2939 · Fax (561) 287-8126</p>
-      </footer>
       </div>
     </main>
   );
@@ -545,14 +566,14 @@ function LoanEstimateIdentityBand({
         </div>
         <div className="min-w-0">
           <p className="truncate text-[length:var(--type-md)] font-black text-[var(--le-navy)]">
-            {state.applicantName}
-            {coBorrowerName ? <span className="font-semibold text-[var(--le-muted)]"> + {coBorrowerName}</span> : null}
+            {titleCase(state.applicantName)}
+            {coBorrowerName ? <span className="font-semibold text-[var(--le-muted)]"> + {titleCase(coBorrowerName)}</span> : null}
           </p>
           <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">
             Loan {state.loanNumber} · {state.propertyAddress || "Property address unavailable"}
           </p>
           <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">
-            Loan Officer: {state.presentedBy}{state.nmlsId ? ` · NMLS ${state.nmlsId}` : ""}
+            Loan Officer: {titleCase(state.presentedBy)}{state.nmlsId ? ` · NMLS ${state.nmlsId}` : ""}
           </p>
         </div>
       </div>
@@ -627,10 +648,12 @@ function PrepaidLedgerRow({
   insight?: FieldInsight;
 }) {
   return (
-    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-200 px-2.5 py-1.5 text-[13px] sm:grid-cols-[minmax(130px,1fr)_minmax(130px,0.9fr)_minmax(170px,1fr)_auto]">
-      <span className="min-w-0 truncate text-[12px] font-bold text-[var(--le-navy)]" title={label}>{label}</span>
-      <span className="order-3 min-w-0 truncate text-[calc(var(--type-xs)+1px)] text-[var(--le-muted)] sm:order-none" title={basis}>{basis}</span>
-      <div className="order-4 min-w-0 sm:order-none">{input}</div>
+    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-200 px-2.5 py-1.5 text-[13px] sm:grid-cols-[minmax(130px,1fr)_minmax(150px,auto)_auto]">
+      <div className="min-w-0">
+        <span className="block truncate text-[12px] font-bold text-[var(--le-navy)]" title={label}>{label}</span>
+        <span className="block truncate text-[length:var(--type-xs)] text-[var(--le-muted)]" title={basis}>{basis}</span>
+      </div>
+      <div className="order-3 col-span-2 min-w-0 sm:order-none sm:col-span-1">{input}</div>
       <ReadOnlyInsight insight={insight} className="rounded-sm">
         <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
       </ReadOnlyInsight>
@@ -713,11 +736,17 @@ function PaymentRow({
 
 function EquationRow({ sign, label, amount }: { sign: string; label: string; amount: number }) {
   return (
-    <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-2.5 py-0.5 text-[length:var(--type-xs)]">
+    <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-2.5 py-0.5 text-[calc(var(--type-xs)+2.2px)]">
       <span className="text-center font-black text-slate-400" aria-hidden="true">{sign}</span>
       {sign ? <span className="sr-only">{sign === "−" ? "Subtract" : "Add"}</span> : null}
       <span className="truncate text-[var(--le-muted)]">{label}</span>
-      <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+      {sign === "−" ? (
+        <span className="numeric font-black text-[#247a57]">
+          (<AnimatedValue value={amount} format="currency" className="numeric font-black text-[#247a57]" />)
+        </span>
+      ) : (
+        <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+      )}
     </div>
   );
 }
@@ -740,14 +769,11 @@ function LoanEstimateActionBar({
   onReset: () => void;
 }) {
   return (
-    <div className="no-print sticky bottom-2 z-40 mt-3 flex min-h-[52px] items-center gap-2 rounded-[5px] border border-slate-200 bg-white/97 px-2 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.14)] backdrop-blur sm:px-3">
-      <div className="hidden min-w-0 md:block">
-        <p className="text-[length:var(--type-xs)] font-black text-[var(--le-navy)]">Loan Estimate workspace</p>
-        <p className="truncate text-[9px] text-[var(--le-muted)]">
-          {generatedAt ? `Last generated ${generatedAt}` : "Changes remain in this workspace until the PDF is generated."}
-        </p>
-      </div>
-      <div className="ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-1.5 overflow-x-auto md:flex-initial">
+    <div className="no-print flex min-w-0 flex-nowrap items-center justify-end gap-1.5">
+      <p className="hidden truncate text-[9px] text-[var(--le-muted)] sm:block">
+        {generatedAt ? `Last generated ${generatedAt}` : "No stored PDF yet"}
+      </p>
+      <div className="flex shrink-0 items-center gap-1.5">
         {downloadUrl ? (
           <a
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border border-[var(--le-line)] bg-white px-2.5 text-[length:var(--type-xs)] font-bold text-[var(--le-navy)] transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]"
@@ -778,14 +804,12 @@ function MainTab({
   insights,
   updateNumber,
   updateChoice,
-  matchComputedDownPayment,
 }: {
   state: LoanState;
   results: LoanResults;
   insights: Record<string, FieldInsight>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
-  matchComputedDownPayment: () => void;
 }) {
   const [closingCostsOpen, setClosingCostsOpen] = useState(false);
   const [loanDetailsEditing, setLoanDetailsEditing] = useState(false);
@@ -793,13 +817,6 @@ function MainTab({
   const closingCostsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closingCostsDialogRef = useRef<HTMLDivElement | null>(null);
   const cancelClosingCostsRef = useRef<() => void>(() => undefined);
-  const monthlyBars = [
-    { name: "Principal & Interest", value: results.principalInterest, fill: chartColors.principal },
-    { name: "Property Taxes", value: results.monthlyPropertyTax, fill: chartColors.taxes },
-    { name: "Hazard Insurance", value: results.monthlyHazard, fill: chartColors.hazard },
-    { name: "Flood / HO6", value: results.monthlyFlood, fill: chartColors.flood },
-    { name: "HOA / Condo Fee", value: results.monthlyHOA, fill: chartColors.hoa },
-  ];
   const basisLabel = valueBasisLabel(state);
   const borrowerEquityLabel = equityLabel(state);
   const equityApplied = equityAppliedLabel(state);
@@ -998,35 +1015,6 @@ function MainTab({
         </div>
       </Panel>
 
-      <Panel title="Closing Costs" description="Detailed fees remain out of the primary workspace until review is needed." icon={Calculator} showComputedBadge={false} flush>
-        <div className="grid sm:grid-cols-[minmax(0,1fr)_170px_130px_auto]">
-          <div className="flex items-center gap-2.5 px-3 py-3">
-            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[6px] bg-blue-50 text-sm font-black text-[var(--le-blue)]">$</span>
-            <div>
-              <p className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Closing-cost worksheet</p>
-              <p className="mt-0.5 text-[length:var(--type-xs)] text-[var(--le-muted)]">Loan, title, government, and third-party fees</p>
-            </div>
-          </div>
-          <div className="border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
-                <AnimatedValue
-                  value={results.totalClosingCosts}
-                  format="currency"
-                  className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]"
-                />
-          </div>
-          <div className="flex items-center border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
-            <Badge tone="gold">Preliminary</Badge>
-          </div>
-          <div className="flex items-center border-t border-[var(--le-line)] px-3 py-3 sm:border-l sm:border-t-0">
-          <Button ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
-            <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
-            Review / Edit Closing Costs
-          </Button>
-          </div>
-        </div>
-      </Panel>
-
       {closingCostsOpen && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -1067,7 +1055,6 @@ function MainTab({
                   <ClosingCostsEditor
                     state={state}
                     results={results}
-                    insights={insights}
                     updateNumber={updateNumber}
                     updateChoice={updateChoice}
                   />
@@ -1089,11 +1076,9 @@ function MainTab({
           )
         : null}
 
-      <Panel title="Pre-Paid Items" description="Escrows, insurance, interest, and property-specific contributions." icon={PiggyBank} showComputedBadge={false} flush>
-        <div className="overflow-hidden">
-            <div className="hidden grid-cols-[minmax(130px,1fr)_minmax(130px,0.9fr)_minmax(170px,1fr)_auto] border-b border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 sm:grid">
-              <span>Item</span><span>Basis</span><span>Input</span><span className="text-right">Amount</span>
-            </div>
+      <div className="grid items-stretch overflow-hidden rounded-[5px] border border-[var(--le-line)] bg-white shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:grid-cols-2">
+        <Panel title="Pre-Paid Items" description="Escrows, insurance, interest, and property-specific contributions." icon={PiggyBank} showComputedBadge={false} flush bare className="border-b border-[var(--le-line)] xl:border-b-0 xl:border-r">
+          <div className="overflow-hidden">
             <PrepaidLedgerRow
               label="Taxes Escrowed"
               basis="Monthly taxes × escrow months"
@@ -1140,79 +1125,84 @@ function MainTab({
             />
             <LedgerTotalRow label="Total Pre-Paid Items" amount={results.totalPrepaid} insight={insights["Total Pre-Paid Items"]} />
             <LedgerTotalRow label="Closing Costs + Pre-Paid Items" amount={results.totalClosingAndPrepaid} secondary insight={insights["Closing + Pre-Paid"]} />
-        </div>
-      </Panel>
+          </div>
+        </Panel>
 
-      <Panel title="Monthly Payment" description="Estimated recurring housing payment." icon={BadgeDollarSign} showComputedBadge={false} flush>
-        <div className="grid md:grid-cols-[minmax(0,1fr)_245px]">
-          <div className="overflow-hidden">
-            <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
-            <PaymentRow label="Property Taxes" amount={results.monthlyPropertyTax} />
-            <PaymentRow
-              label="Hazard Insurance"
-              amount={results.monthlyHazard}
-              input={<CompactLedgerInput label="Annual" ariaLabel="Hazard insurance annual" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />}
-            />
-            <PaymentRow label="Flood / HO6" amount={results.monthlyFlood} />
-            <PaymentRow
-              label="HOA / Condo Fee"
-              amount={results.monthlyHOA}
-              input={<CompactLedgerInput label="Monthly" ariaLabel="HOA or condo fee monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />}
-            />
-          </div>
-          <div className="flex flex-col justify-center border-t border-[var(--le-line)] bg-[var(--le-navy)] px-3.5 py-3 text-white md:border-l md:border-t-0">
-            <div>
-              <p className="text-[10px] font-bold uppercase text-white/65">Estimated monthly payment</p>
-              <p className="text-[length:var(--type-sm)] text-white/75">Principal, taxes, insurance, and association dues</p>
+        <Panel title="Monthly Payment" description="Estimated recurring housing payment." icon={BadgeDollarSign} showComputedBadge={false} flush bare>
+          <div>
+            <div className="overflow-hidden">
+              <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
+              <PaymentRow label="Property Taxes" amount={results.monthlyPropertyTax} />
+              <PaymentRow
+                label="Hazard Insurance"
+                amount={results.monthlyHazard}
+                input={<CompactLedgerInput label="Annual" ariaLabel="Hazard insurance annual" field="hazardInsAnnual" value={state.hazardInsAnnual} step="10" onChange={updateNumber} />}
+              />
+              <PaymentRow label="Flood / HO6" amount={results.monthlyFlood} />
+              <PaymentRow
+                label="HOA / Condo Fee"
+                amount={results.monthlyHOA}
+                input={<CompactLedgerInput label="Monthly" ariaLabel="HOA or condo fee monthly" field="hoaMonthly" value={state.hoaMonthly} step="10" onChange={updateNumber} />}
+              />
             </div>
-            <ReadOnlyInsight insight={insights["Total Monthly Payment"]} className="rounded-sm">
-              <AnimatedValue value={results.totalMonthlyPayment} format="currency" className="numeric mt-1 block text-[length:var(--type-2xl)] font-black text-white" />
-            </ReadOnlyInsight>
-            <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
-              {monthlyBars.map((entry) => (
-                <span
-                  key={entry.name}
-                  className="h-full"
-                  style={{ width: `${results.totalMonthlyPayment > 0 ? Math.max(0, (entry.value / results.totalMonthlyPayment) * 100) : 0}%`, backgroundColor: entry.fill }}
-                />
-              ))}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] text-white/70">
-              {monthlyBars.map((entry) => (
-                <span key={entry.name} className="flex min-w-0 items-center gap-1">
-                  <i className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: entry.fill }} aria-hidden="true" />
-                  <span className="truncate">{entry.name}</span>
-                </span>
-              ))}
+            <div className="m-2.5 rounded-[5px] border border-slate-200 bg-slate-50 px-3 py-3.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Total Monthly Payment</p>
+              <ReadOnlyInsight insight={insights["Total Monthly Payment"]} className="rounded-sm">
+                <AnimatedValue value={results.totalMonthlyPayment} format="currency" className="numeric mt-1 block text-[length:var(--type-2xl)] font-black text-[var(--le-navy)]" />
+              </ReadOnlyInsight>
             </div>
           </div>
-        </div>
-      </Panel>
+        </Panel>
+      </div>
 
       <Panel title="Cash to Close & Asset Requirements" description="Credits reduce cash due; reserves determine required assets." icon={ShieldCheck} showComputedBadge={false} flush>
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_252px]">
-          <div className="grid content-start border-l border-t border-slate-200 sm:grid-cols-2">
-            <CashControlCell>
-              <NumberField label="Seller Credit" field="sellerCredit" value={state.sellerCredit} step="100" onChange={updateNumber} />
-            </CashControlCell>
-            <CashControlCell>
-              <NumberField label="Other Credits" field="otherCredits" value={state.otherCredits} step="100" onChange={updateNumber} />
-            </CashControlCell>
-            <CashControlCell>
-              <CurrencyField
-                label={equityApplied}
-                field="downPaymentGivenToSeller"
-                value={state.downPaymentGivenToSeller}
-                onChange={updateNumber}
-                action={{
-                  label: `Match computed ${borrowerEquityLabel.toLowerCase()}`,
-                  onClick: matchComputedDownPayment,
-                }}
-              />
-            </CashControlCell>
-            <CashControlCell>
-              <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" onChange={updateNumber} />
-            </CashControlCell>
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="border-l border-t border-slate-200">
+            <div className="grid content-start">
+              <CashControlCell>
+                <NumberField
+                  label={equityApplied}
+                  field="downPaymentGivenToSeller"
+                  value={state.downPaymentGivenToSeller}
+                  step="100"
+                  currency
+                  boldLabel
+                  onChange={updateNumber}
+                  onMatch={() => updateNumber("downPaymentGivenToSeller", String(results.downPayment))}
+                  matchTitle="Match computed down payment"
+                />
+              </CashControlCell>
+              <CashControlCell>
+                <NumberField label="Seller Credit" field="sellerCredit" value={state.sellerCredit} step="100" boldLabel onChange={updateNumber} />
+              </CashControlCell>
+              <CashControlCell>
+                <NumberField label="Other Credits" field="otherCredits" value={state.otherCredits} step="100" boldLabel onChange={updateNumber} />
+              </CashControlCell>
+              <CashControlCell>
+                <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" boldLabel onChange={updateNumber} />
+              </CashControlCell>
+            </div>
+            <section className="border-b border-r border-slate-200 bg-slate-50/40 px-3 py-3" aria-labelledby="cash-closing-costs-heading">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[6px] bg-blue-50 text-sm font-black text-[var(--le-blue)]">$</span>
+                  <div className="min-w-0">
+                    <h3 id="cash-closing-costs-heading" className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Closing Costs</h3>
+                    <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">Loan, title, government, and third-party fees</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
+                    <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
+                  </div>
+                  <Button ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
+                    <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+                    Review / Edit
+                  </Button>
+                </div>
+              </div>
+            </section>
           </div>
           <div className="border-t border-[var(--le-line)] bg-slate-50/60 xl:border-l xl:border-t-0">
             <EquationRow sign="" label={borrowerEquityLabel} amount={results.downPayment} />
@@ -1220,7 +1210,7 @@ function MainTab({
             <EquationRow sign="+" label="Pre-Paid Items" amount={results.totalPrepaid} />
             <EquationRow sign="−" label="Seller Credit" amount={results.sellerCredit} />
             <EquationRow sign="−" label="Other Credits" amount={results.otherCredits} />
-            <EquationRow sign="−" label={equityApplied} amount={state.downPaymentGivenToSeller} />
+            <EquationRow sign="−" label={`Reserves (${formatNumber(results.reserveMonths)} mo.)`} amount={results.reserves} />
             <div className="flex items-end justify-between gap-4 bg-[var(--le-navy)] px-3 py-2 text-white">
               <div>
                 <p className="text-[10px] font-bold uppercase text-white/65">Borrower funds due</p>
@@ -1230,25 +1220,22 @@ function MainTab({
                 <AnimatedValue value={results.totalCashToClose} format="currency" className="numeric text-[length:var(--type-xl)] font-black text-white" />
               </ReadOnlyInsight>
             </div>
-            <div className="grid content-start gap-1 border-t border-[var(--le-line)] bg-white p-2">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-1.5">
+            <div className="grid content-start gap-0.5 border-t border-[var(--le-line)] bg-white px-2 py-1.5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-1">
               <span className="text-[length:var(--type-sm)] text-[var(--le-muted)]">Reserves ({formatNumber(results.reserveMonths)} mo.)</span>
               <ReadOnlyInsight insight={insights.Reserves} className="rounded-sm">
                 <AnimatedValue value={results.reserves} format="currency" className="numeric font-black text-[var(--le-navy)]" />
               </ReadOnlyInsight>
             </div>
-            <div>
+            <div className="flex items-center justify-between gap-3 py-0.5">
               <p className="text-[10px] font-bold uppercase text-slate-400">Funds Required for Approval</p>
-              <ReadOnlyInsight insight={insights["Total Assets Required"]} className="mt-1 rounded-sm">
+              <ReadOnlyInsight insight={insights["Total Assets Required"]} className="rounded-sm">
                 <AnimatedValue value={results.totalAssetsRequired} format="currency" className="numeric text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
               </ReadOnlyInsight>
             </div>
           </div>
           </div>
         </div>
-        <Disclaimer compact>
-          These figures are estimates. Actual charges may be more or less and are not a commitment to lend.
-        </Disclaimer>
       </Panel>
     </div>
   );
@@ -1257,13 +1244,11 @@ function MainTab({
 function ClosingCostsEditor({
   state,
   results,
-  insights,
   updateNumber,
   updateChoice,
 }: {
   state: LoanState;
   results: LoanResults;
-  insights: Record<string, FieldInsight>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
 }) {
@@ -1355,9 +1340,6 @@ function ClosingCostsEditor({
         feeInputRow("1304. Flood Zone Certification", "floodZoneCertFee", state.floodZoneCertFee, results.floodZoneCertFee, updateNumber, "1"),
         feeInputRow("1306. Miscellaneous (Filing, Couriers)", "miscFilingFee", state.miscFilingFee, results.miscFilingFee, updateNumber, "10"),
       ]}
-      footerLabel="Total Closing Costs"
-      footerValue={results.totalClosingCosts}
-      footerInsight={insights["Total Closing Costs"]}
     />
   );
 }
@@ -1373,7 +1355,7 @@ function SummaryCostsTab({
     <div className="space-y-5">
       <Panel title="Loan Snapshot" icon={ChartNoAxesCombined} dense>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Applicant" textValue={state.applicantName} compact />
+          <StatCard label="Applicant" textValue={titleCase(state.applicantName)} compact />
           <StatCard label="Loan Purpose" textValue={state.loanPurpose} compact />
           <StatCard label={valueBasisLabel(state)} value={results.purchasePrice} compact />
           <StatCard label={equityLabel(state)} value={results.downPayment} compact />
@@ -1487,7 +1469,7 @@ function SummaryMarketingTab({
           </h2>
           <SimpleTable
             rows={[
-              ["Applicant", state.applicantName],
+              ["Applicant", titleCase(state.applicantName)],
               ["Loan Type", state.foreignOrDomestic === "F" ? "Foreign National Loan" : "Domestic Loan"],
               [valueBasisLabel(state), formatCurrency(results.purchasePrice)],
               [equityLabel(state), formatCurrency(results.downPayment)],
@@ -1801,6 +1783,8 @@ function Panel({
   dense = false,
   showComputedBadge = true,
   flush = false,
+  bare = false,
+  className,
 }: {
   title: string;
   description?: string;
@@ -1810,10 +1794,16 @@ function Panel({
   dense?: boolean;
   showComputedBadge?: boolean;
   flush?: boolean;
+  bare?: boolean;
+  className?: string;
 }) {
   return (
     <motion.section
-      className="print-panel overflow-hidden rounded-[5px] border border-[var(--le-line)] bg-white shadow-[0_1px_2px_rgb(15_31_56_/_0.03)]"
+      className={cn(
+        "print-panel overflow-hidden bg-white",
+        !bare && "rounded-[5px] border border-[var(--le-line)] shadow-[0_1px_2px_rgb(15_31_56_/_0.03)]",
+        className,
+      )}
     >
       <div className="flex min-h-[43px] items-center justify-between gap-2 border-b border-[var(--le-line)] bg-slate-50/50 px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -1839,11 +1829,13 @@ function LoanSummarySidebar({
   results,
   traceability,
   generatedAt,
+  stickyOffset = 112,
 }: {
   state: LoanState;
   results: LoanResults;
   traceability: LoanEstimateTraceability;
   generatedAt?: string;
+  stickyOffset?: number;
 }) {
   const missingItems = [
     !Number.isFinite(state.purchasePrice) ? valueBasisLabel(state) : null,
@@ -1890,12 +1882,13 @@ function LoanSummarySidebar({
   return (
     <aside
       data-loan-summary="sidebar"
-      className="no-print w-full space-y-2 rounded-[5px] border border-[var(--le-line)] bg-white p-2 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:sticky xl:top-[112px]"
+      className="no-print w-full space-y-2 rounded-[5px] border border-[var(--le-line)] bg-white p-2 shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:sticky"
+      style={{ top: stickyOffset }}
     >
       <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Loan Estimate</p>
-          <p className="truncate text-[15px] font-extrabold text-slate-900">{state.applicantName}</p>
+          <p className="truncate text-[15px] font-extrabold text-slate-900">{titleCase(state.applicantName)}</p>
         </div>
         <TraceabilityTrigger data={traceability} />
       </div>
@@ -1986,76 +1979,66 @@ function NumberField({
   value,
   step,
   suffix,
+  currency = false,
   loanDetail = false,
+  boldLabel = false,
   onChange,
+  onMatch,
+  matchTitle,
 }: {
   label: string;
   field: NumericField;
   value: number;
   step: string;
   suffix?: string;
+  currency?: boolean;
   loanDetail?: boolean;
+  boldLabel?: boolean;
   onChange: (field: NumericField, value: string) => void;
+  onMatch?: () => void;
+  matchTitle?: string;
 }) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [draftText, setDraftText] = useState("");
+
   return (
     <div className="min-w-0 space-y-0.5">
-      <Label className={loanDetail ? loanDetailLabelClassName : "flex min-h-[14px] items-end text-[10px] leading-tight"} htmlFor={field} title={label}>{label}</Label>
+      <Label className={loanDetail ? loanDetailLabelClassName : cn("flex min-h-[14px] items-end text-[10px] leading-tight", boldLabel && "font-bold text-[var(--le-navy)]")} htmlFor={field} title={label}>{label}</Label>
       <div className="relative">
         <Input
           id={field}
-          className={loanDetail ? cn("h-9 rounded-[5px] px-2 text-left sm:h-8", loanEstimateInputTextClassName, suffix && "pr-7", spinnerlessNumberInputClassName) : cn(numericInputClassName, "h-9 rounded-[5px] px-2 sm:h-8", suffix && "pr-7")}
-          type="number"
+          className={loanDetail ? cn("h-9 rounded-[5px] px-2 text-left sm:h-8", loanEstimateInputTextClassName, suffix && "pr-7", onMatch && "pr-7", spinnerlessNumberInputClassName) : cn(numericInputClassName, "h-9 rounded-[5px] px-2 sm:h-8", suffix && "pr-7", onMatch && "pr-7")}
+          type={currency ? "text" : "number"}
           inputMode="decimal"
           step={step}
-          value={numberInputValue(value)}
-          onFocus={selectInputText}
-          onChange={(event) => onChange(field, event.target.value)}
+          value={currency ? (isFocused ? draftText : formatCurrency(value)) : numberInputValue(value)}
+          onFocus={(event) => {
+            if (currency) {
+              setDraftText(numberInputValue(value) === "" ? "" : String(numberInputValue(value)));
+              setIsFocused(true);
+            }
+            selectInputText(event);
+          }}
+          onBlur={() => currency && setIsFocused(false)}
+          onChange={(event) => {
+            if (currency) {
+              setDraftText(event.target.value);
+              onChange(field, event.target.value.replace(/[^0-9.-]/g, ""));
+              return;
+            }
+            onChange(field, event.target.value);
+          }}
         />
         {suffix ? <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[var(--le-muted)]">{suffix}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-function CurrencyField({
-  label,
-  field,
-  value,
-  onChange,
-  action,
-}: {
-  label: string;
-  field: NumericField;
-  value: number;
-  onChange: (field: NumericField, value: string) => void;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-}) {
-  return (
-    <div className="min-w-0 space-y-0.5">
-      <Label className="block text-[10px] leading-none" htmlFor={field}>{label}</Label>
-      <div className="relative">
-        <Input
-          id={field}
-          inputMode="decimal"
-          value={formatCurrency(value)}
-          className={cn(numericInputClassName, "h-9 rounded-[5px] px-2 sm:h-8", action && "pr-9")}
-          onFocus={selectInputText}
-          onChange={(event) => onChange(field, event.target.value.replace(/[^\d.-]/g, ""))}
-        />
-        {action ? (
+        {onMatch ? (
           <button
             type="button"
-            className="group/action absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm text-slate-400 transition hover:bg-slate-100 hover:text-[var(--le-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(49_95_190_/_0.24)]"
-            aria-label={action.label}
-            onClick={action.onClick}
+            onClick={onMatch}
+            title={matchTitle ?? "Match computed value"}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--le-muted)] transition hover:bg-slate-100 hover:text-[var(--le-blue)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]"
           >
             <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="pointer-events-none absolute bottom-full right-0 z-20 mb-1 hidden whitespace-nowrap rounded-sm bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white shadow-lg group-hover/action:block group-focus-visible/action:block">
-              {action.label}
-            </span>
+            <span className="sr-only">{matchTitle ?? "Match computed value"}</span>
           </button>
         ) : null}
       </div>
@@ -2541,15 +2524,9 @@ function isInteractiveTableTarget(target: EventTarget) {
 function FinancialTable({
   columns,
   rows,
-  footerLabel,
-  footerValue,
-  footerInsight,
 }: {
   columns: string[];
   rows: FinancialRow[];
-  footerLabel: string;
-  footerValue: number;
-  footerInsight?: FieldInsight;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -2586,16 +2563,6 @@ function FinancialTable({
             );
           })}
         </tbody>
-        <tfoot>
-          <tr className="bg-[var(--le-gold-soft)] text-[var(--le-navy)]">
-            <td className="px-2 py-1.5 font-black" colSpan={2}>{footerLabel}</td>
-            <td className="numeric px-2 py-1.5 text-right font-mono font-black tabular-nums">
-              <ReadOnlyInsight insight={footerInsight} className="ml-auto inline-block rounded-sm">
-                <span className="transition-colors group-hover:text-[var(--le-blue)]">{formatCurrency(footerValue)}</span>
-              </ReadOnlyInsight>
-            </td>
-          </tr>
-        </tfoot>
       </table>
     </div>
   );
@@ -2689,14 +2656,14 @@ function ClientHeader({ state, subtitle }: { state: LoanState; subtitle: string 
         <h1 className="mt-1 text-[length:var(--type-2xl)] font-black text-[var(--le-navy)]">FEE SHEET</h1>
         <p className="mt-1 text-[length:var(--type-sm)] font-semibold text-[var(--le-muted)]">{subtitle}</p>
         <p className="mt-3 text-[length:var(--type-sm)] text-[var(--le-muted)]">
-          Applicant&apos;s Name: <strong className="text-[var(--le-navy)]">{state.applicantName}</strong>
+          Applicant&apos;s Name: <strong className="text-[var(--le-navy)]">{titleCase(state.applicantName)}</strong>
         </p>
         <p className="text-[length:var(--type-sm)] font-bold text-[var(--le-navy)]">
           {state.foreignOrDomestic === "F" ? "FOREIGN NATIONAL LOAN" : "DOMESTIC LOAN"}
         </p>
       </div>
       <div className="text-right text-[length:var(--type-sm)] text-[var(--le-muted)]">
-        <p>Presented by: <strong className="text-[var(--le-navy)]">{state.presentedBy}</strong></p>
+        <p>Presented by: <strong className="text-[var(--le-navy)]">{titleCase(state.presentedBy)}</strong></p>
         <p>Cell {formatUSPhone(state.cellPhone)}</p>
         <p>Off. {formatUSPhone(state.officePhone)}</p>
         <p>{state.email}</p>
