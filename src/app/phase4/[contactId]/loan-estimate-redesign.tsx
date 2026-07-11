@@ -107,8 +107,8 @@ type ClosingCostSnapshot = Pick<
 const tabs: Array<{ id: TabId; label: string; icon: typeof Calculator; audience: "internal" | "client" }> = [
   { id: "main", label: "Main To Complete", icon: Calculator, audience: "internal" },
   { id: "costs", label: "Summary Costs", icon: ChartNoAxesCombined, audience: "internal" },
-  { id: "marketing", label: "Summary Marketing", icon: FileText, audience: "client" },
-  { id: "legal", label: "Marketing Complete Legal Size", icon: Landmark, audience: "client" },
+  { id: "marketing", label: "Client Summary", icon: FileText, audience: "client" },
+  { id: "legal", label: "Detailed Fee Sheet", icon: Landmark, audience: "client" },
 ];
 
 const chartColors = {
@@ -127,7 +127,7 @@ const spinnerlessNumberInputClassName = "[appearance:textfield] [&::-webkit-inne
 const loanEstimateInputTextClassName = "text-[13px] font-bold leading-normal text-[var(--le-navy)]";
 const numericInputClassName = cn("numeric text-right tabular-nums", loanEstimateInputTextClassName, spinnerlessNumberInputClassName);
 const nonManualControlClassName = "loan-estimate-non-manual-control h-9 w-full rounded-[5px] border border-dashed border-[var(--le-line)] bg-slate-50 px-2 text-left text-[13px] font-bold leading-normal text-[var(--le-navy)] shadow-none sm:h-8";
-const loanDetailLabelClassName = "loan-estimate-detail-label mb-0.5 block min-h-[14px] truncate text-[10px] font-bold normal-case leading-tight tracking-normal text-[var(--le-muted)] opacity-100";
+const loanDetailLabelClassName = "loan-estimate-detail-label mb-0.5 block min-h-[14px] truncate text-[10px] font-bold normal-case leading-tight tracking-normal text-slate-600 opacity-100";
 
 const loanPrograms: Array<{ value: LoanProgram; label: string }> = [
   { value: "30 YR FIXED", label: "30 Yr Fixed" },
@@ -616,7 +616,7 @@ function LoanDetailField({
     <div className="min-h-[59px] min-w-0 border-b border-r border-slate-200 bg-white px-2.5 py-1.5">
       {children}
       <div className="mt-1 flex items-center gap-2">
-        <span className="truncate text-[9px] leading-none text-slate-400">{source}</span>
+        <span className="truncate text-[9px] leading-none text-slate-500">{source}</span>
       </div>
     </div>
   );
@@ -647,15 +647,17 @@ function PrepaidLedgerRow({
   insight?: FieldInsight;
 }) {
   return (
-    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-200 px-2.5 py-1.5 text-[13px] sm:grid-cols-[minmax(130px,1fr)_minmax(150px,auto)_auto]">
+    <div className="grid min-h-[42px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-200 px-2.5 py-1.5 text-[13px] sm:grid-cols-[minmax(130px,1fr)_minmax(170px,220px)_minmax(72px,92px)]">
       <div className="min-w-0">
         <span className="block truncate text-[12px] font-bold text-[var(--le-navy)]" title={label}>{label}</span>
-        <span className="block truncate text-[length:var(--type-xs)] text-[var(--le-muted)]" title={basis}>{basis}</span>
+        <span className="block truncate text-[length:var(--type-xs)] text-slate-600" title={basis}>{basis}</span>
       </div>
       <div className="order-3 col-span-2 min-w-0 sm:order-none sm:col-span-1">{input}</div>
-      <ReadOnlyInsight insight={insight} className="rounded-sm">
-        <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
-      </ReadOnlyInsight>
+      <div className="w-full text-right">
+        <ReadOnlyInsight insight={insight} className="w-full rounded-sm" buttonClassName="text-right">
+          <AnimatedValue value={amount} format="currency" className="numeric font-black text-[var(--le-navy)]" />
+        </ReadOnlyInsight>
+      </div>
     </div>
   );
 }
@@ -678,7 +680,7 @@ function CompactLedgerInput({
   const inputId = `ledger-${field}`;
   return (
     <label className="flex items-center justify-end gap-1.5" htmlFor={inputId}>
-      <span className="text-[10px] text-slate-400">{label}</span>
+      <span className="text-[10px] text-slate-500">{label}</span>
       <Input
         id={inputId}
         aria-label={ariaLabel}
@@ -1103,12 +1105,6 @@ function MainTab({
               insight={insights["Developer Fee (Per Contract)"]}
             />
             <PrepaidLedgerRow
-              label="Capital Contribution"
-              basis={state.newOrUsed === "New" ? "2 × monthly HOA" : "Existing / resale"}
-              amount={results.capitalContribution}
-              insight={insights["Capital Contribution"]}
-            />
-            <PrepaidLedgerRow
               label="Flood / HO6 Insurance"
               basis="Annual policy premium"
               input={<CompactLedgerInput label="Annual" ariaLabel="Flood or HO6 insurance annual" field="floodHO6Annual" value={state.floodHO6Annual} step="10" onChange={updateNumber} />}
@@ -1120,6 +1116,12 @@ function MainTab({
               input={<CompactLedgerInput label="Days" ariaLabel="Per-diem interest days" field="interestDays" value={state.interestDays} step="1" onChange={updateNumber} />}
               amount={results.interestPerDiem}
               insight={insights["Per-Diem Interest"]}
+            />
+            <PrepaidLedgerRow
+              label="Capital Contribution"
+              basis={state.newOrUsed === "New" ? "2 × monthly HOA" : "(2× HOA if New)"}
+              amount={results.capitalContribution}
+              insight={insights["Capital Contribution"]}
             />
             <LedgerTotalRow label="Total Pre-Paid Items" amount={results.totalPrepaid} insight={insights["Total Pre-Paid Items"]} />
             <LedgerTotalRow label="Closing Costs + Pre-Paid Items" amount={results.totalClosingAndPrepaid} secondary insight={insights["Closing + Pre-Paid"]} />
@@ -1453,7 +1455,7 @@ function SummaryMarketingTab({
     <DocumentFrame className="!max-w-[1390px]">
       <div className="grid items-start gap-5">
         <div className="space-y-5">
-          <ClientHeader state={state} subtitle="Borrower Fee Sheet Summary" />
+          <ClientHeader state={state} subtitle="Client Summary" />
           <section
             data-summary-marketing="core"
             className="print-client-section print-keep-together grid gap-5 lg:grid-cols-2"
@@ -1561,7 +1563,7 @@ function LegalSizeTab({
   return (
     <DocumentFrame className="legal-page">
       <Badge tone="gold" className="mb-4">Legal Size Layout - 8.5 x 14 when printed</Badge>
-      <ClientHeader state={state} subtitle="Marketing Complete Legal Size" />
+      <ClientHeader state={state} subtitle="Detailed Fee Sheet" />
       <div className="grid gap-5 lg:grid-cols-2">
         <DocumentSection title="Loan Information" icon={Home}>
           <SimpleTable
@@ -1868,6 +1870,7 @@ function LoanSummarySidebar({
   ];
   const unresolvedCount = readinessChecks.filter((check) => !check.ready).length;
   const readinessScore = Math.round(((readinessChecks.length - unresolvedCount) / readinessChecks.length) * 100);
+  const readinessComplete = unresolvedCount === 0;
 
   return (
     <aside
@@ -1883,8 +1886,15 @@ function LoanSummarySidebar({
         <TraceabilityTrigger data={traceability} />
       </div>
 
-      <section className="overflow-hidden rounded-[6px] border border-[#173451] bg-[var(--le-navy)] text-white shadow-[0_1px_2px_rgb(15_31_56_/_0.08)]">
-        <div className="flex items-center justify-between gap-3 border-b border-white/12 px-2.5 py-2">
+      <section
+        className={cn(
+          "overflow-hidden rounded-[6px] border shadow-[0_1px_2px_rgb(15_31_56_/_0.08)]",
+          readinessComplete
+            ? "border-emerald-200 bg-emerald-50/50 text-[var(--le-navy)]"
+            : "border-[#173451] bg-[var(--le-navy)] text-white",
+        )}
+      >
+        <div className={cn("flex items-center justify-between gap-3 border-b px-2.5 py-2", readinessComplete ? "border-emerald-200" : "border-white/12")}>
           <p className="text-[11px] font-black">Loan Estimate Readiness</p>
           <Badge tone={unresolvedCount ? "gold" : "teal"} className="text-[calc(var(--type-xs)+1px)]">
             {unresolvedCount ? `${unresolvedCount} Review` : "Ready"}
@@ -1895,30 +1905,30 @@ function LoanSummarySidebar({
           <div className="flex items-center gap-3">
             <div
               className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full"
-              style={{ background: `conic-gradient(#f7b84b ${readinessScore * 3.6}deg, #304a66 0deg)` }}
+              style={{ background: readinessComplete ? "conic-gradient(#2f8f68 360deg, #dce9e3 0deg)" : `conic-gradient(#f7b84b ${readinessScore * 3.6}deg, #304a66 0deg)` }}
               aria-label={`${readinessScore}% ready`}
               role="img"
             >
-              <div className="grid h-[42px] w-[42px] place-items-center rounded-full bg-[var(--le-navy)] text-[13px] font-black text-white">
+              <div className={cn("grid h-[42px] w-[42px] place-items-center rounded-full text-[13px] font-black", readinessComplete ? "bg-white text-[var(--le-navy)]" : "bg-[var(--le-navy)] text-white")}>
                 {readinessScore}%
               </div>
             </div>
             <div className="min-w-0">
               <p className="text-[13px] font-black">{unresolvedCount ? "Needs review" : "Ready for review"}</p>
-              <p className="mt-0.5 text-[10px] leading-4 text-white/70">
+              <p className={cn("mt-0.5 text-[10px] leading-4", readinessComplete ? "text-slate-600" : "text-white/70")}>
                 {unresolvedCount
                   ? `${unresolvedCount} ${unresolvedCount === 1 ? "item requires" : "items require"} attention before export.`
                   : "Required estimate inputs are available."}
               </p>
-              <span className="mt-1.5 inline-flex rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-[var(--le-blue)]">
+              <span className={cn("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold", readinessComplete ? "border border-emerald-200 bg-white text-emerald-800" : "bg-white text-[var(--le-blue)]")}>
                 {generatedAt ? "Generated estimate" : "Preliminary estimate"}
               </span>
             </div>
           </div>
 
-          <ul className="mt-2.5 space-y-1.5 border-t border-white/12 pt-2.5">
+          <ul className={cn("mt-2.5 space-y-1.5 border-t pt-2.5", readinessComplete ? "border-emerald-200" : "border-white/12")}>
             {readinessChecks.map((check) => (
-              <li key={check.label} className="flex items-start gap-2 text-[10px] leading-4 text-white/82">
+              <li key={check.label} className={cn("flex items-start gap-2 text-[10px] leading-4", readinessComplete ? "text-slate-700" : "text-white/82")}>
                 <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full", check.ready ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400/20 text-amber-300")}>
                   {check.ready ? <Check className="h-2.5 w-2.5" aria-hidden="true" /> : <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />}
                 </span>
