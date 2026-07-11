@@ -18,7 +18,7 @@ import {
   Signature,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Bar,
@@ -70,6 +70,37 @@ type FieldInsight = {
   body: string;
   kind: "Formula" | "Source";
 };
+
+const closingCostNumericFields = [
+  "originationPct",
+  "originationFlatFee",
+  "brokerFeePct",
+  "brokerFeeFlatFee",
+  "appraisalFee",
+  "applicationFee",
+  "underwritingFee",
+  "processingFee",
+  "adminFee",
+  "interestDays",
+  "settlementFee",
+  "titleSearchFee",
+  "miscTitleFee",
+  "titleInsuranceFee",
+  "endorsements",
+  "recordingFees",
+  "cityTaxStamps",
+  "stateTaxStamps",
+  "stampsOnDeed",
+  "surveyFee",
+  "transamericaFee",
+  "floodZoneCertFee",
+  "miscFilingFee",
+] as const satisfies readonly NumericField[];
+
+type ClosingCostSnapshot = Pick<
+  LoanState,
+  (typeof closingCostNumericFields)[number] | "brokerFeeMode" | "originationMode"
+>;
 
 const tabs: Array<{ id: TabId; label: string; icon: typeof Calculator; audience: "internal" | "client" }> = [
   { id: "main", label: "Main To Complete", icon: Calculator, audience: "internal" },
@@ -507,6 +538,11 @@ function MainTab({
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
   matchComputedDownPayment: () => void;
 }) {
+  const [closingCostsOpen, setClosingCostsOpen] = useState(false);
+  const closingCostsSnapshotRef = useRef<ClosingCostSnapshot | null>(null);
+  const closingCostsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closingCostsDialogRef = useRef<HTMLDivElement | null>(null);
+  const cancelClosingCostsRef = useRef<() => void>(() => undefined);
   const monthlyBars = [
     { name: "Principal & Interest", value: results.principalInterest, fill: chartColors.principal },
     { name: "Property Taxes", value: results.monthlyPropertyTax, fill: chartColors.taxes },
@@ -517,6 +553,91 @@ function MainTab({
   const basisLabel = valueBasisLabel(state);
   const borrowerEquityLabel = equityLabel(state);
   const equityApplied = equityAppliedLabel(state);
+
+  function captureClosingCosts(): ClosingCostSnapshot {
+    return closingCostNumericFields.reduce(
+      (snapshot, field) => ({ ...snapshot, [field]: state[field] }),
+      {
+        brokerFeeMode: state.brokerFeeMode,
+        originationMode: state.originationMode,
+      } as ClosingCostSnapshot,
+    );
+  }
+
+  function openClosingCosts() {
+    closingCostsSnapshotRef.current = captureClosingCosts();
+    setClosingCostsOpen(true);
+  }
+
+  function restoreClosingCostSnapshot() {
+    const snapshot = closingCostsSnapshotRef.current;
+    if (!snapshot) return;
+
+    for (const field of closingCostNumericFields) {
+      const value = snapshot[field];
+      updateNumber(field, Number.isFinite(value) ? String(value) : "");
+    }
+    updateChoice("brokerFeeMode", snapshot.brokerFeeMode);
+    updateChoice("originationMode", snapshot.originationMode);
+  }
+
+  function returnFocusToClosingCostsTrigger() {
+    window.requestAnimationFrame(() => closingCostsTriggerRef.current?.focus());
+  }
+
+  function cancelClosingCosts() {
+    restoreClosingCostSnapshot();
+    setClosingCostsOpen(false);
+    returnFocusToClosingCostsTrigger();
+  }
+  useEffect(() => {
+    cancelClosingCostsRef.current = cancelClosingCosts;
+  });
+
+  function finishClosingCosts() {
+    closingCostsSnapshotRef.current = null;
+    setClosingCostsOpen(false);
+    returnFocusToClosingCostsTrigger();
+  }
+
+  useEffect(() => {
+    if (!closingCostsOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const dialog = closingCostsDialogRef.current;
+    const focusable = dialog?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.[0]?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelClosingCostsRef.current();
+        return;
+      }
+
+      if (event.key !== "Tab" || !focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closingCostsOpen]);
 
   return (
     <div className="space-y-2.5">
@@ -600,99 +721,92 @@ function MainTab({
         </div>
       </Panel>
 
-      <Panel title="Closing Costs (Sections 800-1300)" icon={Calculator}>
-        <FinancialTable
-          columns={["Line", "Input", "Amount"]}
-          rows={[
-            {
-              kind: "dual",
-              label: "801. Loan Origination",
-              input: (
-                <DualFeeInput
-                  groupName="originationMode"
-                  mode={state.originationMode}
-                  percent={state.originationPct}
-                  flat={state.originationFlatFee}
-                  percentLabel="Loan origination percent of loan amount"
-                  flatLabel="Loan origination flat fee dollars"
-                  onModeChange={(value) => updateChoice("originationMode", value)}
-                  onPercentChange={(value) => updateNumber("originationPct", value)}
-                  onFlatChange={(value) => updateNumber("originationFlatFee", value)}
+      <Panel title="Closing Costs" icon={Calculator}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[length:var(--type-sm)] text-[var(--le-muted)]">
+              Review and adjust lender, title, government, and third-party fees.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Closing Costs</p>
+                <AnimatedValue
+                  value={results.totalClosingCosts}
+                  format="currency"
+                  className="numeric mt-0.5 block text-[length:var(--type-2xl)] font-black text-[var(--le-navy)]"
                 />
-              ),
-              value:
-                state.originationMode === "flat"
-                  ? Number.isFinite(state.originationFlatFee)
-                    ? results.loanOrigination
-                    : Number.NaN
-                  : Number.isFinite(state.originationPct)
-                    ? results.loanOrigination
-                    : Number.NaN,
-            },
-            {
-              kind: "dual",
-              label: "802. Broker Fee",
-              input: (
-                <DualFeeInput
-                  groupName="brokerFeeMode"
-                  mode={state.brokerFeeMode}
-                  percent={state.brokerFeePct}
-                  flat={state.brokerFeeFlatFee}
-                  percentLabel="Broker fee percent of loan amount"
-                  flatLabel="Broker fee flat fee dollars"
-                  onModeChange={(value) => updateChoice("brokerFeeMode", value)}
-                  onPercentChange={(value) => updateNumber("brokerFeePct", value)}
-                  onFlatChange={(value) => updateNumber("brokerFeeFlatFee", value)}
-                />
-              ),
-              value:
-                state.brokerFeeMode === "flat"
-                  ? Number.isFinite(state.brokerFeeFlatFee)
-                    ? results.brokerFee
-                    : Number.NaN
-                  : Number.isFinite(state.brokerFeePct)
-                    ? results.brokerFee
-                    : Number.NaN,
-            },
-            feeInputRow("803. Appraisal Fee & Final Inspection", "appraisalFee", state.appraisalFee, results.appraisalFee, updateNumber, "10"),
-            feeInputRow("804. Application Fee (Credit Report)", "applicationFee", state.applicationFee, results.applicationFee, updateNumber, "10"),
-            feeInputRow("811. Underwriting Fee", "underwritingFee", state.underwritingFee, results.underwritingFee, updateNumber, "10"),
-            feeInputRow("812. Processing Fee", "processingFee", state.processingFee, results.processingFee, updateNumber, "10"),
-            feeInputRow("813. Admin Fee (Broker)", "adminFee", state.adminFee, results.adminFee, updateNumber, "10"),
-            {
-              kind: "standard",
-              label: "901. Per-Diem Interest",
-              note: "days shown; prepaid item",
-              input: (
-                <InlineNumberInput
-                  ariaLabel="Number of days of interest"
-                  value={state.interestDays}
-                  step="1"
-                  suffix="days"
-                  onChange={(value) => updateNumber("interestDays", value)}
-                />
-              ),
-              value: Number.isFinite(state.interestDays) ? results.interestPerDiem : Number.NaN,
-            },
-            feeInputRow("1101. Settlement / Closing Fee", "settlementFee", state.settlementFee, results.settlementFee, updateNumber, "10"),
-            feeInputRow("1102. Abstract / Title Search", "titleSearchFee", state.titleSearchFee, results.titleSearchFee, updateNumber, "10"),
-            feeInputRow("1107. Miscellaneous Title Company", "miscTitleFee", state.miscTitleFee, results.miscTitleFee, updateNumber, "10"),
-            feeInputRow("1108. Title Insurance Fee", "titleInsuranceFee", state.titleInsuranceFee, results.titleInsuranceFee, updateNumber, "10"),
-            feeInputRow("1109. Endorsements", "endorsements", state.endorsements, results.endorsements, updateNumber, "1"),
-            feeInputRow("1201. Recording Fees", "recordingFees", state.recordingFees, results.recordingFees, updateNumber, "5"),
-            feeInputRow("1202. City/County Tax Stamps", "cityTaxStamps", state.cityTaxStamps, results.cityTaxStamps, updateNumber, "10"),
-            feeInputRow("1203. State Tax Stamps", "stateTaxStamps", state.stateTaxStamps, results.stateTaxStamps, updateNumber, "10"),
-            feeInputRow("1300. Stamps on Deed", "stampsOnDeed", state.stampsOnDeed, results.stampsOnDeed, updateNumber, "10"),
-            feeInputRow("1301. Survey", "surveyFee", state.surveyFee, results.surveyFee, updateNumber, "10"),
-            feeInputRow("1303. Transamerica Tax Fee", "transamericaFee", state.transamericaFee, results.transamericaFee, updateNumber, "1"),
-            feeInputRow("1304. Flood Zone Certification", "floodZoneCertFee", state.floodZoneCertFee, results.floodZoneCertFee, updateNumber, "1"),
-            feeInputRow("1306. Miscellaneous (Filing, Couriers)", "miscFilingFee", state.miscFilingFee, results.miscFilingFee, updateNumber, "10"),
-          ]}
-          footerLabel="Total Closing Costs"
-          footerValue={results.totalClosingCosts}
-          footerInsight={insights["Total Closing Costs"]}
-        />
+              </div>
+              <Badge tone="gold">Preliminary estimate</Badge>
+            </div>
+          </div>
+          <Button ref={closingCostsTriggerRef} type="button" variant="primary" onClick={openClosingCosts}>
+            <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+            Review / Edit Closing Costs
+          </Button>
+        </div>
       </Panel>
+
+      {closingCostsOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-[2px] sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) cancelClosingCosts();
+              }}
+            >
+              <div
+                ref={closingCostsDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="closing-costs-dialog-title"
+                aria-describedby="closing-costs-dialog-description"
+                className="grid max-h-[calc(100vh-1.5rem)] w-full max-w-[1100px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.32)] sm:max-h-[calc(100vh-3rem)]"
+              >
+                <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+                  <div>
+                    <h2 id="closing-costs-dialog-title" className="text-[length:var(--type-xl)] font-black text-[var(--le-navy)]">
+                      Closing Costs
+                    </h2>
+                    <p id="closing-costs-dialog-description" className="mt-1 text-[length:var(--type-sm)] text-[var(--le-muted)]">
+                      Review and adjust estimated loan, title, government, and third-party fees.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <div className="hidden text-right sm:block">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
+                      <AnimatedValue value={results.totalClosingCosts} format="currency" className="font-black text-[var(--le-navy)]" />
+                    </div>
+                    <Button type="button" size="icon" aria-label="Cancel and close closing costs" onClick={cancelClosingCosts}>
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </header>
+
+                <div className="min-h-0 overflow-y-auto px-3 py-3 sm:px-5">
+                  <ClosingCostsEditor
+                    state={state}
+                    results={results}
+                    insights={insights}
+                    updateNumber={updateNumber}
+                    updateChoice={updateChoice}
+                  />
+                </div>
+
+                <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <div className="flex items-baseline justify-between gap-4 sm:justify-start">
+                    <span className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Total Closing Costs</span>
+                    <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={cancelClosingCosts}>Cancel</Button>
+                    <Button type="button" variant="primary" onClick={finishClosingCosts}>Done</Button>
+                  </div>
+                </footer>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <Panel title="Pre-Paid Items" icon={PiggyBank}>
         <div className="space-y-2.5">
@@ -769,6 +883,114 @@ function MainTab({
         </Disclaimer>
       </Panel>
     </div>
+  );
+}
+
+function ClosingCostsEditor({
+  state,
+  results,
+  insights,
+  updateNumber,
+  updateChoice,
+}: {
+  state: LoanState;
+  results: LoanResults;
+  insights: Record<string, FieldInsight>;
+  updateNumber: (field: NumericField, value: string) => void;
+  updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
+}) {
+  return (
+    <FinancialTable
+      columns={["Line", "Input", "Amount"]}
+      rows={[
+        {
+          kind: "dual",
+          label: "801. Loan Origination",
+          input: (
+            <DualFeeInput
+              groupName="originationMode"
+              mode={state.originationMode}
+              percent={state.originationPct}
+              flat={state.originationFlatFee}
+              percentLabel="Loan origination percent of loan amount"
+              flatLabel="Loan origination flat fee dollars"
+              onModeChange={(value) => updateChoice("originationMode", value)}
+              onPercentChange={(value) => updateNumber("originationPct", value)}
+              onFlatChange={(value) => updateNumber("originationFlatFee", value)}
+            />
+          ),
+          value:
+            state.originationMode === "flat"
+              ? Number.isFinite(state.originationFlatFee)
+                ? results.loanOrigination
+                : Number.NaN
+              : Number.isFinite(state.originationPct)
+                ? results.loanOrigination
+                : Number.NaN,
+        },
+        {
+          kind: "dual",
+          label: "802. Broker Fee",
+          input: (
+            <DualFeeInput
+              groupName="brokerFeeMode"
+              mode={state.brokerFeeMode}
+              percent={state.brokerFeePct}
+              flat={state.brokerFeeFlatFee}
+              percentLabel="Broker fee percent of loan amount"
+              flatLabel="Broker fee flat fee dollars"
+              onModeChange={(value) => updateChoice("brokerFeeMode", value)}
+              onPercentChange={(value) => updateNumber("brokerFeePct", value)}
+              onFlatChange={(value) => updateNumber("brokerFeeFlatFee", value)}
+            />
+          ),
+          value:
+            state.brokerFeeMode === "flat"
+              ? Number.isFinite(state.brokerFeeFlatFee)
+                ? results.brokerFee
+                : Number.NaN
+              : Number.isFinite(state.brokerFeePct)
+                ? results.brokerFee
+                : Number.NaN,
+        },
+        feeInputRow("803. Appraisal Fee & Final Inspection", "appraisalFee", state.appraisalFee, results.appraisalFee, updateNumber, "10"),
+        feeInputRow("804. Application Fee (Credit Report)", "applicationFee", state.applicationFee, results.applicationFee, updateNumber, "10"),
+        feeInputRow("811. Underwriting Fee", "underwritingFee", state.underwritingFee, results.underwritingFee, updateNumber, "10"),
+        feeInputRow("812. Processing Fee", "processingFee", state.processingFee, results.processingFee, updateNumber, "10"),
+        feeInputRow("813. Admin Fee (Broker)", "adminFee", state.adminFee, results.adminFee, updateNumber, "10"),
+        {
+          kind: "standard",
+          label: "901. Per-Diem Interest",
+          note: "days shown; prepaid item",
+          input: (
+            <InlineNumberInput
+              ariaLabel="Number of days of interest"
+              value={state.interestDays}
+              step="1"
+              suffix="days"
+              onChange={(value) => updateNumber("interestDays", value)}
+            />
+          ),
+          value: Number.isFinite(state.interestDays) ? results.interestPerDiem : Number.NaN,
+        },
+        feeInputRow("1101. Settlement / Closing Fee", "settlementFee", state.settlementFee, results.settlementFee, updateNumber, "10"),
+        feeInputRow("1102. Abstract / Title Search", "titleSearchFee", state.titleSearchFee, results.titleSearchFee, updateNumber, "10"),
+        feeInputRow("1107. Miscellaneous Title Company", "miscTitleFee", state.miscTitleFee, results.miscTitleFee, updateNumber, "10"),
+        feeInputRow("1108. Title Insurance Fee", "titleInsuranceFee", state.titleInsuranceFee, results.titleInsuranceFee, updateNumber, "10"),
+        feeInputRow("1109. Endorsements", "endorsements", state.endorsements, results.endorsements, updateNumber, "1"),
+        feeInputRow("1201. Recording Fees", "recordingFees", state.recordingFees, results.recordingFees, updateNumber, "5"),
+        feeInputRow("1202. City/County Tax Stamps", "cityTaxStamps", state.cityTaxStamps, results.cityTaxStamps, updateNumber, "10"),
+        feeInputRow("1203. State Tax Stamps", "stateTaxStamps", state.stateTaxStamps, results.stateTaxStamps, updateNumber, "10"),
+        feeInputRow("1300. Stamps on Deed", "stampsOnDeed", state.stampsOnDeed, results.stampsOnDeed, updateNumber, "10"),
+        feeInputRow("1301. Survey", "surveyFee", state.surveyFee, results.surveyFee, updateNumber, "10"),
+        feeInputRow("1303. Transamerica Tax Fee", "transamericaFee", state.transamericaFee, results.transamericaFee, updateNumber, "1"),
+        feeInputRow("1304. Flood Zone Certification", "floodZoneCertFee", state.floodZoneCertFee, results.floodZoneCertFee, updateNumber, "1"),
+        feeInputRow("1306. Miscellaneous (Filing, Couriers)", "miscFilingFee", state.miscFilingFee, results.miscFilingFee, updateNumber, "10"),
+      ]}
+      footerLabel="Total Closing Costs"
+      footerValue={results.totalClosingCosts}
+      footerInsight={insights["Total Closing Costs"]}
+    />
   );
 }
 
