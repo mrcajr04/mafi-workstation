@@ -487,7 +487,7 @@ export function LoanEstimateRedesign({
         <div
           className={cn(
             "items-start gap-3.5",
-            activeTab !== "marketing" && "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_318px]",
+            activeTab !== "marketing" && activeTab !== "legal" && "grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_318px]",
           )}
         >
           <AnimatePresence mode="wait">
@@ -514,7 +514,6 @@ export function LoanEstimateRedesign({
                   state={state}
                   results={results}
                   assetSegments={assetSegments}
-                  traceability={traceability}
                 />
               ) : null}
               {activeTab === "legal" ? <LegalSizeTab state={state} results={results} /> : null}
@@ -523,7 +522,7 @@ export function LoanEstimateRedesign({
               ) : null}
             </motion.div>
           </AnimatePresence>
-          {activeTab !== "marketing" ? (
+          {activeTab !== "marketing" && activeTab !== "legal" ? (
             <LoanSummarySidebar
               state={state}
               results={results}
@@ -736,7 +735,7 @@ function PaymentRow({
 
 function EquationRow({ sign, label, amount }: { sign: string; label: string; amount: number }) {
   return (
-    <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-2.5 py-0.5 text-[calc(var(--type-xs)+2.2px)]">
+    <div className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 border-b border-slate-200 px-2.5 py-1 text-[calc(var(--type-xs)+2.2px)]">
       <span className="text-center font-black text-slate-400" aria-hidden="true">{sign}</span>
       {sign ? <span className="sr-only">{sign === "−" ? "Subtract" : "Add"}</span> : null}
       <span className="truncate text-[var(--le-muted)]">{label}</span>
@@ -910,7 +909,6 @@ function MainTab({
     <div className="space-y-3">
       <Panel
         title="Purchase & Loan Details"
-        description=""
         icon={Home}
         showComputedBadge={false}
         titleAction={(
@@ -1077,7 +1075,7 @@ function MainTab({
         : null}
 
       <div className="grid items-stretch overflow-hidden rounded-[5px] border border-[var(--le-line)] bg-white shadow-[0_1px_2px_rgb(15_31_56_/_0.03)] xl:grid-cols-2">
-        <Panel title="Pre-Paid Items" description="Escrows, insurance, interest, and property-specific contributions." icon={PiggyBank} showComputedBadge={false} flush bare className="border-b border-[var(--le-line)] xl:border-b-0 xl:border-r">
+        <Panel title="Pre-Paid Items" icon={PiggyBank} showComputedBadge={false} flush bare className="border-b border-[var(--le-line)] xl:border-b-0 xl:border-r">
           <div className="overflow-hidden">
             <PrepaidLedgerRow
               label="Taxes Escrowed"
@@ -1128,7 +1126,7 @@ function MainTab({
           </div>
         </Panel>
 
-        <Panel title="Monthly Payment" description="Estimated recurring housing payment." icon={BadgeDollarSign} showComputedBadge={false} flush bare>
+        <Panel title="Monthly Payment" icon={BadgeDollarSign} showComputedBadge={false} flush bare>
           <div>
             <div className="overflow-hidden">
               <PaymentRow label="Principal & Interest" amount={results.principalInterest} />
@@ -1155,7 +1153,7 @@ function MainTab({
         </Panel>
       </div>
 
-      <Panel title="Cash to Close & Asset Requirements" description="Credits reduce cash due; reserves determine required assets." icon={ShieldCheck} showComputedBadge={false} flush>
+      <Panel title="Cash to Close & Asset Requirements" icon={ShieldCheck} showComputedBadge={false} flush>
         <div className="grid xl:grid-cols-[minmax(0,1fr)_400px]">
           <div className="border-l border-t border-slate-200">
             <div className="grid content-start">
@@ -1353,7 +1351,7 @@ function SummaryCostsTab({
 }) {
   return (
     <div className="space-y-5">
-      <Panel title="Loan Snapshot" icon={ChartNoAxesCombined} dense>
+      <Panel title="Loan Snapshot" icon={ChartNoAxesCombined} dense showComputedBadge={false}>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Applicant" textValue={titleCase(state.applicantName)} compact />
           <StatCard label="Loan Purpose" textValue={state.loanPurpose} compact />
@@ -1369,7 +1367,7 @@ function SummaryCostsTab({
       </Panel>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Panel title="Monthly Payments" icon={BadgeDollarSign} dense>
+        <Panel title="Monthly Payments" icon={BadgeDollarSign} dense showComputedBadge={false}>
           <SimpleTable
             rows={[
               ["Principal & Interest", formatCurrency(results.principalInterest)],
@@ -1382,7 +1380,7 @@ function SummaryCostsTab({
           />
         </Panel>
 
-        <Panel title="Closing Costs & Pre-Paids" icon={Calculator} dense>
+        <Panel title="Closing Costs & Pre-Paids" icon={Calculator} dense showComputedBadge={false}>
           <SimpleTable
             rows={[
               ["Fixed Loan Costs", formatCurrency(results.fixedLoanCosts)],
@@ -1397,7 +1395,7 @@ function SummaryCostsTab({
         </Panel>
       </div>
 
-      <Panel title="Credits & Cash Required" icon={ShieldCheck} dense>
+      <Panel title="Credits & Cash Required" icon={ShieldCheck} dense showComputedBadge={false}>
         <SimpleTable
           rows={[
             [equityLabel(state), formatCurrency(results.downPayment)],
@@ -1419,12 +1417,10 @@ function SummaryMarketingTab({
   state,
   results,
   assetSegments,
-  traceability,
 }: {
   state: LoanState;
   results: ReturnType<typeof calculateLoanEstimate>;
   assetSegments: Array<{ name: string; value: number; color: string }>;
-  traceability: LoanEstimateTraceability;
 }) {
   const renderBreakdownContent = () => (
     <div className="print-breakdown-content mt-4 grid gap-5 lg:grid-cols-2">
@@ -1455,8 +1451,8 @@ function SummaryMarketingTab({
 
   return (
     <DocumentFrame className="!max-w-[1390px]">
-      <div className="loan-estimate-marketing-layout grid items-start gap-5">
-        <div className="space-y-5 print:col-span-2">
+      <div className="grid items-start gap-5">
+        <div className="space-y-5">
           <ClientHeader state={state} subtitle="Borrower Fee Sheet Summary" />
           <section
             data-summary-marketing="core"
@@ -1522,33 +1518,27 @@ function SummaryMarketingTab({
           </section>
         </div>
 
-        <LoanSummarySidebar
-          state={state}
-          results={results}
-          traceability={traceability}
-        />
-
         <section
           data-summary-marketing="assets"
-          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5 xl:col-span-2"
+          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5"
         >
           <AssetsPieChart data={assetSegments} />
         </section>
 
-        <details className="screen-full-breakdown print-client-section rounded-md border border-[var(--le-line)] p-5 xl:col-span-2">
+        <details className="screen-full-breakdown print-client-section rounded-md border border-[var(--le-line)] p-5">
           <summary className="cursor-pointer text-[length:var(--type-sm)] font-black uppercase text-[var(--le-navy)]">
             View full breakdown
           </summary>
           {renderBreakdownContent()}
         </details>
 
-        <section className="print-full-breakdown print-client-section hidden rounded-md border border-[var(--le-line)] p-5 xl:col-span-2">
+        <section className="print-full-breakdown print-client-section hidden rounded-md border border-[var(--le-line)] p-5">
           {renderBreakdownContent()}
         </section>
 
         <section
           data-summary-marketing="disclosure"
-          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5 xl:col-span-2"
+          className="print-client-section print-keep-together rounded-md border border-[var(--le-line)] p-5"
         >
           <Disclaimer>
             The information provided reflects estimates of charges you are likely to incur at settlement. Fees may be
@@ -2609,7 +2599,7 @@ function AssetsPieChart({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("grid min-w-0 items-center gap-4", compact ? "grid-cols-1" : "md:grid-cols-[180px_minmax(220px,1fr)]")}>
+    <div className={cn("grid min-w-0 items-center gap-4", compact ? "grid-cols-1" : "md:grid-cols-[180px_max-content] md:justify-start")}>
       <div className={cn("mx-auto", compact ? "h-44 w-full" : "h-44 w-44")}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -2622,9 +2612,9 @@ function AssetsPieChart({
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="min-w-[220px] space-y-2 self-center">
+      <ul className="mx-auto w-fit min-w-[280px] space-y-2 self-center md:mx-0">
         {data.map((item) => (
-          <li key={item.name} className="grid grid-cols-[auto_minmax(112px,1fr)_auto] items-center gap-2 text-[length:var(--type-sm)]">
+          <li key={item.name} className="grid grid-cols-[auto_120px_auto] items-center gap-2 text-[length:var(--type-sm)]">
             <span className="h-3 w-3 rounded-sm" style={{ background: item.color }} />
             <span className="whitespace-nowrap font-semibold text-[var(--le-ink)]">{item.name}</span>
             <span className="numeric whitespace-nowrap pl-2 text-right font-black text-[var(--le-navy)]">{formatCurrency(item.value)}</span>

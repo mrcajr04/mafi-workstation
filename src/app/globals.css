@@ -227,12 +227,6 @@
   background: var(--le-paper);
 }
 
-@media (min-width: 80rem) {
-  .loan-estimate-marketing-layout {
-    grid-template-columns: minmax(0, 1fr) 304px;
-  }
-}
-
 .prospect-scenario-print-document {
   display: none;
 }
