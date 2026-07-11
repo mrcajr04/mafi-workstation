@@ -4,15 +4,6 @@ import { Prisma, RoleType } from "@prisma/client";
 import { logAccessDenied, logAuditEvent } from "@/lib/audit";
 import { formatTimestampForDisplay } from "@/lib/dates";
 import type { LoanEstimateState } from "@/lib/loan-estimate-calc";
-import {
-  LOAN_DOCUMENTS_BUCKET,
-  createLoanEstimateSignedUrl,
-  ensureLoanDocumentsBucket,
-} from "@/lib/loan-estimate-storage";
-import {
-  loanEstimatePdfHtml,
-  renderLoanEstimatePdf,
-} from "@/lib/loan-estimate-pdf";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/rbac";
 
@@ -20,16 +11,18 @@ type GenerateLoanEstimatePdfResult =
   | {
       success: true;
       data: {
-        downloadUrl: string;
         generatedAt: string;
       };
     }
   | { success: false; error: string };
 
-function timestampForPath(date: Date) {
-  return date.toISOString().replace(/[:.]/g, "-");
-}
-
+/**
+ * Records a Loan Estimate "generation": persists the current input state (so the
+ * workspace restores edits on reload) and logs a GENERATE_DOCUMENT audit event
+ * (so the pipeline "last generated" status stays accurate). The PDF itself is
+ * produced client-side via the browser print dialog — nothing is rendered
+ * server-side or stored in object storage.
+ */
 export async function generateLoanEstimatePdf(
   contactId: string,
   state: LoanEstimateState,
@@ -50,36 +43,18 @@ export async function generateLoanEstimatePdf(
 
   try {
     const generatedAt = new Date();
-    const html = loanEstimatePdfHtml(state);
     const pipeline = await prisma.phase4Pipeline.upsert({
       create: {
         contactId,
-        loanEstimateHtml: html,
         loanEstimateState: state as unknown as Prisma.InputJsonValue,
       },
       update: {
-        loanEstimateHtml: html,
         loanEstimateState: state as unknown as Prisma.InputJsonValue,
       },
       where: {
         contactId,
       },
     });
-    const pdf = await renderLoanEstimatePdf(state);
-    const storagePath = `phase4/${contactId}/loan-estimates/${timestampForPath(
-      generatedAt,
-    )}.pdf`;
-    const supabase = await ensureLoanDocumentsBucket();
-    const { error: uploadError } = await supabase.storage
-      .from(LOAN_DOCUMENTS_BUCKET)
-      .upload(storagePath, pdf, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw uploadError;
-    }
 
     await logAuditEvent(
       access.data.id,
@@ -90,27 +65,24 @@ export async function generateLoanEstimatePdf(
         contactId,
         docType: "LOAN_ESTIMATE",
         generatedAt: generatedAt.toISOString(),
-        storageBucket: LOAN_DOCUMENTS_BUCKET,
-        storagePath,
       },
     );
 
     return {
       success: true,
       data: {
-        downloadUrl: await createLoanEstimateSignedUrl(storagePath),
         generatedAt: formatTimestampForDisplay(generatedAt),
       },
     };
   } catch (error) {
     console.error(
-      "Loan Estimate PDF generation failed",
+      "Loan Estimate generation failed",
       error instanceof Error ? error.message : error,
     );
 
     return {
       success: false,
-      error: "Unable to generate the Loan Estimate PDF. Please try again.",
+      error: "Unable to record the Loan Estimate. Please try again.",
     };
   }
 }

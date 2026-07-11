@@ -355,7 +355,6 @@ export default async function Phase4DetailPage({
             ? formatTimestampForDisplay(latestLoanEstimateGeneration.generatedAt)
             : undefined
         }
-        initialDownloadUrl={latestLoanEstimateGeneration?.downloadUrl}
         initialState={initialState}
         traceability={traceability}
       />

@@ -16,7 +16,6 @@ import type { LoanEstimateTraceability } from "./loan-estimate-traceability";
 type LoanEstimateBuilderProps = {
   contactId: string;
   headerExtras: LoanEstimateHeaderExtras;
-  initialDownloadUrl?: string;
   initialGeneratedAt?: string;
   initialState: LoanEstimateState;
   traceability: LoanEstimateTraceability;
@@ -24,20 +23,19 @@ type LoanEstimateBuilderProps = {
 
 /**
  * Thin bridge wrapper. The compliance-critical path (route mapping ->
- * generateLoanEstimatePdf -> Supabase -> audit) still speaks the production
- * string-typed LoanEstimateState. This component converts the pulled-forward
- * production state into the redesigned UI's number-typed LoanState for editing,
- * and converts back on generation. The redesigned UI is presentation only.
+ * generateLoanEstimatePdf -> audit) still speaks the production string-typed
+ * LoanEstimateState. This component converts the pulled-forward production state
+ * into the redesigned UI's number-typed LoanState for editing, and converts back
+ * on generation. The redesigned UI is presentation only. The generated PDF is
+ * produced client-side via the browser print dialog; nothing is stored.
  */
 export function LoanEstimateBuilder({
   contactId,
   headerExtras,
-  initialDownloadUrl,
   initialGeneratedAt,
   initialState,
   traceability,
 }: LoanEstimateBuilderProps) {
-  const [downloadUrl, setDownloadUrl] = useState(initialDownloadUrl);
   const [generatedAt, setGeneratedAt] = useState(initialGeneratedAt);
   const [isGenerating, startGenerationTransition] = useTransition();
 
@@ -61,15 +59,12 @@ export function LoanEstimateBuilder({
       }
 
       setGeneratedAt(generationResult.data.generatedAt);
-      setDownloadUrl(generationResult.data.downloadUrl);
-      toast.success("Loan Estimate PDF saved.");
       window.print();
     });
   }
 
   return (
     <LoanEstimateRedesign
-      downloadUrl={downloadUrl}
       generatedAt={generatedAt}
       initialState={designInitialState}
       isGenerating={isGenerating}

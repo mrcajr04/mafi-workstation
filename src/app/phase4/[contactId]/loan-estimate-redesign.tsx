@@ -109,6 +109,31 @@ type ClosingCostSnapshot = Pick<
   (typeof closingCostNumericFields)[number] | "brokerFeeMode" | "originationMode"
 >;
 
+function closingCostLineValues(state: LoanState) {
+  return [
+    state.originationMode === "flat" ? state.originationFlatFee : state.originationPct,
+    state.brokerFeeMode === "flat" ? state.brokerFeeFlatFee : state.brokerFeePct,
+    state.appraisalFee,
+    state.applicationFee,
+    state.underwritingFee,
+    state.processingFee,
+    state.adminFee,
+    state.settlementFee,
+    state.titleSearchFee,
+    state.miscTitleFee,
+    state.titleInsuranceFee,
+    state.endorsements,
+    state.recordingFees,
+    state.cityTaxStamps,
+    state.stateTaxStamps,
+    state.stampsOnDeed,
+    state.surveyFee,
+    state.transamericaFee,
+    state.floodZoneCertFee,
+    state.miscFilingFee,
+  ];
+}
+
 const tabs: Array<{ id: TabId; label: string; icon: typeof Calculator; audience: "internal" | "client" }> = [
   { id: "main", label: "Main To Complete", icon: Calculator, audience: "internal" },
   { id: "costs", label: "Summary Costs", icon: ChartNoAxesCombined, audience: "internal" },
@@ -295,7 +320,6 @@ export type LoanEstimateRedesignProps = {
   onGenerate: (state: LoanState) => void;
   isGenerating: boolean;
   generatedAt?: string;
-  downloadUrl?: string;
   traceability: LoanEstimateTraceability;
 };
 
@@ -304,7 +328,6 @@ export function LoanEstimateRedesign({
   onGenerate,
   isGenerating,
   generatedAt,
-  downloadUrl,
   traceability,
 }: LoanEstimateRedesignProps) {
   const [state, setState] = useState<LoanState>(initialState);
@@ -435,7 +458,6 @@ export function LoanEstimateRedesign({
             })}
           </Tabs.List>
           <LoanEstimateActionBar
-            downloadUrl={downloadUrl}
             generatedAt={generatedAt}
             isGenerating={isGenerating}
             onGenerate={() => onGenerate(state)}
@@ -524,6 +546,7 @@ export function LoanEstimateRedesign({
                   state={state}
                   results={results}
                   insights={insights}
+                  assetSegments={assetSegments}
                   updateNumber={updateNumber}
                   updateChoice={updateChoice}
                   loanDetailsEditing={loanDetailsEditing}
@@ -779,13 +802,11 @@ function CashControlCell({ children }: { children: React.ReactNode }) {
 }
 
 function LoanEstimateActionBar({
-  downloadUrl,
   generatedAt,
   isGenerating,
   onGenerate,
   onReset,
 }: {
-  downloadUrl?: string;
   generatedAt?: string;
   isGenerating: boolean;
   onGenerate: () => void;
@@ -794,20 +815,9 @@ function LoanEstimateActionBar({
   return (
     <div className="no-print flex min-w-0 flex-nowrap items-center justify-end gap-1.5">
       <p className="hidden truncate text-[9px] text-[var(--le-muted)] sm:block">
-        {generatedAt ? `Last generated ${generatedAt}` : "No stored PDF yet"}
+        {generatedAt ? `Last generated ${generatedAt}` : "Not generated yet"}
       </p>
       <div className="flex shrink-0 items-center gap-1.5">
-        {downloadUrl ? (
-          <a
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border border-[var(--le-line)] bg-white px-2.5 text-[length:var(--type-xs)] font-bold text-[var(--le-navy)] transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--le-blue)]"
-            href={downloadUrl}
-            rel="noopener"
-            target="_blank"
-          >
-            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-            View Saved PDF
-          </a>
-        ) : null}
         <Button className="h-8 shrink-0 px-2.5 text-[length:var(--type-xs)]" variant="secondary" size="sm" onClick={onReset}>
           <RefreshCcw className="h-3.5 w-3.5" aria-hidden="true" />
           Reset values
@@ -825,6 +835,7 @@ function MainTab({
   state,
   results,
   insights,
+  assetSegments,
   updateNumber,
   updateChoice,
   loanDetailsEditing,
@@ -833,6 +844,7 @@ function MainTab({
   state: LoanState;
   results: LoanResults;
   insights: Record<string, FieldInsight>;
+  assetSegments: Array<{ name: string; value: number; color: string }>;
   updateNumber: (field: NumericField, value: string) => void;
   updateChoice: <K extends StringField>(field: K, value: LoanState[K]) => void;
   loanDetailsEditing: boolean;
@@ -846,6 +858,8 @@ function MainTab({
   const basisLabel = valueBasisLabel(state);
   const borrowerEquityLabel = equityLabel(state);
   const equityApplied = equityAppliedLabel(state);
+  const closingCostLines = closingCostLineValues(state);
+  const missingClosingCostLines = closingCostLines.filter((value) => !Number.isFinite(value)).length;
 
   function captureClosingCosts(): ClosingCostSnapshot {
     return closingCostNumericFields.reduce(
@@ -1185,8 +1199,43 @@ function MainTab({
         </Panel>
       </div>
 
+      <Panel title="Closing Costs" icon={Calculator} showComputedBadge={false} flush>
+        <section className="bg-slate-50/40" aria-labelledby="closing-costs-worksheet-heading">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_150px_150px_auto]">
+            <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+              <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[6px] bg-blue-50 text-sm font-black text-[var(--le-blue)]">$</span>
+              <div className="min-w-0">
+                <h3 id="closing-costs-worksheet-heading" className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Closing-cost worksheet</h3>
+                <p className="mt-0.5 text-[length:var(--type-xs)] text-[var(--le-muted)]">
+                  {closingCostLines.length} fee lines · {missingClosingCostLines ? `${missingClosingCostLines} missing` : "all values entered"}
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-[var(--le-line)] px-3 py-2.5 sm:border-l sm:border-t-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
+              <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
+            </div>
+            <div className="border-t border-[var(--le-line)] px-3 py-2.5 xl:border-l xl:border-t-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Status</p>
+              <span className={cn("mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold", missingClosingCostLines ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-[var(--le-blue)]")}>
+                {missingClosingCostLines ? "Needs Review" : "Preliminary"}
+              </span>
+              <p className="mt-1 text-[9px] text-[var(--le-muted)]">
+                {missingClosingCostLines ? `${missingClosingCostLines} line${missingClosingCostLines === 1 ? "" : "s"} need review` : "Ready for review"}
+              </p>
+            </div>
+            <div className="flex items-center border-t border-[var(--le-line)] px-3 py-2.5 sm:border-l xl:border-t-0">
+              <Button id="closing-costs-review-button" ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
+                <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+                Review / Edit Closing Costs
+              </Button>
+            </div>
+          </div>
+        </section>
+      </Panel>
+
       <Panel title="Cash to Close & Asset Requirements" icon={ShieldCheck} showComputedBadge={false} flush>
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid xl:grid-cols-[minmax(280px,0.6fr)_440px_minmax(340px,0.8fr)]">
           <div className="border-l border-t border-slate-200">
             <div className="grid content-start">
               <CashControlCell>
@@ -1212,27 +1261,6 @@ function MainTab({
                 <NumberField label="Reserve Months" field="reserveMonths" value={state.reserveMonths} step="1" boldLabel onChange={updateNumber} />
               </CashControlCell>
             </div>
-            <section className="border-b border-r border-slate-200 bg-slate-50/40 px-3 py-3" aria-labelledby="cash-closing-costs-heading">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[6px] bg-blue-50 text-sm font-black text-[var(--le-blue)]">$</span>
-                  <div className="min-w-0">
-                    <h3 id="cash-closing-costs-heading" className="text-[length:var(--type-sm)] font-black text-[var(--le-navy)]">Closing Costs</h3>
-                    <p className="mt-0.5 truncate text-[length:var(--type-xs)] text-[var(--le-muted)]">Loan, title, government, and third-party fees</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <div className="text-right">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Current total</p>
-                    <AnimatedValue value={results.totalClosingCosts} format="currency" className="numeric mt-0.5 block text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
-                  </div>
-                  <Button id="closing-costs-review-button" ref={closingCostsTriggerRef} type="button" variant="primary" size="sm" onClick={openClosingCosts}>
-                    <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
-                    Review / Edit
-                  </Button>
-                </div>
-              </div>
-            </section>
           </div>
           <div className="border-t border-[var(--le-line)] bg-slate-50/60 xl:border-l xl:border-t-0">
             <EquationRow sign="" label={borrowerEquityLabel} amount={results.downPayment} />
@@ -1263,7 +1291,10 @@ function MainTab({
                 <AnimatedValue value={results.totalAssetsRequired} format="currency" className="numeric text-[length:var(--type-lg)] font-black text-[var(--le-navy)]" />
               </ReadOnlyInsight>
             </div>
+            </div>
           </div>
+          <div className="flex min-h-[244px] items-center justify-center border-t border-[var(--le-line)] bg-white px-4 py-4 xl:border-l xl:border-t-0">
+            <AssetsPieChart data={assetSegments} cashClose />
           </div>
         </div>
       </Panel>
@@ -1530,20 +1561,17 @@ function SummaryMarketingTab({
           </h2>
           <SimpleTable
             rows={[
-              ["Flood / HO6", formatCurrency(results.floodHO6Escrow)],
-              ["Developer Fee (per contract)", formatCurrency(results.developFeeContract)],
-              ["Capital Contribution", formatCurrency(results.capitalContribution)],
               ["Total Prepaid Costs", formatCurrency(results.totalPrepaid)],
-              ["Fixed Loan Costs", formatCurrency(results.fixedLoanCosts)],
-              ["Fixed Title Costs", formatCurrency(results.fixedTitleCosts)],
               ["Total Closing Costs", formatCurrency(results.totalClosingCosts)],
+              [equityLabel(state), formatCurrency(results.downPayment)],
+              ["Total Closing + Pre-Paid", formatCurrency(results.totalClosingAndPrepaid)],
               ["Seller Credit", formatCurrency(results.sellerCredit)],
               ["Other Credits", formatCurrency(results.otherCredits)],
               [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
               ["Total Cash Required at Closing", formatCurrency(results.totalCashToClose)],
               ["Reserves Savings", formatCurrency(results.reserves)],
             ]}
-            emphasizedRows={["Total Closing Costs"]}
+            emphasizedRows={["Total Prepaid Costs", "Total Closing Costs"]}
             footer={["Total Assets Required to Approve Loan", formatCurrency(results.totalAssetsRequired)]}
           />
         </div>
@@ -1670,6 +1698,8 @@ function LegalSizeTab({
           <div className="print-cash-summary mt-4">
             <SimpleTable
               rows={[
+                [equityLabel(state), formatCurrency(results.downPayment)],
+                ["Total Closing + Pre-Paid", formatCurrency(results.totalClosingAndPrepaid)],
                 ["Seller Credit", formatCurrency(results.sellerCredit)],
                 ["Other Credits", formatCurrency(results.otherCredits)],
                 [equityAppliedLabel(state), formatCurrency(results.downPaymentGivenToSeller)],
@@ -1862,7 +1892,8 @@ function LoanSummarySidebar({
   onNavigateToIssue: (issue: ReadinessIssue) => void;
 }) {
   const developerFeeConfirmed = state.developFee === "Yes" || state.developFee === "No";
-  const closingCostsAvailable = Number.isFinite(results.totalClosingCosts) && results.totalClosingCosts > 0;
+  const missingClosingCostLines = closingCostLineValues(state).filter((value) => !Number.isFinite(value)).length;
+  const closingCostsAvailable = missingClosingCostLines === 0 && Number.isFinite(results.totalClosingCosts) && results.totalClosingCosts > 0;
   const requiredLoanInputsPresent = Number.isFinite(state.purchasePrice) && Number.isFinite(state.downPaymentPct);
   const blockingIssues = [
     !Number.isFinite(state.purchasePrice) || state.purchasePrice <= 0 ? { label: `${valueBasisLabel(state)} is missing.`, targetId: "purchasePrice-readiness" } : null,
@@ -2647,13 +2678,15 @@ function SimpleTable({
 function AssetsPieChart({
   data,
   compact = false,
+  cashClose = false,
 }: {
   data: Array<{ name: string; value: number; color: string }>;
   compact?: boolean;
+  cashClose?: boolean;
 }) {
   return (
-    <div className={cn("grid min-w-0 items-center gap-4", compact ? "grid-cols-1" : "md:grid-cols-[180px_max-content] md:justify-start")}>
-      <div className={cn("mx-auto", compact ? "h-44 w-full" : "h-44 w-44")}>
+    <div className={cn("grid min-w-0 items-center", cashClose ? "w-full gap-2 2xl:grid-cols-[132px_minmax(0,1fr)]" : compact ? "grid-cols-1 gap-4" : "gap-4 md:grid-cols-[180px_max-content] md:justify-start")}>
+      <div className={cn("mx-auto", cashClose ? "h-32 w-32" : compact ? "h-44 w-full" : "h-44 w-44")}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={2}>
@@ -2665,9 +2698,9 @@ function AssetsPieChart({
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="mx-auto w-fit min-w-[280px] space-y-2 self-center md:mx-0">
+      <ul className={cn("mx-auto w-fit self-center", cashClose ? "min-w-0 space-y-1.5 2xl:mx-0" : "min-w-[280px] space-y-2 md:mx-0")}>
         {data.map((item) => (
-          <li key={item.name} className="grid grid-cols-[auto_120px_auto] items-center gap-2 text-[length:var(--type-sm)]">
+          <li key={item.name} className={cn("grid items-center gap-2 text-[length:var(--type-sm)]", cashClose ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_120px_auto]")}>
             <span className="h-3 w-3 rounded-sm" style={{ background: item.color }} />
             <span className="whitespace-nowrap font-semibold text-[var(--le-ink)]">{item.name}</span>
             <span className="numeric whitespace-nowrap pl-2 text-right font-black text-[var(--le-navy)]">{formatCurrency(item.value)}</span>
